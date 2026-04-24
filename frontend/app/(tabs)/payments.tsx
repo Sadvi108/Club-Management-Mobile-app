@@ -1,18 +1,20 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { colors, font, radius, shadow, spacing } from "../../src/theme";
+import { radius, spacing, font, useTheme } from "../../src/theme";
 import { student, payments } from "../../src/mockData";
 
 const methods = [
   { id: "card", label: "Credit / Debit Card", icon: "card" },
-  { id: "wallet", label: "UPI / Wallet", icon: "phone-portrait" },
+  { id: "wallet", label: "FPX / eWallet", icon: "phone-portrait" },
   { id: "bank", label: "Bank Transfer", icon: "business" },
 ];
 
 export default function Payments() {
+  const { colors, shadow, mode } = useTheme();
+  const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const [showPay, setShowPay] = useState(false);
   const [selected, setSelected] = useState("card");
 
@@ -33,9 +35,9 @@ export default function Payments() {
       </SafeAreaView>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.dueCard}>
+        <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.dueCard, shadow.strong]}>
           <View style={styles.dueRow}>
-            <Ionicons name="alert-circle" size={18} color="#FDE68A" />
+            <Ionicons name="alert-circle" size={18} color="#FFF7ED" />
             <Text style={styles.dueLbl}>NEXT PAYMENT DUE</Text>
           </View>
           <Text style={styles.dueAmt}>RM {student.nextPayment.amount.toLocaleString()}</Text>
@@ -47,27 +49,13 @@ export default function Payments() {
           </TouchableOpacity>
         </LinearGradient>
 
-        {/* Packages */}
         <Text style={styles.section}>Quick Pay</Text>
         <View style={styles.pkgRow}>
-          <View style={styles.pkgCard}>
-            <Ionicons name="calendar" size={22} color={colors.primary} />
-            <Text style={styles.pkgLbl}>Monthly</Text>
-            <Text style={styles.pkgAmt}>RM 480</Text>
-          </View>
-          <View style={styles.pkgCard}>
-            <Ionicons name="calendar-outline" size={22} color={colors.purple} />
-            <Text style={styles.pkgLbl}>Quarterly</Text>
-            <Text style={styles.pkgAmt}>RM 1,300</Text>
-          </View>
-          <View style={styles.pkgCard}>
-            <Ionicons name="trophy" size={22} color={colors.accent} />
-            <Text style={styles.pkgLbl}>Tournament</Text>
-            <Text style={styles.pkgAmt}>RM 150</Text>
-          </View>
+          <View style={styles.pkgCard}><Ionicons name="calendar" size={22} color={colors.primary} /><Text style={styles.pkgLbl}>Monthly</Text><Text style={styles.pkgAmt}>RM 480</Text></View>
+          <View style={styles.pkgCard}><Ionicons name="calendar-outline" size={22} color={colors.primaryDark} /><Text style={styles.pkgLbl}>Quarterly</Text><Text style={styles.pkgAmt}>RM 1,300</Text></View>
+          <View style={styles.pkgCard}><Ionicons name="trophy" size={22} color={colors.warning} /><Text style={styles.pkgLbl}>Tournament</Text><Text style={styles.pkgAmt}>RM 150</Text></View>
         </View>
 
-        {/* Payment history */}
         <View style={styles.sectionHead}>
           <Text style={styles.section}>Payment History</Text>
           <TouchableOpacity><Text style={styles.link}>Export</Text></TouchableOpacity>
@@ -75,9 +63,7 @@ export default function Payments() {
 
         {payments.map((p) => (
           <View key={p.id} style={styles.histCard} testID={`payment-${p.id}`}>
-            <View style={styles.histIcon}>
-              <Ionicons name="checkmark" size={18} color={colors.success} />
-            </View>
+            <View style={styles.histIcon}><Ionicons name="checkmark" size={18} color={colors.success} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.histLabel}>{p.label}</Text>
               <Text style={styles.histMeta}>{p.date} · {p.method}</Text>
@@ -93,7 +79,6 @@ export default function Payments() {
         ))}
       </ScrollView>
 
-      {/* Pay Modal */}
       <Modal visible={showPay} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -103,26 +88,17 @@ export default function Payments() {
             <Text style={styles.modalAmt}>RM {student.nextPayment.amount.toLocaleString()}</Text>
 
             {methods.map((m) => (
-              <TouchableOpacity
-                key={m.id}
-                onPress={() => setSelected(m.id)}
-                style={[styles.methodRow, selected === m.id && styles.methodRowActive]}
-                testID={`pay-method-${m.id}`}
-              >
+              <TouchableOpacity key={m.id} onPress={() => setSelected(m.id)} style={[styles.methodRow, selected === m.id && styles.methodRowActive]} testID={`pay-method-${m.id}`}>
                 <View style={[styles.methodIcon, selected === m.id && { backgroundColor: colors.primary }]}>
                   <Ionicons name={m.icon as any} size={18} color={selected === m.id ? "#fff" : colors.primary} />
                 </View>
                 <Text style={styles.methodLbl}>{m.label}</Text>
-                <Ionicons
-                  name={selected === m.id ? "radio-button-on" : "radio-button-off"}
-                  size={20}
-                  color={selected === m.id ? colors.primary : colors.textMuted}
-                />
+                <Ionicons name={selected === m.id ? "radio-button-on" : "radio-button-off"} size={20} color={selected === m.id ? colors.primary : colors.textMuted} />
               </TouchableOpacity>
             ))}
 
             <TouchableOpacity onPress={confirmPay} activeOpacity={0.9} testID="pay-confirm-btn">
-              <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.confirmBtn}>
+              <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.confirmBtn, shadow.strong]}>
                 <Ionicons name="lock-closed" size={14} color="#fff" />
                 <Text style={styles.confirmTxt}>Confirm & Pay Securely</Text>
               </LinearGradient>
@@ -137,48 +113,50 @@ export default function Payments() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: 14 },
-  title: { ...font.h1, color: colors.textPrimary, fontSize: 26 },
-  iconBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.background },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: 14 },
+    title: { ...font.h1, color: colors.textPrimary, fontSize: 26 },
+    iconBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
 
-  dueCard: { borderRadius: radius.xxl, padding: 22, ...shadow.strong },
-  dueRow: { flexDirection: "row", gap: 6, alignItems: "center" },
-  dueLbl: { color: "#FDE68A", fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
-  dueAmt: { color: "#fff", fontSize: 38, fontWeight: "800", marginTop: 8, letterSpacing: -1 },
-  dueLabel: { color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: "500", marginTop: 2 },
-  dueDate: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginTop: 2 },
-  payBtn: { flexDirection: "row", gap: 8, alignSelf: "flex-start", backgroundColor: "#fff", paddingHorizontal: 20, paddingVertical: 12, borderRadius: radius.md, alignItems: "center", marginTop: 18 },
-  payBtnTxt: { color: colors.primary, fontWeight: "800", fontSize: 14 },
+    dueCard: { borderRadius: radius.xxl, padding: 22 },
+    dueRow: { flexDirection: "row", gap: 6, alignItems: "center" },
+    dueLbl: { color: "#FFF7ED", fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
+    dueAmt: { color: "#fff", fontSize: 38, fontWeight: "800", marginTop: 8, letterSpacing: -1 },
+    dueLabel: { color: "rgba(255,255,255,0.9)", fontSize: 13, fontWeight: "500", marginTop: 2 },
+    dueDate: { color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 2 },
+    payBtn: { flexDirection: "row", gap: 8, alignSelf: "flex-start", backgroundColor: "#fff", paddingHorizontal: 20, paddingVertical: 12, borderRadius: radius.md, alignItems: "center", marginTop: 18 },
+    payBtnTxt: { color: colors.primary, fontWeight: "800", fontSize: 14 },
 
-  section: { ...font.h3, color: colors.textPrimary, marginTop: 24, marginBottom: 14 },
-  sectionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
-  link: { color: colors.primary, fontWeight: "700", fontSize: 12 },
+    section: { ...font.h3, color: colors.textPrimary, marginTop: 24, marginBottom: 14 },
+    sectionHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
+    link: { color: colors.primary, fontWeight: "700", fontSize: 12 },
 
-  pkgRow: { flexDirection: "row", gap: 10 },
-  pkgCard: { flex: 1, backgroundColor: "#fff", borderRadius: radius.lg, padding: 14, ...shadow.soft },
-  pkgLbl: { fontSize: 11, color: colors.textSecondary, marginTop: 10, fontWeight: "600" },
-  pkgAmt: { fontSize: 15, color: colors.textPrimary, fontWeight: "800", marginTop: 2 },
+    pkgRow: { flexDirection: "row", gap: 10 },
+    pkgCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    pkgLbl: { fontSize: 11, color: colors.textSecondary, marginTop: 10, fontWeight: "600" },
+    pkgAmt: { fontSize: 15, color: colors.textPrimary, fontWeight: "800", marginTop: 2 },
 
-  histCard: { flexDirection: "row", gap: 12, alignItems: "center", backgroundColor: "#fff", padding: 14, borderRadius: radius.lg, marginBottom: 10, ...shadow.soft },
-  histIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#D1FAE5", alignItems: "center", justifyContent: "center" },
-  histLabel: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
-  histMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
-  histAmt: { fontSize: 14, fontWeight: "800", color: colors.textPrimary },
-  receiptBtn: { flexDirection: "row", gap: 3, alignItems: "center", marginTop: 4 },
-  receiptTxt: { color: colors.primary, fontSize: 10, fontWeight: "700" },
+    histCard: { flexDirection: "row", gap: 12, alignItems: "center", backgroundColor: colors.surface, padding: 14, borderRadius: radius.lg, marginBottom: 10, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    histIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: mode === "dark" ? "#064E3B" : "#D1FAE5", alignItems: "center", justifyContent: "center" },
+    histLabel: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
+    histMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+    histAmt: { fontSize: 14, fontWeight: "800", color: colors.textPrimary },
+    receiptBtn: { flexDirection: "row", gap: 3, alignItems: "center", marginTop: 4 },
+    receiptTxt: { color: colors.primary, fontSize: 10, fontWeight: "700" },
 
-  modalOverlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.5)", justifyContent: "flex-end" },
-  modalCard: { backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: 36 },
-  modalHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: "center", marginBottom: 18 },
-  modalTitle: { ...font.h2, color: colors.textPrimary },
-  modalSub: { color: colors.textSecondary, fontSize: 12, marginTop: 4 },
-  modalAmt: { ...font.h1, color: colors.primary, fontSize: 32, marginTop: 12, marginBottom: 10 },
-  methodRow: { flexDirection: "row", gap: 12, alignItems: "center", padding: 14, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: 10 },
-  methodRowActive: { borderColor: colors.primary, backgroundColor: "#EEF2FF" },
-  methodIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#EEF2FF", alignItems: "center", justifyContent: "center" },
-  methodLbl: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: "600" },
-  confirmBtn: { flexDirection: "row", gap: 8, paddingVertical: 16, borderRadius: radius.md, alignItems: "center", justifyContent: "center", marginTop: 10, ...shadow.strong },
-  confirmTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
-});
+    modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: "flex-end" },
+    modalCard: { backgroundColor: colors.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 22, paddingBottom: 36 },
+    modalHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: "center", marginBottom: 18 },
+    modalTitle: { ...font.h2, color: colors.textPrimary },
+    modalSub: { color: colors.textSecondary, fontSize: 12, marginTop: 4 },
+    modalAmt: { ...font.h1, color: colors.primary, fontSize: 32, marginTop: 12, marginBottom: 10 },
+    methodRow: { flexDirection: "row", gap: 12, alignItems: "center", padding: 14, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: 10 },
+    methodRowActive: { borderColor: colors.primary, backgroundColor: colors.surfaceAlt },
+    methodIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    methodLbl: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: "600" },
+    confirmBtn: { flexDirection: "row", gap: 8, paddingVertical: 16, borderRadius: radius.md, alignItems: "center", justifyContent: "center", marginTop: 10 },
+    confirmTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
+  });
+}

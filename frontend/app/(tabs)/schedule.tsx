@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, font, radius, shadow, spacing } from "../../src/theme";
+import { radius, spacing, font, useTheme } from "../../src/theme";
 import { schedule, holidays } from "../../src/mockData";
 
 export default function Schedule() {
+  const { colors, shadow, mode } = useTheme();
+  const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const [active, setActive] = useState(0);
   const day = schedule[active];
 
@@ -27,12 +29,7 @@ export default function Schedule() {
         {schedule.map((d, i) => {
           const activeTab = i === active;
           return (
-            <TouchableOpacity
-              key={d.day}
-              onPress={() => setActive(i)}
-              testID={`schedule-day-${d.day}`}
-              style={[styles.dayChip, activeTab && styles.dayChipActive]}
-            >
+            <TouchableOpacity key={d.day} onPress={() => setActive(i)} testID={`schedule-day-${d.day}`} style={[styles.dayChip, activeTab && styles.dayChipActive]}>
               <Text style={[styles.dayLbl, activeTab && styles.dayLblActive]}>{d.day}</Text>
               <Text style={[styles.dayNum, activeTab && styles.dayNumActive]}>{d.date}</Text>
               {d.sessions.length > 0 && <View style={[styles.dayDot, activeTab && { backgroundColor: "#fff" }]} />}
@@ -42,9 +39,7 @@ export default function Schedule() {
       </ScrollView>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <Text style={styles.section}>
-          {day.sessions.length > 0 ? `${day.sessions.length} session${day.sessions.length > 1 ? "s" : ""} scheduled` : "Rest Day"}
-        </Text>
+        <Text style={styles.section}>{day.sessions.length > 0 ? `${day.sessions.length} session${day.sessions.length > 1 ? "s" : ""} scheduled` : "Rest Day"}</Text>
 
         {day.sessions.length === 0 && (
           <View style={styles.emptyCard}>
@@ -70,26 +65,18 @@ export default function Schedule() {
                 <Text style={styles.metaTxt}>{s.trainer}</Text>
               </View>
               <View style={styles.sessionActions}>
-                <TouchableOpacity style={styles.sessActBtn}>
-                  <Text style={styles.sessActTxt}>Details</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.sessActBtn, { backgroundColor: colors.primary }]}>
-                  <Text style={[styles.sessActTxt, { color: "#fff" }]}>Remind Me</Text>
-                </TouchableOpacity>
+                <TouchableOpacity style={styles.sessActBtn}><Text style={styles.sessActTxt}>Details</Text></TouchableOpacity>
+                <TouchableOpacity style={[styles.sessActBtn, { backgroundColor: colors.primary }]}><Text style={[styles.sessActTxt, { color: "#fff" }]}>Remind Me</Text></TouchableOpacity>
               </View>
             </View>
           </View>
         ))}
 
         <View style={styles.holidayCard}>
-          <View style={styles.holidayIcon}>
-            <Ionicons name="sunny" size={20} color={colors.accent} />
-          </View>
+          <View style={styles.holidayIcon}><Ionicons name="sunny" size={20} color={colors.warning} /></View>
           <View style={{ flex: 1 }}>
             <Text style={styles.holidayTitle}>Upcoming Holidays</Text>
-            {holidays.map((h) => (
-              <Text key={h.date} style={styles.holidayItem}>• {h.date} — {h.name}</Text>
-            ))}
+            {holidays.map((h) => (<Text key={h.date} style={styles.holidayItem}>• {h.date} — {h.name}</Text>))}
           </View>
         </View>
       </ScrollView>
@@ -97,41 +84,43 @@ export default function Schedule() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: 14 },
-  title: { ...font.h1, color: colors.textPrimary, fontSize: 26 },
-  sub: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
-  iconBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.background },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: 14 },
+    title: { ...font.h1, color: colors.textPrimary, fontSize: 26 },
+    sub: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
+    iconBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
 
-  daysRow: { paddingHorizontal: spacing.xl, gap: 10, paddingVertical: 10 },
-  dayChip: { width: 62, paddingVertical: 12, backgroundColor: "#fff", borderRadius: radius.lg, alignItems: "center", ...shadow.soft },
-  dayChipActive: { backgroundColor: colors.primary },
-  dayLbl: { fontSize: 11, fontWeight: "700", color: colors.textSecondary, letterSpacing: 1 },
-  dayLblActive: { color: "rgba(255,255,255,0.8)" },
-  dayNum: { fontSize: 20, fontWeight: "800", color: colors.textPrimary, marginTop: 4 },
-  dayNumActive: { color: "#fff" },
-  dayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.primary, marginTop: 6 },
+    daysRow: { paddingHorizontal: spacing.xl, gap: 10, paddingVertical: 10 },
+    dayChip: { width: 62, paddingVertical: 12, backgroundColor: colors.surface, borderRadius: radius.lg, alignItems: "center", ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    dayChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    dayLbl: { fontSize: 11, fontWeight: "700", color: colors.textSecondary, letterSpacing: 1 },
+    dayLblActive: { color: "rgba(255,255,255,0.85)" },
+    dayNum: { fontSize: 20, fontWeight: "800", color: colors.textPrimary, marginTop: 4 },
+    dayNumActive: { color: "#fff" },
+    dayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.primary, marginTop: 6 },
 
-  section: { ...font.h4, color: colors.textSecondary, marginTop: 10, marginBottom: 14 },
-  emptyCard: { alignItems: "center", paddingVertical: 60 },
-  emptyTxt: { ...font.h3, color: colors.textPrimary, marginTop: 12 },
-  emptySub: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+    section: { ...font.h4, color: colors.textSecondary, marginTop: 10, marginBottom: 14 },
+    emptyCard: { alignItems: "center", paddingVertical: 60 },
+    emptyTxt: { ...font.h3, color: colors.textPrimary, marginTop: 12 },
+    emptySub: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
 
-  sessionCard: { flexDirection: "row", backgroundColor: "#fff", borderRadius: radius.lg, padding: 14, marginBottom: 12, ...shadow.soft },
-  timeCol: { width: 60, alignItems: "center", justifyContent: "center" },
-  timeTxt: { fontSize: 16, fontWeight: "800", color: colors.textPrimary },
-  timeAmPm: { fontSize: 10, color: colors.textSecondary, fontWeight: "700" },
-  verticalBar: { width: 4, borderRadius: 2, marginHorizontal: 10 },
-  sessionTitle: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
-  metaRow: { flexDirection: "row", gap: 4, alignItems: "center", marginTop: 6 },
-  metaTxt: { fontSize: 11, color: colors.textSecondary, fontWeight: "500" },
-  sessionActions: { flexDirection: "row", gap: 8, marginTop: 12 },
-  sessActBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
-  sessActTxt: { fontSize: 11, fontWeight: "700", color: colors.textPrimary },
+    sessionCard: { flexDirection: "row", backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, marginBottom: 12, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    timeCol: { width: 60, alignItems: "center", justifyContent: "center" },
+    timeTxt: { fontSize: 16, fontWeight: "800", color: colors.textPrimary },
+    timeAmPm: { fontSize: 10, color: colors.textSecondary, fontWeight: "700" },
+    verticalBar: { width: 4, borderRadius: 2, marginHorizontal: 10 },
+    sessionTitle: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
+    metaRow: { flexDirection: "row", gap: 4, alignItems: "center", marginTop: 6 },
+    metaTxt: { fontSize: 11, color: colors.textSecondary, fontWeight: "500" },
+    sessionActions: { flexDirection: "row", gap: 8, marginTop: 12 },
+    sessActBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+    sessActTxt: { fontSize: 11, fontWeight: "700", color: colors.textPrimary },
 
-  holidayCard: { flexDirection: "row", gap: 12, backgroundColor: "#FEF3C7", borderRadius: radius.lg, padding: 16, marginTop: 16 },
-  holidayIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#FDE68A", alignItems: "center", justifyContent: "center" },
-  holidayTitle: { fontSize: 14, fontWeight: "800", color: "#92400E" },
-  holidayItem: { fontSize: 12, color: "#92400E", marginTop: 4 },
-});
+    holidayCard: { flexDirection: "row", gap: 12, backgroundColor: mode === "dark" ? "#2D1A0A" : "#FEF3C7", borderRadius: radius.lg, padding: 16, marginTop: 16 },
+    holidayIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: mode === "dark" ? "#3F2410" : "#FDE68A", alignItems: "center", justifyContent: "center" },
+    holidayTitle: { fontSize: 14, fontWeight: "800", color: mode === "dark" ? "#FDBA74" : "#92400E" },
+    holidayItem: { fontSize: 12, color: mode === "dark" ? "#FED7AA" : "#92400E", marginTop: 4 },
+  });
+}

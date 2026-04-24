@@ -1,11 +1,13 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { ThemeProvider, useTheme } from "../src/theme";
 
-export default function RootLayout() {
+function ThemedStack() {
+  const { mode } = useTheme();
   return (
-    <SafeAreaProvider>
-      <StatusBar style="dark" />
+    <>
+      <StatusBar style={mode === "dark" ? "light" : "dark"} />
       <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
@@ -15,6 +17,16 @@ export default function RootLayout() {
         <Stack.Screen name="events" />
         <Stack.Screen name="qr-scan" options={{ presentation: "modal", animation: "fade_from_bottom" }} />
       </Stack>
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <ThemedStack />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
