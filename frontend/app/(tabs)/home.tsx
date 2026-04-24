@@ -99,7 +99,7 @@ export default function Home() {
           <LinearGradient colors={["#FEE2E2", "#FECACA"]} style={styles.dueGradient}>
             <View style={{ flex: 1 }}>
               <Text style={styles.dueLbl}>Fees Due</Text>
-              <Text style={styles.dueAmt}>₹{student.nextPayment.amount.toLocaleString()}</Text>
+              <Text style={styles.dueAmt}>RM {student.nextPayment.amount.toLocaleString()}</Text>
               <Text style={styles.dueDate}>Due {student.nextPayment.dueDate}</Text>
             </View>
             <View style={styles.dueBtn}>

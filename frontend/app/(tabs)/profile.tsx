@@ -11,8 +11,8 @@ const settingsItems = [
   { id: "lang", icon: "language-outline", label: "Language", meta: "English" },
   { id: "priv", icon: "lock-closed-outline", label: "Privacy & Security" },
   { id: "help", icon: "help-circle-outline", label: "Help & Support" },
-  { id: "refer", icon: "gift-outline", label: "Refer a Friend", meta: "Earn ₹500" },
-  { id: "about", icon: "information-circle-outline", label: "About Apex Academy" },
+  { id: "refer", icon: "gift-outline", label: "Refer a Friend", meta: "Earn RM 50" },
+  { id: "about", icon: "information-circle-outline", label: "About D-Clix" },
 ];
 
 export default function Profile() {
@@ -57,7 +57,7 @@ export default function Profile() {
         {/* Virtual ID */}
         <View style={styles.virtualId}>
           <View style={styles.vidLeft}>
-            <Text style={styles.vidBrand}>APEX ACADEMY</Text>
+            <Text style={styles.vidBrand}>D-CLIX</Text>
             <Text style={styles.vidName}>{student.name}</Text>
             <Text style={styles.vidLbl}>{student.level} · {student.belt}</Text>
             <View style={styles.barcodeRow}>
@@ -131,7 +131,7 @@ export default function Profile() {
           <Text style={styles.logoutTxt}>Logout</Text>
         </TouchableOpacity>
 
-        <Text style={styles.version}>Apex Academy · v1.0.0</Text>
+        <Text style={styles.version}>D-Clix · v1.0.0</Text>
       </ScrollView>
     </View>
   );

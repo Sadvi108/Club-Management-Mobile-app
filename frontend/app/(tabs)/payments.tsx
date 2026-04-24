@@ -18,7 +18,7 @@ export default function Payments() {
 
   const confirmPay = () => {
     setShowPay(false);
-    setTimeout(() => Alert.alert("Payment Successful", `₹${student.nextPayment.amount} paid via ${methods.find(m => m.id === selected)?.label}`), 200);
+    setTimeout(() => Alert.alert("Payment Successful", `RM ${student.nextPayment.amount} paid via ${methods.find(m => m.id === selected)?.label}`), 200);
   };
 
   return (
@@ -38,7 +38,7 @@ export default function Payments() {
             <Ionicons name="alert-circle" size={18} color="#FDE68A" />
             <Text style={styles.dueLbl}>NEXT PAYMENT DUE</Text>
           </View>
-          <Text style={styles.dueAmt}>₹{student.nextPayment.amount.toLocaleString()}</Text>
+          <Text style={styles.dueAmt}>RM {student.nextPayment.amount.toLocaleString()}</Text>
           <Text style={styles.dueLabel}>{student.nextPayment.label}</Text>
           <Text style={styles.dueDate}>Due by {student.nextPayment.dueDate}</Text>
           <TouchableOpacity style={styles.payBtn} onPress={() => setShowPay(true)} testID="payments-pay-now">
@@ -53,17 +53,17 @@ export default function Payments() {
           <View style={styles.pkgCard}>
             <Ionicons name="calendar" size={22} color={colors.primary} />
             <Text style={styles.pkgLbl}>Monthly</Text>
-            <Text style={styles.pkgAmt}>₹4,800</Text>
+            <Text style={styles.pkgAmt}>RM 480</Text>
           </View>
           <View style={styles.pkgCard}>
             <Ionicons name="calendar-outline" size={22} color={colors.purple} />
             <Text style={styles.pkgLbl}>Quarterly</Text>
-            <Text style={styles.pkgAmt}>₹13,000</Text>
+            <Text style={styles.pkgAmt}>RM 1,300</Text>
           </View>
           <View style={styles.pkgCard}>
             <Ionicons name="trophy" size={22} color={colors.accent} />
             <Text style={styles.pkgLbl}>Tournament</Text>
-            <Text style={styles.pkgAmt}>₹1,500</Text>
+            <Text style={styles.pkgAmt}>RM 150</Text>
           </View>
         </View>
 
@@ -83,7 +83,7 @@ export default function Payments() {
               <Text style={styles.histMeta}>{p.date} · {p.method}</Text>
             </View>
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={styles.histAmt}>₹{p.amount.toLocaleString()}</Text>
+              <Text style={styles.histAmt}>RM {p.amount.toLocaleString()}</Text>
               <TouchableOpacity style={styles.receiptBtn} testID={`receipt-${p.id}`}>
                 <Ionicons name="download-outline" size={12} color={colors.primary} />
                 <Text style={styles.receiptTxt}>Receipt</Text>
@@ -100,7 +100,7 @@ export default function Payments() {
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Complete Payment</Text>
             <Text style={styles.modalSub}>Choose payment method</Text>
-            <Text style={styles.modalAmt}>₹{student.nextPayment.amount.toLocaleString()}</Text>
+            <Text style={styles.modalAmt}>RM {student.nextPayment.amount.toLocaleString()}</Text>
 
             {methods.map((m) => (
               <TouchableOpacity

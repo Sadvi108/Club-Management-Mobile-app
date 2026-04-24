@@ -44,7 +44,7 @@ export default function Splash() {
             <Ionicons name="flash" size={46} color={colors.primary} />
           </View>
         </View>
-        <Text style={styles.brand}>APEX ACADEMY</Text>
+        <Text style={styles.brand}>D-CLIX</Text>
         <Text style={styles.tagline}>Train Hard. Rise Higher.</Text>
       </Animated.View>
 
