@@ -1,0 +1,43 @@
+### Base URL
+@baseUrl = http://apimac.zyncbook.com
+
+### ============================
+### AUTH (do this first to get token)
+### ============================
+
+### Login (Swagger: POST /Account/Authenticate)
+# @name login
+POST {{baseUrl}}/Account/Authenticate
+Content-Type: application/json
+Accept: application/json
+
+{
+  "username": "Aunty1",
+  "password": "1234",
+  "userType": 3,
+  "accessMethod": 0,
+  "deviceType": "mobile"
+}
+
+### Token helper (VS Code REST Client can resolve it)
+@token = {{login.response.body.data.accessToken}}
+
+### ============================
+### TEST ENDPOINTS (from Swagger)
+### ============================
+
+### My Info
+GET {{baseUrl}}/Profile/MyInfo
+Accept: application/json
+Authorization: Bearer {{token}}
+
+### Training Centers
+GET {{baseUrl}}/Listing/TrainingCenters
+Accept: application/json
+Authorization: Bearer {{token}}
+
+### Get Branches By Club Code
+GET {{baseUrl}}/Account/GetBranchesByClubCode/RTT
+Accept: application/json
+Authorization: Bearer {{token}}
+
