@@ -44,7 +44,21 @@ class TabsShell extends StatelessWidget {
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: BottomAppBar(
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          boxShadow: c.isDark
+              ? null
+              : [
+                  BoxShadow(
+                    color: const Color(0xFF0F172A).withOpacity(0.06),
+                    blurRadius: 24,
+                    offset: const Offset(0, -8),
+                    spreadRadius: -4,
+                  ),
+                ],
+        ),
+        child: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
         color: c.surface,
@@ -59,6 +73,7 @@ class TabsShell extends StatelessWidget {
             _tab(context, 3, idx, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Payments', '/payments'),
             _tab(context, 4, idx, Icons.person_outline, Icons.person, 'Profile', '/profile'),
           ],
+        ),
         ),
       ),
     );

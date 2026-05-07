@@ -152,11 +152,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           fontWeight: FontWeight.w500)),
                   const SizedBox(height: 32),
                   Container(
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(
                       color: c.surface,
-                      borderRadius: BorderRadius.circular(Radii.xl),
-                      border: Border.all(color: c.border),
+                      borderRadius: BorderRadius.circular(Radii.xxl),
+                      border: c.isDark ? Border.all(color: c.border) : null,
                       boxShadow: Shadows.card(c),
                     ),
                     child: Column(

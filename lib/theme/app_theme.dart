@@ -48,7 +48,7 @@ class AppColors {
   });
 
   static const light = AppColors(
-    background: Color(0xFFFFFFFF),
+    background: Color(0xFFF6F7FB),
     surface: Color(0xFFFFFFFF),
     surfaceAlt: Color(0xFFFFF7ED),
     surfaceAlt2: Color(0xFFFFEDD5),
@@ -57,10 +57,10 @@ class AppColors {
     primaryLight: Color(0xFFFB923C),
     accent: Color(0xFFFB923C),
     textPrimary: Color(0xFF0F172A),
-    textSecondary: Color(0xFF64748B),
+    textSecondary: Color(0xFF475569),
     textMuted: Color(0xFF94A3B8),
-    border: Color(0xFFF1F5F9),
-    borderLight: Color(0xFFF8FAFC),
+    border: Color(0xFFE2E8F0),
+    borderLight: Color(0xFFF1F5F9),
     success: Color(0xFF10B981),
     warning: Color(0xFFF59E0B),
     danger: Color(0xFFEF4444),
@@ -104,18 +104,37 @@ class Gaps {
 }
 
 class Shadows {
-  static List<BoxShadow> card(AppColors c) => [
-        BoxShadow(
-          color: (c.isDark ? Colors.black : const Color(0xFF0F172A)).withOpacity(c.isDark ? 0.3 : 0.08),
-          blurRadius: 16,
-          offset: const Offset(0, 6),
-        ),
-      ];
+  static List<BoxShadow> card(AppColors c) => c.isDark
+      ? [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ]
+      : [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.06),
+            blurRadius: 1,
+            offset: const Offset(0, 1),
+          ),
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+            spreadRadius: -4,
+          ),
+        ];
   static List<BoxShadow> strong(AppColors c) => [
         BoxShadow(
-          color: const Color(0xFFF97316).withOpacity(0.3),
-          blurRadius: 18,
-          offset: const Offset(0, 10),
+          color: const Color(0xFFF97316).withOpacity(c.isDark ? 0.45 : 0.35),
+          blurRadius: 24,
+          offset: const Offset(0, 12),
+        ),
+        BoxShadow(
+          color: const Color(0xFFEA580C).withOpacity(c.isDark ? 0.25 : 0.18),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
         ),
       ];
 }
@@ -188,8 +207,8 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: c.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        fillColor: c.isDark ? c.surfaceAlt : const Color(0xFFF8FAFC),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         hintStyle: TextStyle(color: c.textMuted, fontWeight: FontWeight.w500),
         labelStyle: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w600),
         errorStyle: TextStyle(color: c.danger, fontWeight: FontWeight.w600),
@@ -203,7 +222,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(Radii.md),
-          borderSide: BorderSide(color: c.primary, width: 1.5),
+          borderSide: BorderSide(color: c.primary, width: 1.6),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
