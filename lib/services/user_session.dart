@@ -15,6 +15,35 @@ class UserSession extends ChangeNotifier {
   bool loading = false;
   String? error;
 
+  /// Latest store version returned by /Listing/StoreVersion. Compared against
+  /// [currentAppVersion] to decide whether to show the "new version" banner.
+  String? latestStoreVersion;
+  bool storeVersionDismissed = false;
+  static const String currentAppVersion = '1.0.0';
+
+  bool get hasNewerVersion {
+    final latest = latestStoreVersion;
+    if (latest == null || latest.isEmpty) return false;
+    if (storeVersionDismissed) return false;
+    return _compareVersion(latest, currentAppVersion) > 0;
+  }
+
+  void dismissStoreVersionBanner() {
+    storeVersionDismissed = true;
+    notifyListeners();
+  }
+
+  static int _compareVersion(String a, String b) {
+    final ap = a.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+    final bp = b.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+    for (var i = 0; i < ap.length || i < bp.length; i++) {
+      final av = i < ap.length ? ap[i] : 0;
+      final bv = i < bp.length ? bp[i] : 0;
+      if (av != bv) return av.compareTo(bv);
+    }
+    return 0;
+  }
+
   List<dynamic> get myOffers =>
       (homeStats?['myoffers'] as List?) ?? const <dynamic>[];
   List<dynamic> get myNews =>
@@ -70,6 +99,9 @@ class UserSession extends ChangeNotifier {
       ApiService.setToken(token);
       authData = data;
       await _loadAll();
+      // Boot-time post-login extras (best-effort, never throw).
+      _checkStoreVersion();
+      _registerPushToken();
       return true;
     } catch (e) {
       error = e.toString();
@@ -102,6 +134,37 @@ class UserSession extends ChangeNotifier {
         if (d is Map) studentAddtnlInfo = Map<String, dynamic>.from(d);
       }),
     ]);
+  }
+
+  Future<void> _checkStoreVersion() async {
+    try {
+      final resp = await ApiService.get('/Listing/StoreVersion/android');
+      String? v;
+      if (resp is String) {
+        v = resp;
+      } else if (resp is Map) {
+        v = (resp['version'] ?? resp['data'] ?? resp['storeVersion'])?.toString();
+      }
+      if (v != null && v.isNotEmpty) {
+        latestStoreVersion = v;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('StoreVersion failed: $e');
+    }
+  }
+
+  Future<void> _registerPushToken() async {
+    try {
+      final branchId = authData?['branchId'] ?? authData?['branchID'] ?? 0;
+      // FCM not wired — send a stub so the endpoint is exercised.
+      await ApiService.post('/Profile/UpdateToken/$branchId', <String, dynamic>{
+        'token': 'flutter-stub-token',
+        'deviceType': 'android',
+      });
+    } catch (e) {
+      debugPrint('UpdateToken failed: $e');
+    }
   }
 
   Future<dynamic> _safeGet(String endpoint) async {

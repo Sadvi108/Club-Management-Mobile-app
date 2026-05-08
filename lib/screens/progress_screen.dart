@@ -5,6 +5,8 @@ import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
+import '../widgets/app_icon_button.dart';
+import '../widgets/filter_sheet.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -60,7 +62,16 @@ class _ProgressScreenState extends State<ProgressScreen> {
       backgroundColor: c.background,
       body: CustomScrollView(slivers: [
         SliverToBoxAdapter(
-          child: const AppHeader(title: 'Progress', showBack: true),
+          child: AppHeader(
+            title: 'Progress',
+            showBack: true,
+            trailing: AppIconButton(
+              icon: Icons.tune,
+              onPressed: () => showFilterSheet(context),
+              backgroundColor: c.surfaceAlt,
+              foregroundColor: c.primary,
+            ),
+          ),
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(Gaps.xl, 0, Gaps.xl, 40),

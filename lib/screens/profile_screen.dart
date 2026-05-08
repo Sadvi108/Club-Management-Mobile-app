@@ -98,6 +98,351 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<List<dynamic>?> _safeList(Future<dynamic> Function() fn) async {
+    try {
+      final r = await fn();
+      if (r is List) return r;
+      if (r is Map && r['data'] is List) return r['data'] as List;
+    } catch (e) {
+      debugPrint('safeList failed: $e');
+    }
+    return null;
+  }
+
+  Future<void> _openSwitchStudent() async {
+    final c = context.appColors;
+    final list = await _safeList(Api.listingMySiblings);
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
+        ),
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 14),
+          Text('Switch Student', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          if (list == null || list.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text('No siblings found.', style: TextStyle(fontSize: 13, color: c.textSecondary)),
+            )
+          else
+            ...list.whereType<Map>().map((s) {
+              final sid = s['id'] ?? s['studentId'] ?? s['code'];
+              final name = (s['name'] ?? s['fullName'] ?? '?').toString();
+              return InkWell(
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    final token = (UserSession.instance.authData?['accessToken'] ?? '').toString();
+                    final resp = await Api.accountChangeStudent(<String, dynamic>{
+                      'studentId': sid,
+                      'accessToken': token,
+                    });
+                    if (resp is Map && resp['data'] is Map) {
+                      UserSession.instance.authData =
+                          Map<String, dynamic>.from(resp['data'] as Map);
+                    }
+                    await UserSession.instance.refresh();
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Switched to $name')),
+                    );
+                  } catch (e) {
+                    debugPrint('ChangeStudent failed: $e');
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Switch failed: $e')),
+                    );
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(children: [
+                    Container(width: 36, height: 36, decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle), child: Icon(Icons.person, color: c.primary, size: 18)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary))),
+                    Icon(Icons.chevron_right, color: c.textMuted),
+                  ]),
+                ),
+              );
+            }),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _openSwitchClub() async {
+    final c = context.appColors;
+    final session = UserSession.instance;
+    final clubCode = (session.authData?['clubCode'] ?? session.authData?['code'] ?? '').toString();
+    List<dynamic>? branches;
+    if (clubCode.isNotEmpty) {
+      branches = await _safeList(() => Api.listingGetBranchesByClubCode(clubCode));
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
+        ),
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 14),
+          Text('Switch Club', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          if (branches == null || branches.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text('No branches available.', style: TextStyle(fontSize: 13, color: c.textSecondary)),
+            )
+          else
+            ...branches.whereType<Map>().map((b) {
+              final bid = b['id'] ?? b['branchId'] ?? b['code'];
+              final name = (b['name'] ?? b['branchName'] ?? '?').toString();
+              return InkWell(
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    final token = (session.authData?['accessToken'] ?? '').toString();
+                    final resp = await Api.accountChangeClub(<String, dynamic>{
+                      'branchId': bid,
+                      'clubCode': clubCode,
+                      'accessToken': token,
+                    });
+                    if (resp is Map && resp['data'] is Map) {
+                      UserSession.instance.authData =
+                          Map<String, dynamic>.from(resp['data'] as Map);
+                    }
+                    await UserSession.instance.refresh();
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Switched to $name')),
+                    );
+                  } catch (e) {
+                    debugPrint('ChangeClub failed: $e');
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Switch failed: $e')),
+                    );
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(children: [
+                    Container(width: 36, height: 36, decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle), child: Icon(Icons.business, color: c.primary, size: 18)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary))),
+                    Icon(Icons.chevron_right, color: c.textMuted),
+                  ]),
+                ),
+              );
+            }),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _openHelpDesk() async {
+    final c = context.appColors;
+    final subjectCtrl = TextEditingController();
+    final messageCtrl = TextEditingController();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
+          ),
+          padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 14),
+            Text('Help Desk', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 12),
+            TextField(controller: subjectCtrl, decoration: const InputDecoration(labelText: 'Subject')),
+            const SizedBox(height: 10),
+            TextField(controller: messageCtrl, maxLines: 4, decoration: const InputDecoration(labelText: 'Message')),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: () async {
+                try {
+                  await Api.profileSend2ClubHelpDesk(<String, dynamic>{
+                    'subject': subjectCtrl.text,
+                    'message': messageCtrl.text,
+                  });
+                  if (!mounted) return;
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Help desk message sent')),
+                  );
+                } catch (e) {
+                  debugPrint('Send2HelpDesk failed: $e');
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                }
+              },
+              borderRadius: BorderRadius.circular(Radii.md),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: c.gradient),
+                  borderRadius: BorderRadius.circular(Radii.md),
+                  boxShadow: Shadows.strong(c),
+                ),
+                child: const Text('Send', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openStudentDetails() async {
+    final c = context.appColors;
+    Map<String, dynamic>? data;
+    try {
+      final r = await Api.reportsStudentDetails();
+      if (r is Map && r['data'] is Map) {
+        data = Map<String, dynamic>.from(r['data'] as Map);
+      } else if (r is Map) {
+        data = Map<String, dynamic>.from(r);
+      }
+    } catch (e) {
+      debugPrint('reportsStudentDetails failed: $e');
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Student Details'),
+        content: data == null
+            ? const Text('No details available.')
+            : SizedBox(
+                width: 320,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: data.entries.take(20).map((e) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 3),
+                          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            SizedBox(width: 110, child: Text(e.key, style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w700))),
+                            Expanded(child: Text(e.value?.toString() ?? '', style: TextStyle(fontSize: 12, color: c.textPrimary))),
+                          ]),
+                        )).toList(),
+                  ),
+                ),
+              ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+      ),
+    );
+  }
+
+  Future<void> _openMyPurchases() async {
+    final c = context.appColors;
+    final list = await _safeList(Api.reportsPurchaseRequests);
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
+        ),
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 14),
+          Text('My Purchases', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          Flexible(
+            child: (list == null || list.isEmpty)
+                ? Text('No purchases yet.', style: TextStyle(fontSize: 13, color: c.textSecondary))
+                : ListView(
+                    shrinkWrap: true,
+                    children: list.whereType<Map>().map((p) {
+                      final label = (p['name'] ?? p['description'] ?? p['text'] ?? 'Purchase').toString();
+                      final amt = (p['amount'] ?? p['value'] ?? '').toString();
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(children: [
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                            if (amt.isNotEmpty) Text('RM $amt', style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                          ])),
+                          TextButton.icon(
+                            onPressed: () async {
+                              try {
+                                final r = await Api.purchaseRequestFetchProducts();
+                                final products = r is List ? r : (r is Map && r['data'] is List ? r['data'] as List : const <dynamic>[]);
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Loaded ${products.length} products')),
+                                );
+                              } catch (e) {
+                                debugPrint('FetchProducts failed: $e');
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                              }
+                            },
+                            icon: Icon(Icons.replay, size: 14, color: c.primary),
+                            label: Text('Reorder', style: TextStyle(color: c.primary, fontSize: 12, fontWeight: FontWeight.w800)),
+                          ),
+                        ]),
+                      );
+                    }).toList(),
+                  ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _actionTile(AppColors c, IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(Radii.lg),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: Gaps.xl, vertical: 6),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(Radii.lg),
+          border: c.isDark ? Border.all(color: c.border) : null,
+          boxShadow: Shadows.card(c),
+        ),
+        child: Row(children: [
+          Container(width: 38, height: 38, decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle), child: Icon(icon, color: c.primary, size: 18)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary))),
+          Icon(Icons.chevron_right, color: c.textMuted),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
@@ -236,7 +581,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ]),
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
+            _actionTile(c, Icons.swap_horiz, 'Switch Student', _openSwitchStudent),
+            _actionTile(c, Icons.business, 'Switch Club', _openSwitchClub),
+            _actionTile(c, Icons.support_agent, 'Help Desk', _openHelpDesk),
+            _actionTile(c, Icons.badge_outlined, 'Student Details', _openStudentDetails),
+            _actionTile(c, Icons.shopping_bag_outlined, 'My Purchases', _openMyPurchases),
+            const SizedBox(height: 12),
             _notificationsCard(context, c, session),
             const SizedBox(height: 18),
             _logoutBtn(context, c),
@@ -275,7 +626,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final body = (n['value'] ?? n['description'] ?? '').toString()
                 .replaceAll(RegExp(r'<[^>]+>'), '').replaceAll('&nbsp;', ' ').trim();
             return InkWell(
-              onTap: () => _markNotificationRead(id),
+              onTap: () {
+                final gid = (n['groupId'] ?? n['groupid'] ?? id);
+                if (gid != null) {
+                  context.push('/notification/${Uri.encodeComponent(gid.toString())}');
+                } else {
+                  _markNotificationRead(id);
+                }
+              },
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

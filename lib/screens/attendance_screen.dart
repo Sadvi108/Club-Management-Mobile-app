@@ -8,6 +8,7 @@ import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_icon_button.dart';
+import '../widgets/filter_sheet.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -87,12 +88,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           child: AppHeader(
             title: 'Attendance',
             showBack: true,
-            trailing: AppIconButton(
-              icon: Icons.qr_code_2,
-              onPressed: () => context.push('/qr-scan'),
-              backgroundColor: c.surfaceAlt,
-              foregroundColor: c.primary,
-            ),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              AppIconButton(
+                icon: Icons.tune,
+                onPressed: () => showFilterSheet(context),
+                backgroundColor: c.surfaceAlt,
+                foregroundColor: c.primary,
+              ),
+              const SizedBox(width: 6),
+              AppIconButton(
+                icon: Icons.qr_code_2,
+                onPressed: () => context.push('/qr-scan'),
+                backgroundColor: c.surfaceAlt,
+                foregroundColor: c.primary,
+              ),
+            ]),
           ),
         ),
         SliverPadding(

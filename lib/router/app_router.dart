@@ -13,6 +13,7 @@ import '../screens/attendance_screen.dart';
 import '../screens/progress_screen.dart';
 import '../screens/events_screen.dart';
 import '../screens/qr_scan_screen.dart';
+import '../screens/notification_detail_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -32,6 +33,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/attendance', builder: (_, __) => const AttendanceScreen()),
     GoRoute(path: '/progress', builder: (_, __) => const ProgressScreen()),
     GoRoute(path: '/events', builder: (_, __) => const EventsScreen()),
+    GoRoute(
+      path: '/notification/:groupId',
+      builder: (_, state) => NotificationDetailScreen(
+        groupId: state.pathParameters['groupId'] ?? '',
+      ),
+    ),
     GoRoute(
       path: '/qr-scan',
       pageBuilder: (_, state) => MaterialPage(

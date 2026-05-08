@@ -5,6 +5,7 @@ import '../services/api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_icon_button.dart';
+import '../widgets/filter_sheet.dart';
 
 class TrainingScreen extends StatefulWidget {
   const TrainingScreen({super.key});
@@ -74,7 +75,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
               subtitle: '3 active programs',
               trailing: AppIconButton(
                 icon: Icons.tune,
-                onPressed: () {},
+                onPressed: () => showFilterSheet(context),
                 backgroundColor: c.surfaceAlt,
                 foregroundColor: c.primary,
               ),

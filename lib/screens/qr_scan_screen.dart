@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -29,6 +30,11 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
   bool _resolving = false;
   bool _cameraFailed = false;
   Timer? _fallbackTimer;
+  bool _generateMode = false;
+  final _genCtrl = TextEditingController();
+  Uint8List? _genBytes;
+  String? _genString;
+  bool _generating = false;
 
   @override
   void initState() {
@@ -53,7 +59,49 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
     _fallbackTimer?.cancel();
     _laser.dispose();
     _controller.dispose();
+    _genCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _generateQR() async {
+    final text = _genCtrl.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _generating = true;
+      _genBytes = null;
+      _genString = null;
+    });
+    try {
+      final resp = await Api.utilitiesQRCode(width: 300, height: 300, content: text);
+      if (resp is String) {
+        // Try base64 decode
+        try {
+          final cleaned = resp.contains(',') ? resp.split(',').last : resp;
+          _genBytes = base64Decode(cleaned);
+        } catch (_) {
+          _genString = resp;
+        }
+      } else if (resp is Map) {
+        final s = (resp['data'] ?? resp['image'] ?? resp['qr'])?.toString();
+        if (s != null) {
+          try {
+            final cleaned = s.contains(',') ? s.split(',').last : s;
+            _genBytes = base64Decode(cleaned);
+          } catch (_) {
+            _genString = s;
+          }
+        }
+      } else if (resp is List<int>) {
+        _genBytes = Uint8List.fromList(resp);
+      }
+    } catch (e) {
+      debugPrint('QRCode generate failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _generating = false);
+    }
   }
 
   void _onDetect(BarcodeCapture capture) {
@@ -150,7 +198,11 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
                   backgroundColor: Colors.white.withOpacity(0.12),
                   foregroundColor: Colors.white,
                 ),
-                const Text('Scan to Check-in', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  _tabBtn('Scan', !_generateMode, () => setState(() => _generateMode = false)),
+                  const SizedBox(width: 6),
+                  _tabBtn('Generate', _generateMode, () => setState(() => _generateMode = true)),
+                ]),
                 AppIconButton(
                   icon: Icons.flash_on,
                   onPressed: () => _controller.toggleTorch(),
@@ -163,6 +215,9 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
         ),
 
         // Center area
+        if (_generateMode)
+          _buildGeneratePanel(c)
+        else
         Align(
           alignment: Alignment.center,
           child: Padding(
@@ -286,6 +341,81 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
           begin: Alignment.topCenter, end: Alignment.bottomCenter,
           colors: [Colors.black, Color(0xFF0A0A0B), Color(0xFF1F1610)],
         ),
+      ),
+    );
+  }
+
+  Widget _tabBtn(String label, bool active, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? Colors.white : Colors.white.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                color: active ? Colors.black : Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w800)),
+      ),
+    );
+  }
+
+  Widget _buildGeneratePanel(AppColors c) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const Text('Generate QR', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 14),
+          Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(Radii.md),
+            child: TextField(
+              controller: _genCtrl,
+              decoration: const InputDecoration(
+                hintText: 'Enter text to encode',
+                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: _generating ? null : _generateQR,
+            borderRadius: BorderRadius.circular(Radii.md),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: c.gradient),
+                borderRadius: BorderRadius.circular(Radii.md),
+              ),
+              child: Text(_generating ? 'Generating…' : 'Generate',
+                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Expanded(
+            child: Center(
+              child: _genBytes != null
+                  ? Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(Radii.md)),
+                      child: Image.memory(_genBytes!, width: 240, height: 240, fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => const Text('Cannot render image')),
+                    )
+                  : _genString != null
+                      ? SingleChildScrollView(
+                          child: SelectableText(_genString!, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                        )
+                      : const Text('No QR generated yet', style: TextStyle(color: Color(0x99FFFFFF))),
+            ),
+          ),
+        ]),
       ),
     );
   }

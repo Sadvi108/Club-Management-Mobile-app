@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import '../data/mock_data.dart';
 import '../models/models.dart';
 import '../services/api.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_icon_button.dart';
+import '../widgets/filter_sheet.dart';
 
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({super.key});
@@ -59,7 +61,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   Widget build(BuildContext context) {
     final c = context.appColors;
     final day = kSchedule[active];
-    return Container(
+    return Stack(children: [
+      Container(
       color: c.background,
       child: Column(
         children: [
@@ -67,8 +70,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             title: 'Schedule',
             subtitle: 'Feb 2026 · Week 4',
             trailing: AppIconButton(
-              icon: Icons.swap_horiz,
-              onPressed: () {},
+              icon: Icons.tune,
+              onPressed: () async {
+                final r = await showFilterSheet(context);
+                if (r != null && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Filter applied: ${r.values.where((v) => v != null).length} field(s)')),
+                  );
+                }
+              },
               backgroundColor: c.surfaceAlt,
               foregroundColor: c.primary,
             ),
@@ -143,6 +153,221 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           ),
         ],
       ),
+    ),
+    Positioned(
+      right: 18,
+      bottom: 100,
+      child: FloatingActionButton.extended(
+        backgroundColor: c.primary,
+        foregroundColor: Colors.white,
+        onPressed: _openBookClassSheet,
+        icon: const Icon(Icons.add),
+        label: const Text('Book a class', style: TextStyle(fontWeight: FontWeight.w800)),
+      ),
+    ),
+    ]);
+  }
+
+  Future<void> _openBookClassSheet() async {
+    final c = context.appColors;
+    List<dynamic>? centers;
+    List<dynamic>? instructors;
+    try {
+      final r1 = await Api.listingTrainingCenters();
+      centers = r1 is List ? r1 : (r1 is Map && r1['data'] is List ? r1['data'] as List : <dynamic>[]);
+      final r2 = await Api.listingInstructors();
+      instructors = r2 is List ? r2 : (r2 is Map && r2['data'] is List ? r2['data'] as List : <dynamic>[]);
+    } catch (e) {
+      debugPrint('book class load failed: $e');
+    }
+    if (!mounted) return;
+
+    final now = DateTime.now();
+    dynamic centerId;
+    dynamic instructorId;
+    int month = now.month;
+    int year = now.year;
+    int packageTypeId = 1;
+    dynamic packageId;
+    List<dynamic>? packages;
+    String? availability;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
+            ),
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
+                const SizedBox(height: 14),
+                Text('Book a class', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: c.textPrimary)),
+                const SizedBox(height: 12),
+                _bookDropdown(c, 'Training Center', centers, centerId, (v) => setSheet(() => centerId = v)),
+                _bookDropdown(c, 'Instructor', instructors, instructorId, (v) => setSheet(() => instructorId = v)),
+                Row(children: [
+                  Expanded(child: _bookNumField(c, 'Month', month.toString(), (v) {
+                    final n = int.tryParse(v);
+                    if (n != null) setSheet(() => month = n);
+                  })),
+                  const SizedBox(width: 10),
+                  Expanded(child: _bookNumField(c, 'Year', year.toString(), (v) {
+                    final n = int.tryParse(v);
+                    if (n != null) setSheet(() => year = n);
+                  })),
+                ]),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () async {
+                    if (centerId == null || instructorId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Pick a center & instructor first')),
+                      );
+                      return;
+                    }
+                    try {
+                      await Api.classBookingTrainingTimeWithDateAndInstructor(
+                        month: month, year: year, tCenterId: centerId, instructorId: instructorId);
+                      await Api.classBookingBookingsByInstructor(
+                        instructorId: instructorId, month: month, year: year);
+                      final r = await Api.classBookingSessionOrPackages(packageTypeId);
+                      final list = r is List ? r : (r is Map && r['data'] is List ? r['data'] as List : <dynamic>[]);
+                      final session = UserSession.instance;
+                      final sid = session.authData?['studentId'] ?? session.authData?['id'] ?? 0;
+                      String avail = '';
+                      try {
+                        final p = await Api.classBookingPackageInfo(sid);
+                        avail = p?.toString() ?? '';
+                      } catch (_) {}
+                      setSheet(() {
+                        packages = list;
+                        availability = avail;
+                      });
+                    } catch (e) {
+                      debugPrint('Book class load step failed: $e');
+                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Load failed: $e')));
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(Radii.md),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: BorderRadius.circular(Radii.md), border: Border.all(color: c.primary)),
+                    child: Text('Load slots & packages', style: TextStyle(color: c.primary, fontWeight: FontWeight.w800, fontSize: 13)),
+                  ),
+                ),
+                if (packages != null) ...[
+                  const SizedBox(height: 10),
+                  Text('Packages', style: TextStyle(fontSize: 12, color: c.textSecondary, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  _bookDropdown(c, 'Package', packages, packageId, (v) async {
+                    setSheet(() => packageId = v);
+                    final session = UserSession.instance;
+                    final sid = session.authData?['studentId'] ?? session.authData?['id'] ?? 0;
+                    try {
+                      final r = await Api.classBookingBookingCountByPackageSession(
+                        packageTypeId: packageTypeId, packageId: v, studentId: sid, month: month, year: year);
+                      setSheet(() => availability = r?.toString());
+                    } catch (e) {
+                      debugPrint('BookingCountByPackageSession failed: $e');
+                    }
+                  }),
+                  if (availability != null && availability!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text('Availability: $availability', style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                    ),
+                ],
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () async {
+                    final session = UserSession.instance;
+                    final sid = session.authData?['studentId'] ?? session.authData?['id'];
+                    try {
+                      await Api.classBookingBookNow(<String, dynamic>{
+                        'tCenterId': centerId,
+                        'instructorId': instructorId,
+                        'month': month,
+                        'year': year,
+                        'packageTypeId': packageTypeId,
+                        'packageId': packageId,
+                        'studentId': sid,
+                      });
+                      if (!mounted) return;
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Booking confirmed')));
+                      _loadBookings();
+                    } catch (e) {
+                      debugPrint('BookNow failed: $e');
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Booking failed: $e')));
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(Radii.md),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(gradient: LinearGradient(colors: c.gradient), borderRadius: BorderRadius.circular(Radii.md), boxShadow: Shadows.strong(c)),
+                    child: const Text('Confirm booking', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _bookDropdown(AppColors c, String label, List<dynamic>? items, dynamic value, ValueChanged<dynamic> onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(fontSize: 12, color: c.textSecondary, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: BorderRadius.circular(Radii.md), border: Border.all(color: c.border)),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<dynamic>(
+              isExpanded: true,
+              value: value,
+              hint: Text(items == null ? 'Loading…' : 'Select', style: TextStyle(color: c.textMuted, fontSize: 13)),
+              items: (items ?? const <dynamic>[]).map((e) {
+                final m = e is Map ? e : <dynamic, dynamic>{};
+                final id = m['id'] ?? m['code'] ?? m['value'] ?? e;
+                final name = (m['name'] ?? m['text'] ?? m['title'] ?? e).toString();
+                return DropdownMenuItem<dynamic>(value: id, child: Text(name, style: TextStyle(color: c.textPrimary, fontSize: 13)));
+              }).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _bookNumField(AppColors c, String label, String initial, ValueChanged<String> onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: TextStyle(fontSize: 12, color: c.textSecondary, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 4),
+        TextField(
+          controller: TextEditingController(text: initial),
+          keyboardType: TextInputType.number,
+          onChanged: onChanged,
+        ),
+      ]),
     );
   }
 

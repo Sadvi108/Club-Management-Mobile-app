@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
@@ -19,6 +20,65 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isInstructor = false;
   bool _remember = true;
   bool _busy = false;
+
+  Future<void> _openForgotPassword() async {
+    final ctrl = TextEditingController(text: _idCtrl.text.trim());
+    final c = context.appColors;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Forgot password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Enter your username to receive a reset link.',
+              style: TextStyle(fontSize: 12, color: c.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              decoration: const InputDecoration(labelText: 'Username'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () async {
+              final value = ctrl.text.trim();
+              if (value.isEmpty) return;
+              try {
+                final resp = await Api.accountForgotPassword(<String, dynamic>{
+                  'username': value,
+                  'userType': _isInstructor ? 2 : 3,
+                });
+                final msg = (resp is Map
+                        ? (resp['message'] ?? resp['data'] ?? 'Reset request sent')
+                        : 'Reset request sent')
+                    .toString();
+                if (!mounted) return;
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(msg)),
+                );
+              } catch (e) {
+                debugPrint('ForgotPassword failed: $e');
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed: $e')),
+                );
+              }
+            },
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _signIn() async {
     final id = _idCtrl.text.trim();
@@ -245,6 +305,20 @@ class _LoginScreenState extends State<LoginScreen> {
                           label: _busy ? 'Signing In…' : 'Sign In',
                           trailingIcon: Icons.arrow_forward,
                           onPressed: _busy ? null : () => _signIn(),
+                        ),
+                        const SizedBox(height: 6),
+                        Center(
+                          child: TextButton(
+                            onPressed: _openForgotPassword,
+                            child: Text(
+                              'Forgot password?',
+                              style: TextStyle(
+                                color: c.primary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),

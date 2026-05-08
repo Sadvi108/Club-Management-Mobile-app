@@ -28,6 +28,26 @@ class HomeScreen extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 120),
         child: Column(
           children: [
+            if (session.hasNewerVersion)
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.fromLTRB(Gaps.xl, MediaQuery.of(context).padding.top + 8, Gaps.xl, 10),
+                color: c.primary,
+                child: Row(children: [
+                  const Icon(Icons.system_update, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'New version available (${session.latestStoreVersion})',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 18),
+                    onPressed: () => UserSession.instance.dismissStoreVersionBanner(),
+                  ),
+                ]),
+              ),
             // Gradient header
             Container(
               padding: EdgeInsets.fromLTRB(Gaps.xl, MediaQuery.of(context).padding.top + 8, Gaps.xl, 30),
