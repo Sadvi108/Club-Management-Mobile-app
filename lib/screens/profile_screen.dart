@@ -3,13 +3,100 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../data/mock_data.dart';
+import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/app_icon_button.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  Future<void> _openEditSheet() async {
+    final session = UserSession.instance;
+    final info = session.myInfo ?? <String, dynamic>{};
+    final name = TextEditingController(text: (info['name'] ?? '').toString());
+    final phone = TextEditingController(text: (info['handPhone'] ?? info['phone'] ?? '').toString());
+    final email = TextEditingController(text: (info['email'] ?? '').toString());
+    final c = context.appColors;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 14),
+            Text('Edit Profile', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 14),
+            TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
+            const SizedBox(height: 8),
+            TextField(controller: phone, decoration: const InputDecoration(labelText: 'Phone')),
+            const SizedBox(height: 8),
+            TextField(controller: email, decoration: const InputDecoration(labelText: 'Email')),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: () async {
+                try {
+                  await Api.profileUpdateProfile(<String, dynamic>{
+                    'name': name.text,
+                    'handPhone': phone.text,
+                    'email': email.text,
+                  });
+                  if (!mounted) return;
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Profile updated')),
+                  );
+                  await UserSession.instance.refresh();
+                } catch (e) {
+                  debugPrint('UpdateProfile failed: $e');
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed: $e')),
+                  );
+                }
+              },
+              borderRadius: BorderRadius.circular(Radii.md),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(Radii.md)),
+                child: const Text('Save', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _markNotificationRead(dynamic id) async {
+    if (id == null) return;
+    try {
+      await Api.profileUpdateNotification2Read(<String, dynamic>{'id': id, 'groupId': id});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Notification marked read')),
+        );
+      }
+      await UserSession.instance.refresh();
+    } catch (e) {
+      debugPrint('UpdateNotification2Read failed: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,8 +127,8 @@ class ProfileScreen extends StatelessWidget {
                   const Text('My Profile', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
                   const Spacer(),
                   AppIconButton(
-                    icon: Icons.settings_outlined,
-                    onPressed: () {},
+                    icon: Icons.edit,
+                    onPressed: _openEditSheet,
                     backgroundColor: Colors.white.withOpacity(0.22),
                     foregroundColor: Colors.white,
                     size: 38,
@@ -150,11 +237,57 @@ class ProfileScreen extends StatelessWidget {
             ),
 
             const SizedBox(height: 18),
+            _notificationsCard(context, c, session),
+            const SizedBox(height: 18),
             _logoutBtn(context, c),
             const SizedBox(height: 8),
             Text('D-Clix · v1.0.0', style: TextStyle(color: c.textMuted, fontSize: 11)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _notificationsCard(BuildContext ctx, AppColors c, UserSession session) {
+    final notifs = (session.notifications ?? const []).whereType<Map>().toList();
+    if (notifs.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: Gaps.xl),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.notifications_active, size: 16, color: c.primary),
+            const SizedBox(width: 6),
+            Text('LIVE · Notifications (${notifs.length})',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+          ]),
+          const SizedBox(height: 8),
+          ...notifs.take(8).map((n) {
+            final id = n['id'] ?? n['groupId'] ?? n['groupid'];
+            final title = (n['text'] ?? n['title'] ?? n['name'] ?? '').toString();
+            final body = (n['value'] ?? n['description'] ?? '').toString()
+                .replaceAll(RegExp(r'<[^>]+>'), '').replaceAll('&nbsp;', ' ').trim();
+            return InkWell(
+              onTap: () => _markNotificationRead(id),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                  if (body.isNotEmpty)
+                    Text(body, maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                ]),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

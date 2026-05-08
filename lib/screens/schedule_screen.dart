@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/mock_data.dart';
 import '../models/models.dart';
-import '../services/api_service.dart';
+import '../services/api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_icon_button.dart';
@@ -15,6 +15,7 @@ class ScheduleScreen extends StatefulWidget {
 class _ScheduleScreenState extends State<ScheduleScreen> {
   int active = 0;
   List<dynamic>? _liveBookings;
+  List<dynamic>? _allBookings;
   bool _bookingsLoading = false;
 
   @override
@@ -25,16 +26,33 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   Future<void> _loadBookings() async {
     setState(() => _bookingsLoading = true);
+    await Future.wait([
+      _safeFetch(Api.classBookingNextBookings).then((v) => _liveBookings = v),
+      _safeFetch(Api.classBookingGetBookings).then((v) => _allBookings = v),
+    ]);
+    if (mounted) setState(() => _bookingsLoading = false);
+  }
+
+  Future<List<dynamic>?> _safeFetch(Future<dynamic> Function() fn) async {
     try {
-      final resp = await ApiService.get('/ClassBooking/NextBookings');
-      if (resp is Map && resp['data'] is List) {
-        _liveBookings = resp['data'] as List;
-      }
-    } catch (_) {
-      _liveBookings = null;
-    } finally {
-      if (mounted) setState(() => _bookingsLoading = false);
+      final resp = await fn();
+      if (resp is List) return resp;
+      if (resp is Map && resp['data'] is List) return resp['data'] as List;
+      return null;
+    } catch (e) {
+      debugPrint('schedule fetch failed: $e');
+      return null;
     }
+  }
+
+  Map<String, List<dynamic>> _groupBookingsByDate() {
+    final result = <String, List<dynamic>>{};
+    for (final b in (_allBookings ?? const <dynamic>[])) {
+      if (b is! Map) continue;
+      final date = (b['date'] ?? b['bookingDate'] ?? b['day'] ?? 'Unknown').toString();
+      result.putIfAbsent(date, () => <dynamic>[]).add(b);
+    }
+    return result;
   }
 
   @override
@@ -98,6 +116,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               padding: const EdgeInsets.fromLTRB(Gaps.xl, 0, Gaps.xl, 140),
               children: [
                 _liveBookingsBanner(c),
+                _liveAllBookingsCard(c),
                 Padding(
                   padding: const EdgeInsets.only(top: 10, bottom: 14),
                   child: Text(
@@ -231,6 +250,53 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   }).join('\n'),
             style: TextStyle(fontSize: 12, color: c.textSecondary),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _liveAllBookingsCard(AppColors c) {
+    final all = _allBookings;
+    if (all == null || all.isEmpty) return const SizedBox.shrink();
+    final groups = _groupBookingsByDate();
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.cloud_done, size: 16, color: c.primary),
+            const SizedBox(width: 6),
+            Text('LIVE · All Bookings (${all.length})',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+          ]),
+          const SizedBox(height: 8),
+          ...groups.entries.take(8).map((entry) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(entry.key,
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c.textPrimary)),
+                    ...entry.value.take(4).map((b) {
+                      if (b is! Map) return const SizedBox.shrink();
+                      final t = b['text'] ?? b['title'] ?? b['className'] ?? b['name'] ?? '';
+                      final time = b['time'] ?? b['trainingTime'] ?? '';
+                      return Padding(
+                        padding: const EdgeInsets.only(left: 8, top: 2),
+                        child: Text('• $t${time != '' ? ' · $time' : ''}',
+                            style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                      );
+                    }),
+                  ],
+                ),
+              )),
         ],
       ),
     );

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../data/mock_data.dart';
-import '../services/api_service.dart';
+import '../services/api.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_icon_button.dart';
@@ -14,26 +14,51 @@ class TrainingScreen extends StatefulWidget {
 
 class _TrainingScreenState extends State<TrainingScreen> {
   List<dynamic>? _centers;
+  List<dynamic>? _instructors;
+  List<dynamic>? _times;
+  Object? _selectedCenterId;
   bool _loading = false;
+  bool _timesLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCenters();
+    _loadInitial();
   }
 
-  Future<void> _loadCenters() async {
-    setState(() => _loading = true);
+  Future<List<dynamic>?> _safeList(Future<dynamic> Function() fn) async {
     try {
-      final resp = await ApiService.get('/Listing/TrainingCenters');
-      if (resp is Map && resp['data'] is List) {
-        _centers = resp['data'] as List;
-      }
-    } catch (_) {
-      _centers = null;
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      final r = await fn();
+      if (r is List) return r;
+      if (r is Map && r['data'] is List) return r['data'] as List;
+      return null;
+    } catch (e) {
+      debugPrint('training fetch failed: $e');
+      return null;
     }
+  }
+
+  Future<void> _loadInitial() async {
+    setState(() => _loading = true);
+    await Future.wait([
+      _safeList(Api.listingTrainingCenters).then((v) => _centers = v),
+      _safeList(Api.listingInstructors).then((v) => _instructors = v),
+    ]);
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadTimesFor(Object centerId) async {
+    setState(() {
+      _timesLoading = true;
+      _selectedCenterId = centerId;
+      _times = null;
+    });
+    final v = await _safeList(() => Api.listingTrainingTimeByTcId(centerId));
+    if (!mounted) return;
+    setState(() {
+      _times = v;
+      _timesLoading = false;
+    });
   }
 
   @override
@@ -96,6 +121,12 @@ class _TrainingScreenState extends State<TrainingScreen> {
               ),
               const SizedBox(height: 20),
               _liveCentersCard(c),
+              if (_times != null || _timesLoading) ...[
+                const SizedBox(height: 12),
+                _liveTimesCard(c),
+              ],
+              const SizedBox(height: 12),
+              _liveInstructorsCard(c),
               const SizedBox(height: 20),
               Text('Enrolled Programs', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 14),
@@ -159,11 +190,22 @@ class _TrainingScreenState extends State<TrainingScreen> {
             ),
           ]),
           const SizedBox(height: 8),
-          ...centers.take(5).map((tc) {
-            final name = tc is Map ? (tc['text'] ?? tc['value'] ?? '').toString() : tc.toString();
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text('• $name', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+          ...centers.take(8).map((tc) {
+            final m = tc is Map ? tc : <dynamic, dynamic>{};
+            final name = (m['text'] ?? m['name'] ?? m['value'] ?? tc).toString();
+            final id = m['value'] ?? m['id'] ?? m['tcId'];
+            final selected = id != null && id == _selectedCenterId;
+            return InkWell(
+              onTap: id == null ? null : () => _loadTimesFor(id),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(children: [
+                  Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off,
+                      size: 14, color: selected ? c.primary : c.textMuted),
+                  const SizedBox(width: 6),
+                  Expanded(child: Text(name, style: TextStyle(fontSize: 12, color: selected ? c.textPrimary : c.textSecondary))),
+                ]),
+              ),
             );
           }),
           if (centers.length > 5)
@@ -171,6 +213,77 @@ class _TrainingScreenState extends State<TrainingScreen> {
               padding: const EdgeInsets.only(top: 4),
               child: Text('+${centers.length - 5} more', style: TextStyle(fontSize: 11, color: c.textMuted, fontStyle: FontStyle.italic)),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _liveInstructorsCard(AppColors c) {
+    final list = _instructors;
+    if (list == null || list.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.person_pin, size: 16, color: c.primary),
+            const SizedBox(width: 6),
+            Text('LIVE · Instructors (${list.length})',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+          ]),
+          const SizedBox(height: 8),
+          ...list.take(6).map((i) {
+            final name = i is Map ? (i['text'] ?? i['name'] ?? i['value'] ?? '').toString() : i.toString();
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text('• $name', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _liveTimesCard(AppColors c) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.access_time, size: 16, color: c.primary),
+            const SizedBox(width: 6),
+            Text('LIVE · Training Times',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+          ]),
+          const SizedBox(height: 8),
+          if (_timesLoading)
+            Row(children: [
+              SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
+              const SizedBox(width: 8),
+              Text('Loading…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+            ])
+          else if ((_times ?? const []).isEmpty)
+            Text('No times for this center.', style: TextStyle(fontSize: 12, color: c.textSecondary))
+          else
+            ...(_times!).take(8).map((t) {
+              final name = t is Map ? (t['text'] ?? t['trainingTime'] ?? t['name'] ?? t['value'] ?? '').toString() : t.toString();
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text('• $name', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+              );
+            }),
         ],
       ),
     );

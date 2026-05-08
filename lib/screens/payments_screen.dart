@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/mock_data.dart';
+import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
@@ -14,6 +15,72 @@ class PaymentsScreen extends StatefulWidget {
 
 class _PaymentsScreenState extends State<PaymentsScreen> {
   String selectedMethod = 'card';
+  List<dynamic>? _outstanding;
+  List<dynamic>? _receipts;
+  List<dynamic>? _slips;
+  bool _loading = false;
+  final Set<int> _selectedInvoiceIdx = <int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAll();
+  }
+
+  Future<void> _loadAll() async {
+    setState(() => _loading = true);
+    await Future.wait([
+      _safeList(Api.outstandingFetch).then((v) => _outstanding = v),
+      _safeList(Api.reportsReceipts).then((v) => _receipts = v),
+      _safeList(Api.reportsPaymentSlips).then((v) => _slips = v),
+    ]);
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<List<dynamic>?> _safeList(Future<dynamic> Function() fn) async {
+    try {
+      final resp = await fn();
+      if (resp is List) return resp;
+      if (resp is Map && resp['data'] is List) return resp['data'] as List;
+      return null;
+    } catch (e) {
+      debugPrint('payments load failed: $e');
+      return null;
+    }
+  }
+
+  num _liveOutstandingTotal() {
+    final inv = _outstanding;
+    if (inv == null) return 0;
+    num total = 0;
+    for (final i in inv) {
+      if (i is Map) {
+        final v = i['amount'] ?? i['outstandingAmount'] ?? i['balance'] ?? 0;
+        if (v is num) total += v;
+        if (v is String) total += num.tryParse(v) ?? 0;
+      }
+    }
+    return total;
+  }
+
+  Future<void> _payInvoices(List<Map<String, dynamic>> invoices) async {
+    try {
+      final body = <String, dynamic>{'invoices': invoices};
+      await Api.outstandingPayInvoices(body);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Payment submitted')),
+      );
+      _selectedInvoiceIdx.clear();
+      await _loadAll();
+    } catch (e) {
+      debugPrint('PayInvoices failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Payment failed: $e')),
+      );
+    }
+  }
 
   void _openPayModal() {
     final c = context.appColors;
@@ -114,12 +181,20 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   Widget build(BuildContext context) {
     final c = context.appColors;
     final session = context.watch<UserSession>();
-    final liveAmount = session.dueAmount > 0
-        ? session.dueAmount.toStringAsFixed(2)
-        : kStudent.nextPayment.amount.toString();
-    final liveLabel = session.invoiceCount > 0
-        ? '${session.invoiceCount} outstanding invoice(s)'
-        : kStudent.nextPayment.label;
+    final liveTotal = _liveOutstandingTotal();
+    final invoices = _outstanding ?? const <dynamic>[];
+    final receipts = _receipts ?? const <dynamic>[];
+    final slips = _slips ?? const <dynamic>[];
+    final liveAmount = liveTotal > 0
+        ? liveTotal.toStringAsFixed(2)
+        : (session.dueAmount > 0
+            ? session.dueAmount.toStringAsFixed(2)
+            : kStudent.nextPayment.amount.toString());
+    final liveLabel = invoices.isNotEmpty
+        ? '${invoices.length} outstanding invoice(s)'
+        : (session.invoiceCount > 0
+            ? '${session.invoiceCount} outstanding invoice(s)'
+            : kStudent.nextPayment.label);
     return Container(
       color: c.background,
       child: CustomScrollView(slivers: [
@@ -173,7 +248,21 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 ),
               ]),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            if (_loading)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(children: [
+                  SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
+                  const SizedBox(width: 8),
+                  Text('Loading live invoices…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+                ]),
+              ),
+            if (invoices.isNotEmpty) _liveInvoicesCard(c, invoices),
+            if (invoices.isNotEmpty) const SizedBox(height: 16),
+            if (slips.isNotEmpty) _livePaymentSlipsCard(c, slips),
+            if (slips.isNotEmpty) const SizedBox(height: 16),
+            const SizedBox(height: 8),
             Text('Quick Pay', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 14),
             Row(children: [
@@ -193,7 +282,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            ...kPayments.map((p) => _histRow(c, p)),
+            if (receipts.isNotEmpty)
+              ...receipts.take(20).map((r) => _liveReceiptRow(c, r))
+            else
+              ...kPayments.map((p) => _histRow(c, p)),
           ]),
         ),
       ]),
@@ -221,6 +313,149 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           ),
         ),
       );
+
+  Widget _liveInvoicesCard(AppColors c, List<dynamic> invoices) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.cloud_done, size: 16, color: c.primary),
+            const SizedBox(width: 6),
+            Text('LIVE · Outstanding Invoices (${invoices.length})',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+          ]),
+          const SizedBox(height: 10),
+          ...invoices.asMap().entries.take(10).map((e) {
+            final idx = e.key;
+            final inv = e.value;
+            final m = inv is Map ? inv : <dynamic, dynamic>{};
+            final label = (m['invoiceNo'] ?? m['description'] ?? m['text'] ?? 'Invoice').toString();
+            final amount = (m['amount'] ?? m['outstandingAmount'] ?? m['balance'] ?? 0).toString();
+            final selected = _selectedInvoiceIdx.contains(idx);
+            return InkWell(
+              onTap: () => setState(() {
+                if (selected) {
+                  _selectedInvoiceIdx.remove(idx);
+                } else {
+                  _selectedInvoiceIdx.add(idx);
+                }
+              }),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(children: [
+                  Icon(selected ? Icons.check_box : Icons.check_box_outline_blank, size: 18, color: selected ? c.primary : c.textMuted),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(label, style: TextStyle(fontSize: 12, color: c.textPrimary))),
+                  Text('RM $amount', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c.textPrimary)),
+                ]),
+              ),
+            );
+          }),
+          if (_selectedInvoiceIdx.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            InkWell(
+              onTap: () {
+                final picks = _selectedInvoiceIdx
+                    .map((i) => invoices[i])
+                    .whereType<Map>()
+                    .map((m) => Map<String, dynamic>.from(m))
+                    .toList();
+                _payInvoices(picks);
+              },
+              borderRadius: BorderRadius.circular(Radii.md),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(Radii.md)),
+                child: Text('Pay Selected (${_selectedInvoiceIdx.length})',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _livePaymentSlipsCard(AppColors c, List<dynamic> slips) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.receipt_long, size: 16, color: c.primary),
+            const SizedBox(width: 6),
+            Text('LIVE · Payment Slips (${slips.length})',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+          ]),
+          const SizedBox(height: 8),
+          ...slips.take(5).map((s) {
+            final m = s is Map ? s : <dynamic, dynamic>{};
+            final label = (m['slipNo'] ?? m['description'] ?? m['text'] ?? 'Slip').toString();
+            final amount = (m['amount'] ?? m['value'] ?? '').toString();
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                Expanded(child: Text(label, style: TextStyle(fontSize: 12, color: c.textSecondary))),
+                Text(amount.isEmpty ? '' : 'RM $amount',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c.textPrimary)),
+              ]),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _liveReceiptRow(AppColors c, dynamic r) {
+    final m = r is Map ? r : <dynamic, dynamic>{};
+    final label = (m['description'] ?? m['receiptNo'] ?? m['text'] ?? 'Receipt').toString();
+    final date = (m['date'] ?? m['paymentDate'] ?? '').toString();
+    final method = (m['method'] ?? m['paymentMode'] ?? '').toString();
+    final amount = (m['amount'] ?? m['value'] ?? 0).toString();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: c.isDark ? Border.all(color: c.border) : null,
+        boxShadow: Shadows.card(c),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(color: c.isDark ? const Color(0xFF064E3B) : const Color(0xFFD1FAE5), shape: BoxShape.circle),
+          child: Icon(Icons.cloud_done, size: 18, color: c.success),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary)),
+            if (date.isNotEmpty || method.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('$date${method.isNotEmpty ? ' · $method' : ''}', style: TextStyle(fontSize: 11, color: c.textSecondary)),
+              ),
+          ]),
+        ),
+        Text('RM $amount', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: c.textPrimary)),
+      ]),
+    );
+  }
 
   Widget _histRow(AppColors c, payment) => Container(
         margin: const EdgeInsets.only(bottom: 10),

@@ -1,12 +1,53 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../data/mock_data.dart';
+import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 
-class ProgressScreen extends StatelessWidget {
+class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
+
+  @override
+  State<ProgressScreen> createState() => _ProgressScreenState();
+}
+
+class _ProgressScreenState extends State<ProgressScreen> {
+  List<dynamic>? _grading;
+  List<dynamic>? _activity;
+  List<dynamic>? _tournament;
+  List<dynamic>? _contribution;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAll();
+  }
+
+  Future<List<dynamic>?> _safe(Future<dynamic> Function() fn) async {
+    try {
+      final r = await fn();
+      if (r is List) return r;
+      if (r is Map && r['data'] is List) return r['data'] as List;
+      return null;
+    } catch (e) {
+      debugPrint('progress fetch failed: $e');
+      return null;
+    }
+  }
+
+  Future<void> _loadAll() async {
+    setState(() => _loading = true);
+    await Future.wait([
+      _safe(Api.reportsGradingSchedule).then((v) => _grading = v),
+      _safe(Api.reportsActivity).then((v) => _activity = v),
+      _safe(Api.reportsTournamentSummary).then((v) => _tournament = v),
+      _safe(Api.reportsContribution).then((v) => _contribution = v),
+    ]);
+    if (mounted) setState(() => _loading = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +65,15 @@ class ProgressScreen extends StatelessWidget {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(Gaps.xl, 0, Gaps.xl, 40),
           sliver: SliverList.list(children: [
+            if (_loading)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(children: [
+                  SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
+                  const SizedBox(width: 8),
+                  Text('Loading live progress…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+                ]),
+              ),
             // Fitness card
             Container(
               padding: const EdgeInsets.all(20),
@@ -200,9 +250,57 @@ class ProgressScreen extends StatelessWidget {
                     ),
                   ]),
                 )),
+            const SizedBox(height: 22),
+            if ((_grading ?? const []).isNotEmpty)
+              _liveListCard(c, 'Grading Schedule', Icons.school, _grading!),
+            if ((_grading ?? const []).isNotEmpty) const SizedBox(height: 12),
+            if ((_activity ?? const []).isNotEmpty)
+              _liveListCard(c, 'Activity', Icons.local_activity, _activity!),
+            if ((_activity ?? const []).isNotEmpty) const SizedBox(height: 12),
+            if ((_tournament ?? const []).isNotEmpty)
+              _liveListCard(c, 'Tournament Summary', Icons.emoji_events, _tournament!),
+            if ((_tournament ?? const []).isNotEmpty) const SizedBox(height: 12),
+            if ((_contribution ?? const []).isNotEmpty)
+              _liveListCard(c, 'Contribution', Icons.volunteer_activism, _contribution!),
           ]),
         ),
       ]),
+    );
+  }
+
+  Widget _liveListCard(AppColors c, String title, IconData icon, List<dynamic> rows) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon, size: 16, color: c.primary),
+            const SizedBox(width: 6),
+            Text('LIVE · $title (${rows.length})',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+          ]),
+          const SizedBox(height: 8),
+          ...rows.take(8).map((r) {
+            final m = r is Map ? r : <dynamic, dynamic>{};
+            final t = (m['text'] ?? m['name'] ?? m['title'] ?? m['description'] ?? r).toString();
+            final v = (m['value'] ?? m['date'] ?? '').toString();
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                Expanded(child: Text(t, style: TextStyle(fontSize: 12, color: c.textSecondary))),
+                if (v.isNotEmpty)
+                  Text(v, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c.textPrimary)),
+              ]),
+            );
+          }),
+        ],
+      ),
     );
   }
 

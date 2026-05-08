@@ -3,13 +3,73 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../data/mock_data.dart';
 import '../models/models.dart';
+import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_icon_button.dart';
 
-class AttendanceScreen extends StatelessWidget {
+class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
+
+  @override
+  State<AttendanceScreen> createState() => _AttendanceScreenState();
+}
+
+class _AttendanceScreenState extends State<AttendanceScreen> {
+  List<dynamic>? _liveAttendance;
+  bool _loading = false;
+  bool _marking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAttendance();
+  }
+
+  Future<void> _loadAttendance() async {
+    setState(() => _loading = true);
+    try {
+      final r = await Api.reportsAttendance();
+      if (r is List) _liveAttendance = r;
+      if (r is Map && r['data'] is List) _liveAttendance = r['data'] as List;
+    } catch (e) {
+      debugPrint('reportsAttendance failed: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _markAttendance() async {
+    final session = UserSession.instance;
+    final studentId = session.authData?['studentId'] ?? session.authData?['id'];
+    if (studentId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No student id in session')),
+      );
+      return;
+    }
+    setState(() => _marking = true);
+    try {
+      await Api.attendanceAdd(<String, dynamic>{
+        'studentId': studentId,
+        'date': DateTime.now().toIso8601String(),
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Attendance marked')),
+      );
+      await _loadAttendance();
+    } catch (e) {
+      debugPrint('Attendance/Add failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _marking = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -228,7 +288,33 @@ class AttendanceScreen extends StatelessWidget {
                 ]),
               ),
             ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: _marking ? null : _markAttendance,
+              borderRadius: BorderRadius.circular(Radii.md),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: c.primary, borderRadius: BorderRadius.circular(Radii.md),
+                ),
+                child: _marking
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Mark Attendance Now',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
+              ),
+            ),
             const SizedBox(height: 20),
+            if (_loading)
+              Row(children: [
+                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
+                const SizedBox(width: 8),
+                Text('Loading attendance…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+              ]),
+            if (_liveAttendance != null && _liveAttendance!.isNotEmpty) ...[
+              _liveAttendanceCard(c, _liveAttendance!),
+              const SizedBox(height: 20),
+            ],
             if (session.clubStats != null && session.clubStats!.isNotEmpty) ...[
               _liveStatsCard(c, session),
               const SizedBox(height: 20),
@@ -284,6 +370,45 @@ class AttendanceScreen extends StatelessWidget {
           ]),
         ),
       ]),
+    );
+  }
+
+  Widget _liveAttendanceCard(AppColors c, List<dynamic> rows) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: Border.all(color: c.primary.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.cloud_done, size: 16, color: c.primary),
+            const SizedBox(width: 6),
+            Text('LIVE · Attendance (${rows.length})',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+          ]),
+          const SizedBox(height: 8),
+          ...rows.take(15).map((r) {
+            final m = r is Map ? r : <dynamic, dynamic>{};
+            final date = (m['date'] ?? m['attendanceDate'] ?? m['text'] ?? '').toString();
+            final status = (m['status'] ?? m['value'] ?? '').toString();
+            final present = status.toLowerCase().contains('present') || status == '1' || status.toLowerCase() == 'true';
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                Icon(present ? Icons.check_circle : Icons.cancel,
+                    size: 14, color: present ? c.success : c.danger),
+                const SizedBox(width: 8),
+                Expanded(child: Text(date, style: TextStyle(fontSize: 12, color: c.textPrimary))),
+                Text(status, style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w700)),
+              ]),
+            );
+          }),
+        ],
+      ),
     );
   }
 

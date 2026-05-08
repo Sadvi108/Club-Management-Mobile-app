@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../services/api.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_icon_button.dart';
 
@@ -23,6 +25,8 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
   late final AnimationController _laser;
   bool _scanned = false;
   String _scannedCode = 'Karate Drills';
+  String? _resolvedInfo;
+  bool _resolving = false;
   bool _cameraFailed = false;
   Timer? _fallbackTimer;
 
@@ -60,7 +64,62 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
         _scanned = true;
         _scannedCode = 'Class: $code';
       });
+      _resolveCode(code);
     }
+  }
+
+  Future<void> _resolveCode(String code) async {
+    setState(() => _resolving = true);
+    final session = UserSession.instance;
+    final clubId = session.authData?['clubId'] ?? session.authData?['clubID'];
+    final branchId = session.authData?['branchId'] ?? session.authData?['branchID'];
+    try {
+      // Heuristic — try training-center QR first, then student QR.
+      if (clubId != null) {
+        try {
+          final tc = await Api.utilitiesTrainingCenterQRCode(
+              clubId: clubId, tcid: code);
+          if (tc != null) {
+            _setResolved(_summarize(tc, fallback: 'Training Center: $code'));
+            return;
+          }
+        } catch (_) {/* try next */}
+      }
+      if (clubId != null && branchId != null) {
+        try {
+          final st = await Api.utilitiesStudentQRCode(
+              clubId: clubId, branchId: branchId, studentIds: code);
+          if (st != null) {
+            _setResolved(_summarize(st, fallback: 'Student: $code'));
+            return;
+          }
+        } catch (_) {/* fall through */}
+      }
+      _setResolved(null);
+    } catch (e) {
+      debugPrint('QR resolve failed: $e');
+      _setResolved(null);
+    }
+  }
+
+  void _setResolved(String? info) {
+    if (!mounted) return;
+    setState(() {
+      _resolving = false;
+      _resolvedInfo = info;
+    });
+  }
+
+  String _summarize(dynamic data, {required String fallback}) {
+    if (data is Map) {
+      final name = data['name'] ?? data['text'] ?? data['title'];
+      final id = data['id'] ?? data['code'];
+      if (name != null) return id != null ? '$name ($id)' : name.toString();
+    }
+    if (data is List && data.isNotEmpty) {
+      return _summarize(data.first, fallback: fallback);
+    }
+    return fallback;
   }
 
   @override
@@ -143,7 +202,16 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
                         const SizedBox(height: 12),
                         Text(_scannedCode, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 4),
-                        const Text('24 Feb · 06:00 AM', style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12)),
+                        if (_resolving)
+                          const Text('Resolving…', style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12))
+                        else if (_resolvedInfo != null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(_resolvedInfo!, textAlign: TextAlign.center,
+                                style: const TextStyle(color: Color(0xFFFFE4B5), fontSize: 12, fontWeight: FontWeight.w700)),
+                          )
+                        else
+                          const Text('24 Feb · 06:00 AM', style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12)),
                       ]),
                     ),
                 ]),
