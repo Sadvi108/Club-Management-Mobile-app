@@ -70,24 +70,52 @@ class UserSession extends ChangeNotifier {
   num get dueAmount => (homeStats?['dueAmount'] as num?) ?? 0;
   int get invoiceCount => (homeStats?['invoiceCount'] as int?) ?? 0;
 
+  /// True when the authenticated user is an instructor.
+  /// The Authenticate response sets `userType == 2` for instructors.
+  bool get isInstructor => ((authData?['userType'] as num?)?.toInt() ?? 0) == 2;
+
+  /// Rows surfaced by `Profile/MyClubStats` — each entry is
+  /// `{id: <count>, value: <orderIndex>, text: <label>}`.
+  List<Map<String, dynamic>> get clubStatsRows =>
+      clubStats?.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList() ??
+          const [];
+
+  String get clubDisplayName {
+    final list = authData?['clubList'];
+    if (list is List && list.isNotEmpty && list.first is Map) {
+      final t = (list.first as Map)['text']?.toString();
+      if (t != null && t.isNotEmpty) return t;
+    }
+    return clubName;
+  }
+
   Future<bool> login({
     required String username,
     required String password,
     required int userType,
     int accessMethod = 0,
     String deviceType = 'mobile',
+    String? clubCode,
+    int? branchId,
   }) async {
     loading = true;
     error = null;
     notifyListeners();
     try {
-      final resp = await ApiService.post('/Account/Authenticate', {
+      final body = <String, dynamic>{
         'username': username,
         'password': password,
         'userType': userType,
         'accessMethod': accessMethod,
         'deviceType': deviceType,
-      });
+      };
+      if (clubCode != null && clubCode.isNotEmpty) {
+        body['clubCode'] = clubCode;
+      }
+      if (branchId != null && branchId != 0) {
+        body['branchId'] = branchId;
+      }
+      final resp = await ApiService.post('/Account/Authenticate', body);
       if (resp is! Map || resp['data'] is! Map) {
         throw Exception('Invalid login response');
       }

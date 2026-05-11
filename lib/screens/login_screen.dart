@@ -16,10 +16,56 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _idCtrl = TextEditingController();
   final _pwdCtrl = TextEditingController();
+  final _clubCtrl = TextEditingController();
   bool _showPwd = false;
   bool _isInstructor = false;
   bool _remember = true;
   bool _busy = false;
+
+  // Instructor mode: branch dropdown state.
+  List<Map<String, dynamic>> _branches = const [];
+  int? _branchId;
+  bool _branchesLoading = false;
+  String? _branchesLoadedForCode;
+
+  @override
+  void dispose() {
+    _idCtrl.dispose();
+    _pwdCtrl.dispose();
+    _clubCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadBranches() async {
+    final code = _clubCtrl.text.trim();
+    if (code.length < 2) return;
+    if (_branchesLoading) return;
+    if (_branchesLoadedForCode == code && _branches.isNotEmpty) return;
+    setState(() {
+      _branchesLoading = true;
+    });
+    try {
+      final resp = await Api.accountGetBranchesByClubCode(code);
+      final list = (resp is List)
+          ? resp
+          : (resp is Map && resp['data'] is List ? resp['data'] as List : const []);
+      _branches = list
+          .whereType<Map>()
+          .map<Map<String, dynamic>>((m) => Map<String, dynamic>.from(m))
+          .toList();
+      _branchesLoadedForCode = code;
+      _branchId = null;
+    } catch (e) {
+      debugPrint('GetBranchesByClubCode failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load branches: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _branchesLoading = false);
+    }
+  }
 
   Future<void> _openForgotPassword() async {
     final ctrl = TextEditingController(text: _idCtrl.text.trim());
@@ -54,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
               try {
                 final resp = await Api.accountForgotPassword(<String, dynamic>{
                   'username': value,
-                  'userType': _isInstructor ? 2 : 3,
+                  'userType': _isInstructor ? 0 : 3,
                 });
                 final msg = (resp is Map
                         ? (resp['message'] ?? resp['data'] ?? 'Reset request sent')
@@ -91,17 +137,39 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    String? clubCode;
+    int? branchId;
+    if (_isInstructor) {
+      clubCode = _clubCtrl.text.trim();
+      if (clubCode.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter your club code.')),
+        );
+        return;
+      }
+      branchId = _branchId;
+      if (branchId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Select a branch.')),
+        );
+        return;
+      }
+    }
+
     setState(() => _busy = true);
     final ok = await UserSession.instance.login(
       username: id,
       password: pwd,
-      userType: _isInstructor ? 2 : 3,
+      userType: _isInstructor ? 0 : 3,
+      clubCode: clubCode,
+      branchId: branchId,
     );
     if (!mounted) return;
     setState(() => _busy = false);
 
     if (ok) {
-      context.go('/home');
+      final session = UserSession.instance;
+      context.go(session.isInstructor ? '/instructor/home' : '/home');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -222,37 +290,84 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(children: [
-                          Expanded(
-                              child: _chip(
-                                  c,
-                                  'Student',
-                                  Icons.school,
-                                  !_isInstructor,
-                                  () => setState(() => _isInstructor = false))),
-                          const SizedBox(width: 10),
-                          Expanded(
-                              child: _chip(
-                                  c,
-                                  'Instructor',
-                                  Icons.workspace_premium,
-                                  _isInstructor,
-                                  () => setState(() => _isInstructor = true))),
-                        ]),
+                        // Segmented role toggle.
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: c.surfaceAlt,
+                            borderRadius: BorderRadius.circular(Radii.md),
+                            border: Border.all(color: c.border),
+                          ),
+                          child: Row(children: [
+                            Expanded(
+                              child: _segment(
+                                c,
+                                'Student / Parent Login',
+                                Icons.school,
+                                !_isInstructor,
+                                () => setState(() => _isInstructor = false),
+                              ),
+                            ),
+                            Expanded(
+                              child: _segment(
+                                c,
+                                'Instructor',
+                                Icons.workspace_premium,
+                                _isInstructor,
+                                () => setState(() => _isInstructor = true),
+                              ),
+                            ),
+                          ]),
+                        ),
                         const SizedBox(height: 22),
+                        if (_isInstructor) ...[
+                          _fieldLabel(c, 'Club Code'),
+                          TextField(
+                            controller: _clubCtrl,
+                            textCapitalization: TextCapitalization.characters,
+                            onChanged: (_) {
+                              // Invalidate previously loaded branches when code changes.
+                              if (_branchesLoadedForCode != null &&
+                                  _branchesLoadedForCode != _clubCtrl.text.trim()) {
+                                setState(() {
+                                  _branches = const [];
+                                  _branchId = null;
+                                  _branchesLoadedForCode = null;
+                                });
+                              }
+                            },
+                            style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            decoration: InputDecoration(
+                              prefixIcon:
+                                  Icon(Icons.search, size: 18, color: c.textMuted),
+                              hintText: 'Enter club code (e.g. RTT)',
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          _fieldLabel(c, 'Branch'),
+                          _branchDropdown(c),
+                          const SizedBox(height: 22),
+                        ],
                         _fieldLabel(
                             c,
                             _isInstructor
-                                ? 'Instructor ID, phone or email'
+                                ? 'Email / User Id'
                                 : 'Student ID, phone or email'),
-                        _inputLine(c, _idCtrl, icon: Icons.alternate_email),
+                        _inputLine(c, _idCtrl,
+                            icon: _isInstructor
+                                ? Icons.person_outline
+                                : Icons.alternate_email),
                         const SizedBox(height: 22),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             _fieldLabel(c, 'Password'),
                             InkWell(
-                              onTap: () {},
+                              onTap: _openForgotPassword,
                               child: Text('Forgot?',
                                   style: TextStyle(
                                       color: c.primary,
@@ -367,18 +482,17 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _chip(AppColors c, String label, IconData icon, bool active,
+  Widget _segment(AppColors c, String label, IconData icon, bool active,
       VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(Radii.md),
+      borderRadius: BorderRadius.circular(Radii.sm),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
         decoration: BoxDecoration(
           gradient: active ? LinearGradient(colors: c.gradient) : null,
-          color: active ? null : c.surfaceAlt,
-          borderRadius: BorderRadius.circular(Radii.md),
-          border: active ? null : Border.all(color: c.border),
+          color: active ? null : Colors.transparent,
+          borderRadius: BorderRadius.circular(Radii.sm),
           boxShadow: active ? Shadows.strong(c) : null,
         ),
         child: Row(
@@ -386,14 +500,149 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon,
-                  size: 15, color: active ? Colors.white : c.textSecondary),
+                  size: 14, color: active ? Colors.white : c.textSecondary),
               const SizedBox(width: 6),
-              Text(label,
-                  style: TextStyle(
-                      color: active ? Colors.white : c.textSecondary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13)),
+              Flexible(
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: active ? Colors.white : c.textSecondary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12)),
+              ),
             ]),
+      ),
+    );
+  }
+
+  Widget _branchDropdown(AppColors c) {
+    final code = _clubCtrl.text.trim();
+    final canTap = code.length >= 2 && !_branchesLoading;
+    final hasBranches = _branches.isNotEmpty;
+    return InkWell(
+      borderRadius: BorderRadius.circular(Radii.md),
+      onTap: !canTap
+          ? null
+          : () async {
+              if (!hasBranches) {
+                await _loadBranches();
+              }
+              if (!mounted || _branches.isEmpty) return;
+              final picked = await showModalBottomSheet<int>(
+                context: context,
+                backgroundColor: Colors.transparent,
+                builder: (ctx) {
+                  final c2 = ctx.appColors;
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: c2.surface,
+                      borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(28)),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                            color: c2.border,
+                            borderRadius: BorderRadius.circular(2)),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Row(children: [
+                          Icon(Icons.store_mall_directory_outlined,
+                              color: c2.primary, size: 18),
+                          const SizedBox(width: 8),
+                          Text('Select Branch',
+                              style: TextStyle(
+                                  color: c2.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16)),
+                        ]),
+                      ),
+                      const SizedBox(height: 10),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 360),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _branches.length,
+                          separatorBuilder: (_, __) =>
+                              Divider(height: 1, color: c2.border),
+                          itemBuilder: (_, i) {
+                            final b = _branches[i];
+                            final id = (b['id'] as num?)?.toInt() ?? 0;
+                            final text = (b['text'] ?? '').toString();
+                            final selected = id == _branchId;
+                            return ListTile(
+                              title: Text(text,
+                                  style: TextStyle(
+                                      color: c2.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14)),
+                              trailing: selected
+                                  ? Icon(Icons.check_circle,
+                                      color: c2.primary, size: 20)
+                                  : null,
+                              onTap: () => Navigator.pop(ctx, id),
+                            );
+                          },
+                        ),
+                      ),
+                    ]),
+                  );
+                },
+              );
+              if (picked != null) {
+                setState(() => _branchId = picked);
+              }
+            },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: c.isDark ? c.surfaceAlt : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(Radii.md),
+          border: Border.all(color: c.border),
+        ),
+        child: Row(children: [
+          Icon(Icons.store_mall_directory_outlined,
+              size: 18,
+              color: canTap ? c.primary : c.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _branchesLoading
+                  ? 'Loading branches…'
+                  : _branchId != null
+                      ? (_branches.firstWhere(
+                          (b) => (b['id'] as num?)?.toInt() == _branchId,
+                          orElse: () => const <String, dynamic>{})['text'] ??
+                              '')
+                          .toString()
+                      : (code.length < 2
+                          ? 'Enter club code first'
+                          : (hasBranches
+                              ? 'Select a branch'
+                              : 'Tap to load branches')),
+              style: TextStyle(
+                color: _branchId != null ? c.textPrimary : c.textMuted,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          if (_branchesLoading)
+            SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: c.primary))
+          else
+            Icon(Icons.keyboard_arrow_down,
+                color: canTap ? c.textPrimary : c.textMuted, size: 20),
+        ]),
       ),
     );
   }
