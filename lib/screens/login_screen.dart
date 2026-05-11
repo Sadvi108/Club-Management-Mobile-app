@@ -326,16 +326,25 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _clubCtrl,
                             textCapitalization: TextCapitalization.characters,
                             onChanged: (_) {
+                              final code = _clubCtrl.text.trim();
                               // Invalidate previously loaded branches when code changes.
                               if (_branchesLoadedForCode != null &&
-                                  _branchesLoadedForCode != _clubCtrl.text.trim()) {
+                                  _branchesLoadedForCode != code) {
                                 setState(() {
                                   _branches = const [];
                                   _branchId = null;
                                   _branchesLoadedForCode = null;
                                 });
                               }
+                              // Auto-fetch branches as soon as the user has typed
+                              // a 2+ char club code, so the dropdown is ready.
+                              if (code.length >= 2 &&
+                                  !_branchesLoading &&
+                                  _branchesLoadedForCode != code) {
+                                _loadBranches();
+                              }
                             },
+                            onSubmitted: (_) => _loadBranches(),
                             style: TextStyle(
                               color: c.textPrimary,
                               fontSize: 15,
@@ -516,7 +525,211 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  Future<void> _openBranchSheet() async {
+    final code = _clubCtrl.text.trim();
+    if (code.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter your club code first.')),
+      );
+      return;
+    }
+    if (_branches.isEmpty) {
+      await _loadBranches();
+    }
+    if (!mounted) return;
+    if (_branches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No branches found for that club code.')),
+      );
+      return;
+    }
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final c2 = ctx.appColors;
+        final screenH = MediaQuery.of(ctx).size.height;
+        return StatefulBuilder(builder: (ctx, setSheetState) {
+          String filter = '';
+          final filtered = _branches.where((b) {
+            if (filter.isEmpty) return true;
+            final text = (b['text'] ?? '').toString().toLowerCase();
+            return text.contains(filter.toLowerCase());
+          }).toList();
+          return Container(
+            constraints: BoxConstraints(maxHeight: screenH * 0.75),
+            decoration: BoxDecoration(
+              color: c2.surface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            padding: EdgeInsets.fromLTRB(
+                12, 12, 12, MediaQuery.of(ctx).viewInsets.bottom + 18),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                    color: c2.border, borderRadius: BorderRadius.circular(2)),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(children: [
+                  Icon(Icons.store_mall_directory_outlined,
+                      color: c2.primary, size: 18),
+                  const SizedBox(width: 8),
+                  Text('Select Branch',
+                      style: TextStyle(
+                          color: c2.textPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16)),
+                  const Spacer(),
+                  Text('${filtered.length}/${_branches.length}',
+                      style: TextStyle(
+                          color: c2.textMuted,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12)),
+                ]),
+              ),
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: TextField(
+                  autofocus: false,
+                  onChanged: (v) => setSheetState(() => filter = v),
+                  decoration: InputDecoration(
+                    prefixIcon:
+                        Icon(Icons.search, size: 18, color: c2.textMuted),
+                    hintText: 'Search branch (e.g. KCP)',
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) =>
+                        Divider(height: 1, color: c2.border),
+                    itemBuilder: (_, i) {
+                      final b = filtered[i];
+                      final id = (b['id'] as num?)?.toInt() ?? 0;
+                      final text = (b['text'] ?? '').toString();
+                      final selected = id == _branchId;
+                      return ListTile(
+                        title: Text(text,
+                            style: TextStyle(
+                                color: c2.textPrimary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14)),
+                        subtitle: Text('Branch #$id',
+                            style: TextStyle(
+                                color: c2.textMuted,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 11)),
+                        trailing: selected
+                            ? Icon(Icons.check_circle,
+                                color: c2.primary, size: 20)
+                            : Icon(Icons.chevron_right,
+                                color: c2.textMuted, size: 18),
+                        onTap: () => Navigator.pop(ctx, id),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ]),
+          );
+        });
+      },
+    );
+    if (picked != null && mounted) {
+      setState(() => _branchId = picked);
+    }
+  }
+
   Widget _branchDropdown(AppColors c) {
+    final code = _clubCtrl.text.trim();
+    final canTap = code.length >= 2 && !_branchesLoading;
+    final hasBranches = _branches.isNotEmpty;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(Radii.md),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(Radii.md),
+        onTap: !canTap
+            ? () {
+                // Always give feedback even when disabled.
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(_branchesLoading
+                        ? 'Loading branches…'
+                        : 'Enter your club code first.'),
+                  ),
+                );
+              }
+            : _openBranchSheet,
+        child: AbsorbPointer(
+          // Container below is decorative only — let InkWell handle taps.
+          child: _branchDropdownBody(c, canTap, hasBranches, code),
+        ),
+      ),
+    );
+  }
+
+  Widget _branchDropdownBody(
+      AppColors c, bool canTap, bool hasBranches, String code) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: c.isDark ? c.surfaceAlt : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(Radii.md),
+        border: Border.all(color: c.border),
+      ),
+      child: Row(children: [
+        Icon(Icons.store_mall_directory_outlined,
+            size: 18, color: canTap ? c.primary : c.textMuted),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            _branchesLoading
+                ? 'Loading branches…'
+                : _branchId != null
+                    ? (_branches.firstWhere(
+                            (b) => (b['id'] as num?)?.toInt() == _branchId,
+                            orElse: () => const <String, dynamic>{})['text'] ??
+                            '')
+                        .toString()
+                    : (code.length < 2
+                        ? 'Enter club code first'
+                        : (hasBranches ? 'Select a branch' : 'Tap to load branches')),
+            style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600),
+          ),
+        ),
+        if (_branchesLoading)
+          SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: c.primary))
+        else
+          Icon(Icons.keyboard_arrow_down_rounded,
+              color: canTap ? c.primary : c.textMuted, size: 22),
+      ]),
+    );
+  }
+
+  // OLD inline implementation below kept disabled so old code can be safely removed.
+  // ignore: unused_element
+  Widget _branchDropdownLegacy(AppColors c) {
     final code = _clubCtrl.text.trim();
     final canTap = code.length >= 2 && !_branchesLoading;
     final hasBranches = _branches.isNotEmpty;

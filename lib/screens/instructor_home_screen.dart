@@ -402,8 +402,11 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
   }
 
   Widget _latestNews(AppColors c, UserSession session) {
-    final news = session.myNews;
-    if (news.isEmpty) {
+    // The instructor API leaves `mynews` empty by default — fall back to
+    // `myoffers` so the section still shows live content.
+    final items =
+        session.myNews.isNotEmpty ? session.myNews : session.myOffers;
+    if (items.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(Gaps.md),
         decoration: BoxDecoration(
@@ -420,7 +423,7 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
     }
     return Column(
       children: [
-        for (final n in news) _newsCard(c, n),
+        for (final n in items) _newsCard(c, n),
       ],
     );
   }

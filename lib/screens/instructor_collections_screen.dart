@@ -60,11 +60,13 @@ class _InstructorCollectionsScreenState
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    final cash = _readCount(['cashCount', 'cash', 'cashPayments']);
+    // Real API returns {cash, fpx, dbt}:
+    //   cash → Cash Payments, fpx → Online (FPX), dbt → Payment Slips
+    final cash = _readCount(['cash', 'cashCount', 'cashPayments']);
     final online =
-        _readCount(['onlineCount', 'online', 'onlinePayments']);
+        _readCount(['fpx', 'online', 'onlineCount', 'onlinePayments']);
     final slip =
-        _readCount(['paymentSlipCount', 'slipCount', 'paymentSlips']);
+        _readCount(['dbt', 'paymentSlip', 'paymentSlipCount', 'slipCount']);
     return Scaffold(
       backgroundColor: c.background,
       body: SafeArea(
