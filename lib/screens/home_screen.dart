@@ -16,7 +16,7 @@ class HomeScreen extends StatelessWidget {
     final today = kSchedule.firstWhere((d) => d.day == 'Mon', orElse: () => kSchedule.first);
     final liveName = session.displayName.isNotEmpty ? session.displayName : kStudent.name;
     final liveMembership = session.clubName.isNotEmpty ? session.clubName : kStudent.membership;
-    final livePhoto = session.clubPic.isNotEmpty ? session.clubPic : kStudent.photo;
+    final livePhoto = session.studentPhoto.isNotEmpty ? session.studentPhoto : kStudent.photo;
     final liveBelt = session.currentGrade.isNotEmpty ? session.currentGrade : kStudent.belt;
     final liveDue = session.dueAmount > 0 ? 'RM ${session.dueAmount}' : 'RM ${kStudent.nextPayment.amount}';
     final liveDueLabel = session.invoiceCount > 0
@@ -100,7 +100,12 @@ class HomeScreen extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), borderRadius: BorderRadius.circular(Radii.lg)),
                     child: Row(children: [
-                      _statCell('${kStudent.attendance}%', 'Attendance'),
+                      _statCell(
+                        session.attendancePercentage.isNotEmpty
+                            ? '${session.attendancePercentage}%'
+                            : '${kStudent.attendance}%',
+                        'Attendance',
+                      ),
                       Container(width: 1, color: Colors.white.withOpacity(0.25)),
                       _statCell(liveBelt.split(' ').first, 'Current Belt'),
                       Container(width: 1, color: Colors.white.withOpacity(0.25)),

@@ -9,6 +9,13 @@ import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
 import '../widgets/app_icon_button.dart';
 
+class _InfoRow {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _InfoRow(this.icon, this.label, this.value);
+}
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -318,43 +325,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _openStudentDetails() async {
     final c = context.appColors;
-    Map<String, dynamic>? data;
-    try {
-      final r = await Api.reportsStudentDetails();
-      if (r is Map && r['data'] is Map) {
-        data = Map<String, dynamic>.from(r['data'] as Map);
-      } else if (r is Map) {
-        data = Map<String, dynamic>.from(r);
-      }
-    } catch (e) {
-      debugPrint('reportsStudentDetails failed: $e');
-    }
-    if (!mounted) return;
-    await showDialog<void>(
+    final session = UserSession.instance;
+    // Merge myInfo + studentAddtnlInfo into one map, labelling keys properly.
+    final raw = <String, dynamic>{
+      ...?session.myInfo,
+      ...?session.studentAddtnlInfo,
+    };
+    // Remove noisy / internal fields
+    const skip = {'accessToken', 'refreshToken', 'userType', 'clubList', 'branchList'};
+    final entries = raw.entries
+        .where((e) => !skip.contains(e.key) && e.value != null && e.value.toString().isNotEmpty)
+        .toList();
+
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Student Details'),
-        content: data == null
-            ? const Text('No details available.')
-            : SizedBox(
-                width: 320,
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: data.entries.take(20).map((e) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 3),
-                          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            SizedBox(width: 110, child: Text(e.key, style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w700))),
-                            Expanded(child: Text(e.value?.toString() ?? '', style: TextStyle(fontSize: 12, color: c.textPrimary))),
-                          ]),
-                        )).toList(),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        minChildSize: 0.35,
+        expand: false,
+        builder: (_, ctrl) => Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          child: ListView(controller: ctrl, children: [
+            Center(child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
+            Text('Student Details', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 16),
+            if (entries.isEmpty)
+              Text('No details available.', style: TextStyle(color: c.textSecondary))
+            else
+              ...entries.map((e) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SizedBox(
+                    width: 130,
+                    child: Text(_humanizeKey(e.key),
+                        style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
-                ),
-              ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+                  Expanded(
+                    child: Text(e.value.toString(),
+                        style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+                  ),
+                ]),
+              )),
+          ]),
+        ),
       ),
     );
+  }
+
+  /// Converts camelCase / PascalCase API keys into readable labels.
+  static String _humanizeKey(String key) {
+    final spaced = key.replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m[0]}');
+    final result = spaced[0].toUpperCase() + spaced.substring(1);
+    // Common abbreviation fixes
+    return result
+        .replaceAll('I C ', 'IC ')
+        .replaceAll('T Center', 'Training Center')
+        .replaceAll('S Center', 'Student Center')
+        .replaceAll('Hand Phone', 'Phone')
+        .replaceAll('Addtnl', 'Additional')
+        .trim();
   }
 
   Future<void> _openMyPurchases() async {
@@ -420,6 +457,142 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _personalInfoCard(AppColors c, UserSession session) {
+    // Build rows from live API data — only show non-empty values.
+    final rows = <_InfoRow>[
+      if (session.phone.isNotEmpty)        _InfoRow(Icons.phone_outlined,          'Phone',            session.phone),
+      if (session.email.isNotEmpty)        _InfoRow(Icons.email_outlined,           'Email',            session.email),
+      if (session.currentGrade.isNotEmpty) _InfoRow(Icons.military_tech_outlined,   'Belt / Grade',     session.currentGrade),
+      if (session.tCenterName.isNotEmpty)  _InfoRow(Icons.place_outlined,           'Training Center',  session.tCenterName),
+      if (session.instructorName.isNotEmpty) _InfoRow(Icons.person_outline,         'Instructor',       session.instructorName),
+      if (session.trainingTime.isNotEmpty) _InfoRow(Icons.schedule_outlined,        'Training Time',    session.trainingTime),
+      // Extra fields from studentAddtnlInfo
+      ..._extraInfoRows(c, session),
+    ];
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: Gaps.xl),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.xl),
+        border: c.isDark ? Border.all(color: c.border) : null,
+        boxShadow: Shadows.card(c),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Title row with accent bar
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: c.border)),
+          ),
+          child: Row(children: [
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [c.primary.withOpacity(0.18), c.primary.withOpacity(0.30)],
+                ),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(Icons.badge_outlined, size: 16, color: c.primary),
+            ),
+            const SizedBox(width: 10),
+            Text('Personal Info',
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2)),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: c.primary.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text('${rows.length} fields',
+                  style: TextStyle(color: c.primary, fontSize: 10, fontWeight: FontWeight.w800)),
+            ),
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            children: List.generate(rows.length, (i) {
+              final r = rows[i];
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: i == rows.length - 1
+                    ? null
+                    : BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(color: c.border.withOpacity(0.5)),
+                        ),
+                      ),
+                child: Row(children: [
+                  Container(
+                    width: 34, height: 34,
+                    decoration: BoxDecoration(
+                      color: c.surfaceAlt,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(r.icon, size: 16, color: c.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(r.label,
+                            style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.2)),
+                        const SizedBox(height: 2),
+                        Text(r.value,
+                            style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                ]),
+              );
+            }),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  List<_InfoRow> _extraInfoRows(AppColors c, UserSession session) {
+    final extra = session.studentAddtnlInfo;
+    if (extra == null) return [];
+    const fieldMap = <String, List<dynamic>>{
+      'icNo':         [Icons.credit_card_outlined,  'IC Number'],
+      'passportNo':   [Icons.book_outlined,          'Passport'],
+      'parentName':   [Icons.family_restroom,        'Parent Name'],
+      'parentPhone':  [Icons.phone_in_talk_outlined, 'Parent Phone'],
+      'address':      [Icons.home_outlined,          'Address'],
+      'dob':          [Icons.cake_outlined,          'Date of Birth'],
+      'gender':       [Icons.person_outline,         'Gender'],
+      'nationality':  [Icons.flag_outlined,          'Nationality'],
+      'school':       [Icons.school_outlined,        'School'],
+    };
+    final rows = <_InfoRow>[];
+    for (final entry in fieldMap.entries) {
+      final v = (extra[entry.key] ?? '').toString().trim();
+      if (v.isNotEmpty) {
+        rows.add(_InfoRow(entry.value[0] as IconData, entry.value[1] as String, v));
+      }
+    }
+    return rows;
+  }
+
   Widget _actionTile(AppColors c, IconData icon, String label, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -450,7 +623,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final session = context.watch<UserSession>();
     final liveName = session.displayName.isNotEmpty ? session.displayName : kStudent.name;
     final liveId = session.registrationNo.isNotEmpty ? session.registrationNo : kStudent.id;
-    final livePhoto = session.clubPic.isNotEmpty ? session.clubPic : kStudent.photo;
+    final livePhoto = session.studentPhoto.isNotEmpty ? session.studentPhoto : kStudent.photo;
     final liveMembership = session.clubName.isNotEmpty ? session.clubName : kStudent.membership;
     final liveBelt = session.currentGrade.isNotEmpty ? session.currentGrade : kStudent.belt;
     final liveLevel = session.tCenterName.isNotEmpty ? session.tCenterName : kStudent.level;
@@ -543,6 +716,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ]),
               ),
             ),
+
+            // Personal info card
+            _personalInfoCard(c, session),
+            const SizedBox(height: 12),
 
             // Theme toggle
             Container(

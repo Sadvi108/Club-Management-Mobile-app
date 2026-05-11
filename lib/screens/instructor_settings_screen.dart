@@ -19,15 +19,22 @@ class InstructorSettingsScreen extends StatefulWidget {
 class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
   Future<void> _openProfile() async {
     final c = context.appColors;
-    final info = UserSession.instance.myInfo ?? <String, dynamic>{};
-    final entries = info.entries.toList();
+    final session = UserSession.instance;
+    final raw = <String, dynamic>{
+      ...?session.myInfo,
+    };
+    const skip = {'accessToken', 'refreshToken', 'userType', 'clubList', 'branchList', 'password'};
+    final entries = raw.entries
+        .where((e) => !skip.contains(e.key) && e.value != null && e.value.toString().isNotEmpty)
+        .toList();
+
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (ctx) => DraggableScrollableSheet(
         initialChildSize: 0.55,
-        maxChildSize: 0.9,
+        maxChildSize: 0.92,
         minChildSize: 0.3,
         expand: false,
         builder: (_, ctrl) => Container(
@@ -39,41 +46,33 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
           child: ListView(controller: ctrl, children: [
             Center(
               child: Container(
-                width: 40,
-                height: 4,
+                width: 40, height: 4,
                 margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                    color: c.border, borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)),
               ),
             ),
-            Text('Profile',
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18)),
-            const SizedBox(height: 12),
+            Text('My Profile',
+                style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800, fontSize: 18)),
+            const SizedBox(height: 16),
             if (entries.isEmpty)
-              Text('No profile data.',
-                  style: TextStyle(color: c.textSecondary))
+              Text('No profile data.', style: TextStyle(color: c.textSecondary))
             else
               for (final e in entries)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     SizedBox(
-                      width: 130,
-                      child: Text(e.key,
-                          style: TextStyle(
-                              color: c.textSecondary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12)),
+                      width: 140,
+                      child: Text(
+                        _humanizeKey(e.key),
+                        style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w600, fontSize: 12),
+                      ),
                     ),
                     Expanded(
-                      child: Text(e.value?.toString() ?? '',
-                          style: TextStyle(
-                              color: c.textPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13)),
+                      child: Text(
+                        e.value?.toString() ?? '',
+                        style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
                     ),
                   ]),
                 ),
@@ -81,6 +80,18 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
         ),
       ),
     );
+  }
+
+  static String _humanizeKey(String key) {
+    final spaced = key.replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m[0]}');
+    final result = spaced[0].toUpperCase() + spaced.substring(1);
+    return result
+        .replaceAll('T Center', 'Training Center')
+        .replaceAll('S Center', 'Student Center')
+        .replaceAll('Hand Phone', 'Phone')
+        .replaceAll('I C ', 'IC ')
+        .replaceAll('Tme', 'Time')
+        .trim();
   }
 
   Future<void> _openSwitchBranch() async {
@@ -278,48 +289,78 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
               padding:
                   const EdgeInsets.fromLTRB(Gaps.lg, Gaps.sm, Gaps.lg, 100),
               children: [
+                // Hero profile card with gradient
                 Container(
-                  padding: const EdgeInsets.all(Gaps.md),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: c.surface,
-                    borderRadius: BorderRadius.circular(Radii.lg),
-                    border: Border.all(color: c.border),
-                    boxShadow: Shadows.card(c),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: c.gradient,
+                    ),
+                    borderRadius: BorderRadius.circular(Radii.xl),
+                    boxShadow: Shadows.strong(c),
                   ),
                   child: Row(children: [
                     Container(
-                      width: 46,
-                      height: 46,
+                      width: 56, height: 56,
                       decoration: BoxDecoration(
-                        color: c.surfaceAlt,
+                        color: Colors.white.withOpacity(0.22),
                         shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
                       ),
                       alignment: Alignment.center,
-                      child: Icon(Icons.person, color: c.primary),
+                      child: Text(
+                        name.isNotEmpty ? name[0].toUpperCase() : 'I',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900),
+                      ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(name,
-                              style: TextStyle(
-                                  color: c.textPrimary,
+                              style: const TextStyle(
+                                  color: Colors.white,
                                   fontWeight: FontWeight.w800,
-                                  fontSize: 15)),
-                          Text(session.clubDisplayName,
-                              style: TextStyle(
-                                  color: c.textSecondary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12)),
+                                  fontSize: 17)),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.22),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.verified_user,
+                                    size: 11, color: Colors.white),
+                                const SizedBox(width: 4),
+                                Text(session.clubDisplayName,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700)),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ]),
                 ),
-                const SizedBox(height: Gaps.md),
+                const SizedBox(height: Gaps.lg),
+                _sectionLabel(c, 'Account'),
                 _row(c, Icons.person_outline, 'Profile', _openProfile),
                 _row(c, Icons.swap_horiz, 'Switch Branch', _openSwitchBranch),
+                const SizedBox(height: Gaps.md),
+                _sectionLabel(c, 'Preferences'),
                 _row(
                     c,
                     theme.isDark ? Icons.light_mode : Icons.dark_mode,
@@ -337,6 +378,19 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
     );
   }
 
+  Widget _sectionLabel(AppColors c, String label) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 4, 0, 8),
+        child: Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            color: c.textMuted,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 1.2,
+          ),
+        ),
+      );
+
   Widget _row(AppColors c, IconData icon, String label, VoidCallback onTap,
       {bool danger = false}) {
     return Container(
@@ -346,21 +400,29 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
         borderRadius: BorderRadius.circular(Radii.md),
         child: Container(
           padding: const EdgeInsets.symmetric(
-              horizontal: Gaps.md, vertical: Gaps.md),
+              horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(Radii.md),
             border: Border.all(color: c.border),
+            boxShadow: c.isDark ? null : [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 38, height: 38,
               decoration: BoxDecoration(
-                color: danger
-                    ? c.danger.withOpacity(0.12)
-                    : c.surfaceAlt,
-                shape: BoxShape.circle,
+                gradient: danger
+                    ? LinearGradient(
+                        colors: [c.danger.withOpacity(0.18), c.danger.withOpacity(0.28)])
+                    : LinearGradient(
+                        colors: [c.primary.withOpacity(0.14), c.primary.withOpacity(0.24)]),
+                borderRadius: BorderRadius.circular(11),
               ),
               alignment: Alignment.center,
               child: Icon(icon,

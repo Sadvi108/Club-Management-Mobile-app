@@ -66,9 +66,49 @@ class UserSession extends ChangeNotifier {
   String get clubName => (authData?['clubName'] ?? '').toString();
   String get clubPic => (authData?['clubPic'] ?? '').toString();
   String get phone => (authData?['handPhone'] ?? '').toString();
+  String get email =>
+      (myInfo?['email'] ?? authData?['email'] ?? '').toString();
 
-  num get dueAmount => (homeStats?['dueAmount'] as num?) ?? 0;
-  int get invoiceCount => (homeStats?['invoiceCount'] as int?) ?? 0;
+  /// Student's actual profile picture. Checks multiple myInfo / studentAddtnlInfo
+  /// fields before falling back to the club logo (clubPic).
+  String get studentPhoto {
+    const photoKeys = ['photo', 'profilePic', 'pic', 'image', 'avatar', 'photoUrl', 'studentPhoto'];
+    for (final k in photoKeys) {
+      final v = (myInfo?[k] ?? studentAddtnlInfo?[k] ?? '').toString();
+      if (v.isNotEmpty && v.startsWith('http')) return v;
+    }
+    return clubPic;
+  }
+
+  /// Attendance percentage from profile data, or empty string when unavailable.
+  String get attendancePercentage {
+    for (final k in ['attendancePercentage', 'attendance', 'attendancePct']) {
+      final v = myInfo?[k] ?? studentAddtnlInfo?[k];
+      if (v != null) return v.toString();
+    }
+    return '';
+  }
+
+  num get dueAmount {
+    final m = homeStats;
+    if (m == null) return 0;
+    for (final k in ['dueAmount', 'dueAmt', 'totalDue', 'totalAmount', 'outstandingAmount']) {
+      final v = m[k];
+      if (v is num) return v;
+    }
+    return 0;
+  }
+
+  int get invoiceCount {
+    final m = homeStats;
+    if (m == null) return 0;
+    for (final k in ['invoiceCount', 'pendingInvoice', 'dueInvoice', 'invoices', 'pendingCount']) {
+      final v = m[k];
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+    }
+    return 0;
+  }
 
   /// True when the authenticated user is an instructor.
   /// The Authenticate response sets `userType == 2` for instructors.
@@ -141,7 +181,7 @@ class UserSession extends ChangeNotifier {
   }
 
   Future<void> _loadAll() async {
-    await Future.wait([
+    final futures = <Future>[
       _safeGet('/Profile/MyInfo').then((d) {
         if (d is Map) myInfo = Map<String, dynamic>.from(d);
       }),
@@ -158,10 +198,14 @@ class UserSession extends ChangeNotifier {
       _safeGet('/Profile/MyNotifications').then((d) {
         if (d is List) notifications = d;
       }),
-      _safeGet('/Profile/StudentAddtnlInfo').then((d) {
+    ];
+    // StudentAddtnlInfo is student-only — skip for instructor accounts.
+    if (!isInstructor) {
+      futures.add(_safeGet('/Profile/StudentAddtnlInfo').then((d) {
         if (d is Map) studentAddtnlInfo = Map<String, dynamic>.from(d);
-      }),
-    ]);
+      }));
+    }
+    await Future.wait(futures);
   }
 
   Future<void> _checkStoreVersion() async {

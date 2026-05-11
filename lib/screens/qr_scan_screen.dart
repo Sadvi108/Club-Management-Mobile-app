@@ -28,6 +28,8 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
   String _scannedCode = 'Karate Drills';
   String? _resolvedInfo;
   bool _resolving = false;
+  bool _attendancePosted = false;
+  bool _attendanceFailed = false;
   bool _cameraFailed = false;
   Timer? _fallbackTimer;
   bool _generateMode = false;
@@ -113,6 +115,20 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
         _scannedCode = 'Class: $code';
       });
       _resolveCode(code);
+      _postAttendance(code);
+    }
+  }
+
+  Future<void> _postAttendance(String qrCode) async {
+    try {
+      await Api.attendanceAdd(<String, dynamic>{
+        'qrCode': qrCode,
+        'attendanceType': 1,
+      });
+      if (mounted) setState(() => _attendancePosted = true);
+    } catch (e) {
+      debugPrint('AttendanceAdd failed: $e');
+      if (mounted) setState(() => _attendanceFailed = true);
     }
   }
 
@@ -265,8 +281,12 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
                             child: Text(_resolvedInfo!, textAlign: TextAlign.center,
                                 style: const TextStyle(color: Color(0xFFFFE4B5), fontSize: 12, fontWeight: FontWeight.w700)),
                           )
+                        else if (_attendancePosted)
+                          const Text('Attendance recorded ✓', style: TextStyle(color: Color(0xFF86EFAC), fontSize: 12, fontWeight: FontWeight.w700))
+                        else if (_attendanceFailed)
+                          const Text('Attendance sync failed', style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12))
                         else
-                          const Text('24 Feb · 06:00 AM', style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12)),
+                          const Text('Recording attendance…', style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12)),
                       ]),
                     ),
                 ]),

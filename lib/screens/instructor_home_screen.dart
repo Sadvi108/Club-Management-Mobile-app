@@ -121,41 +121,67 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
       );
 
   Widget _notificationsStrip(AppColors c, UserSession session) {
-    final tint = c.isDark
-        ? const Color(0xFF1E293B)
-        : const Color(0xFFEFF6FF);
+    final isDark = c.isDark;
     final accent = const Color(0xFF2563EB);
     final invoiceCount = session.invoiceCount;
     final due = session.dueAmount;
     return Container(
       padding: const EdgeInsets.all(Gaps.md),
       decoration: BoxDecoration(
-        color: tint,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+              : [const Color(0xFFF0F9FF), const Color(0xFFEFF6FF)],
+        ),
         borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.border),
+        border: Border.all(color: accent.withOpacity(0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withOpacity(isDark ? 0.10 : 0.06),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.campaign_outlined, color: accent, size: 18),
-            const SizedBox(width: 8),
+            Container(
+              width: 28, height: 28,
+              decoration: BoxDecoration(
+                color: accent.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(Icons.campaign_outlined, color: accent, size: 16),
+            ),
+            const SizedBox(width: 10),
             Text('Notifications',
                 style: TextStyle(
                     color: c.textPrimary,
                     fontWeight: FontWeight.w800,
-                    fontSize: 14)),
+                    fontSize: 14,
+                    letterSpacing: 0.2)),
           ]),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _notifRow(
             c,
             '#$invoiceCount invoices are due',
+            icon: Icons.attach_money,
+            iconBg: const Color(0xFFDCFCE7),
+            iconColor: const Color(0xFF16A34A),
             onTap: () => context.go('/instructor/reports/outstanding'),
           ),
           const SizedBox(height: 6),
           _notifRow(
             c,
             'RM ${due.toStringAsFixed(2)} total due amt',
+            icon: Icons.credit_card,
+            iconBg: const Color(0xFFFFECEC),
+            iconColor: const Color(0xFFDC2626),
             onTap: () => context.go('/instructor/reports/outstanding'),
           ),
         ],
@@ -163,13 +189,31 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
     );
   }
 
-  Widget _notifRow(AppColors c, String text, {VoidCallback? onTap}) {
+  Widget _notifRow(
+    AppColors c,
+    String text, {
+    VoidCallback? onTap,
+    IconData icon = Icons.info_outline,
+    Color? iconBg,
+    Color? iconColor,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(Radii.sm),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: iconBg ?? c.surfaceAlt,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, color: iconColor ?? c.primary, size: 14),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(text,
                 style: TextStyle(
@@ -177,36 +221,50 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
                     fontWeight: FontWeight.w700,
                     fontSize: 13)),
           ),
-          Icon(Icons.chevron_right, color: c.primary, size: 18),
+          Icon(Icons.north_east, color: c.primary, size: 15),
         ]),
       ),
     );
   }
 
   Widget _actionGrid(AppColors c) {
+    // Each tile carries its own accent so the grid reads at a glance rather
+    // than as 12 identical orange chips.
+    const amber  = Color(0xFFF59E0B);
+    const teal   = Color(0xFF14B8A6);
+    const green  = Color(0xFF10B981);
+    const lime   = Color(0xFFCA8A04);
+    const indigo = Color(0xFF6366F1);
+    const gold   = Color(0xFFEAB308);
+    const blue   = Color(0xFF3B82F6);
+    const rose   = Color(0xFFEF4444);
+    const yellow = Color(0xFFFBBF24);
+    const cyan   = Color(0xFF06B6D4);
+    const purple = Color(0xFFA855F7);
+    const orange = Color(0xFFFB923C);
     final tiles = <_ActionTile>[
-      _ActionTile(Icons.alarm, 'Training Time', () => context.push('/training')),
-      _ActionTile(Icons.person_search, 'Activities',
+      _ActionTile(Icons.alarm, 'Training Time', amber, () => context.push('/training')),
+      _ActionTile(Icons.directions_run, 'Activities', teal,
           () => context.push('/instructor/reports/activity')),
-      _ActionTile(Icons.assignment_turned_in_outlined, 'Update Attendance',
+      _ActionTile(Icons.assignment_turned_in_outlined, 'Update Attendance', green,
           () => context.push('/attendance')),
-      _ActionTile(Icons.receipt_long, 'Receipt',
+      _ActionTile(Icons.receipt_long, 'Receipt', lime,
           () => context.push('/instructor/reports/receipt')),
-      _ActionTile(Icons.school, 'Grading Schedule',
+      _ActionTile(Icons.school, 'Grading Schedule', indigo,
           () => context.push('/instructor/reports/grading-schedule')),
-      _ActionTile(Icons.emoji_events, 'Tournament Schedule',
+      _ActionTile(Icons.emoji_events, 'Tournament Schedule', gold,
           () => context.push('/instructor/reports/tournament')),
-      _ActionTile(Icons.people_alt_outlined, 'Collections',
+      _ActionTile(Icons.people_alt_outlined, 'Collections', blue,
           () => context.go('/instructor/collections')),
-      _ActionTile(Icons.receipt_long_outlined, 'Missing Invoice',
+      _ActionTile(Icons.receipt_long_outlined, 'Missing Invoice', rose,
           () => context.push('/instructor/reports/missing-invoice')),
-      _ActionTile(Icons.savings, 'Fee Master',
+      _ActionTile(Icons.savings, 'Fee Master', yellow,
           () => context.push('/instructor/reports/fee-master')),
-      _ActionTile(Icons.people_alt, 'New Student',
+      _ActionTile(Icons.person_add_alt_1, 'New Student', cyan,
           () => context.push('/instructor/reports/new-student')),
-      _ActionTile(Icons.receipt, 'Payment Slip',
+      _ActionTile(Icons.receipt, 'Payment Slip', purple,
           () => context.push('/instructor/reports/payment-slip')),
-      _ActionTile(Icons.apps, 'More', () => _openMoreSheet(context)),
+      _ActionTile(Icons.apps, 'More', orange, () => _openMoreSheet(context)),
     ];
     return Container(
       padding: const EdgeInsets.all(Gaps.md),
@@ -221,9 +279,9 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          mainAxisExtent: 100,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          mainAxisExtent: 104,
         ),
         itemCount: tiles.length,
         itemBuilder: (_, i) => _tile(c, tiles[i]),
@@ -232,28 +290,40 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
   }
 
   Widget _tile(AppColors c, _ActionTile t) {
+    final bg = t.color.withOpacity(c.isDark ? 0.18 : 0.12);
     return InkWell(
       onTap: t.onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: c.border),
         ),
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 36,
-              height: 36,
+              width: 46,
+              height: 46,
               decoration: BoxDecoration(
-                color: c.surfaceAlt,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [bg, t.color.withOpacity(c.isDark ? 0.30 : 0.22)],
+                ),
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: t.color.withOpacity(0.18),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
               alignment: Alignment.center,
-              child: Icon(t.icon, color: c.primary, size: 18),
+              child: Icon(t.icon, color: t.color, size: 22),
             ),
             const SizedBox(height: 8),
             Text(t.label,
@@ -263,7 +333,8 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
                 style: TextStyle(
                     color: c.textPrimary,
                     fontSize: 11,
-                    fontWeight: FontWeight.w600)),
+                    height: 1.15,
+                    fontWeight: FontWeight.w700)),
           ],
         ),
       ),
@@ -326,71 +397,143 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
 
   Widget _latestUpdates(AppColors c, UserSession session) {
     final rows = session.clubStatsRows;
-    return Container(
-      decoration: BoxDecoration(
-        color: c.surfaceAlt,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.border),
-        boxShadow: Shadows.card(c),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Gaps.md, Gaps.md, Gaps.md, Gaps.sm),
-            child: Row(children: [
-              Icon(Icons.update, color: c.primary, size: 18),
-              const SizedBox(width: 8),
-              Text('Latest Updates',
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(Radii.lg),
+      child: Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(Radii.lg),
+          border: Border.all(color: c.border),
+          boxShadow: Shadows.card(c),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Gradient orange header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Gaps.md, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: c.gradient,
+                ),
+              ),
+              child: Row(children: [
+                const Icon(Icons.trending_up_rounded,
+                    color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                const Text(
+                  'Latest Updates',
                   style: TextStyle(
-                      color: c.primary,
+                      color: Colors.white,
                       fontWeight: FontWeight.w800,
-                      fontSize: 14)),
-            ]),
-          ),
-          Container(
-            margin: const EdgeInsets.fromLTRB(Gaps.sm, 0, Gaps.sm, Gaps.sm),
-            padding: const EdgeInsets.all(Gaps.md),
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: BorderRadius.circular(Radii.md),
-              border: Border.all(color: c.border),
-            ),
-            child: rows.isEmpty
-                ? Text('No updates yet.',
-                    style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500))
-                : Column(
-                    children: [
-                      for (var i = 0; i < rows.length; i++) ...[
-                        if (i > 0)
-                          Divider(height: 12, color: c.border),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                  (rows[i]['text'] ?? '').toString(),
-                                  style: TextStyle(
-                                      color: c.textPrimary,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13)),
-                            ),
-                            Text((rows[i]['id'] ?? 0).toString(),
-                                style: TextStyle(
-                                    color: c.primary,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 14)),
-                          ],
-                        ),
-                      ],
-                    ],
+                      fontSize: 15,
+                      letterSpacing: 0.3),
+                ),
+                const Spacer(),
+                if (rows.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.22),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('${rows.length}',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11)),
                   ),
-          ),
-        ],
+              ]),
+            ),
+            // Body
+            Padding(
+              padding: const EdgeInsets.all(Gaps.sm),
+              child: rows.isEmpty
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: Gaps.md, vertical: 20),
+                      child: Row(children: [
+                        Icon(Icons.inbox_outlined,
+                            color: c.textMuted, size: 20),
+                        const SizedBox(width: 10),
+                        Text('No updates yet.',
+                            style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500)),
+                      ]),
+                    )
+                  : Column(
+                      children: [
+                        for (var i = 0; i < rows.length; i++)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: Gaps.md, vertical: 11),
+                            decoration: BoxDecoration(
+                              color: i.isOdd
+                                  ? (c.isDark
+                                      ? Colors.white.withOpacity(0.02)
+                                      : c.surfaceAlt.withOpacity(0.35))
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(Radii.sm),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 6, height: 6,
+                                  decoration: BoxDecoration(
+                                    color: c.primary.withOpacity(0.55),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                      (rows[i]['text'] ?? '').toString(),
+                                      style: TextStyle(
+                                          color: c.textPrimary,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13)),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: c.primary.withOpacity(0.10),
+                                    borderRadius:
+                                        BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    _statCount(rows[i]),
+                                    style: TextStyle(
+                                        color: c.primary,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 13),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  String _statCount(Map<String, dynamic> row) {
+    for (final key in ['id', 'count', 'value', 'total']) {
+      final v = row[key];
+      if (v != null && key != 'value') return v.toString();
+    }
+    return '0';
   }
 
   Widget _latestNewsHeader(AppColors c) {
@@ -471,6 +614,7 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
 class _ActionTile {
   final IconData icon;
   final String label;
+  final Color color;
   final VoidCallback onTap;
-  _ActionTile(this.icon, this.label, this.onTap);
+  _ActionTile(this.icon, this.label, this.color, this.onTap);
 }
