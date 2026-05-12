@@ -11,6 +11,11 @@ class UserSession extends ChangeNotifier {
   List<dynamic>? clubStats;
   List<dynamic>? notifications;
   Map<String, dynamic>? studentAddtnlInfo;
+  /// Outstanding invoices for the instructor's branch — loaded from
+  /// `/Outstanding/Fetch`. Used to compute live `dueAmount` and
+  /// `invoiceCount` since `/Reports/HomePageStats` doesn't include them
+  /// for instructor accounts.
+  List<dynamic>? outstandingList;
   int unreadNotifications = 0;
   bool loading = false;
   String? error;
@@ -89,7 +94,29 @@ class UserSession extends ChangeNotifier {
     return '';
   }
 
+  /// Total amount due. For instructors this is the SUM of every unpaid
+  /// invoice across the branch (loaded from `/Outstanding/Fetch`). For
+  /// students it's the personal `dueAmount` from `/Reports/HomePageStats`.
   num get dueAmount {
+    // Instructors → real-time sum from the outstanding list
+    if (isInstructor && outstandingList != null) {
+      num total = 0;
+      for (final row in outstandingList!) {
+        if (row is Map) {
+          for (final k in ['dueAmount', 'amount', 'dueAmt', 'outstandingAmount',
+                            'balance', 'amountDue', 'totalAmount', 'value']) {
+            final v = row[k];
+            if (v is num) { total += v; break; }
+            if (v is String) {
+              final n = num.tryParse(v.replaceAll(',', ''));
+              if (n != null) { total += n; break; }
+            }
+          }
+        }
+      }
+      return total;
+    }
+    // Students → homeStats keys
     final m = homeStats;
     if (m == null) return 0;
     for (final k in ['dueAmount', 'dueAmt', 'totalDue', 'totalAmount', 'outstandingAmount']) {
@@ -99,7 +126,12 @@ class UserSession extends ChangeNotifier {
     return 0;
   }
 
+  /// Number of unpaid invoices. Instructors → outstanding list length.
+  /// Students → homeStats keys.
   int get invoiceCount {
+    if (isInstructor && outstandingList != null) {
+      return outstandingList!.length;
+    }
     final m = homeStats;
     if (m == null) return 0;
     for (final k in ['invoiceCount', 'pendingInvoice', 'dueInvoice', 'invoices', 'pendingCount']) {
@@ -205,7 +237,27 @@ class UserSession extends ChangeNotifier {
         if (d is Map) studentAddtnlInfo = Map<String, dynamic>.from(d);
       }));
     }
+    // Outstanding/Fetch is the real source of unpaid invoices for
+    // instructors. /Reports/HomePageStats does NOT include dueAmount /
+    // invoiceCount for instructor accounts, so compute them from this list.
+    if (isInstructor) {
+      futures.add(_safePost('/Outstanding/Fetch').then((d) {
+        if (d is List) outstandingList = d;
+      }));
+    }
     await Future.wait(futures);
+  }
+
+  Future<dynamic> _safePost(String endpoint,
+      [Map<String, dynamic> body = const {}]) async {
+    try {
+      final resp = await ApiService.post(endpoint, body);
+      if (resp is Map && resp.containsKey('data')) return resp['data'];
+      return resp;
+    } catch (e) {
+      debugPrint('Failed POST $endpoint: $e');
+      return null;
+    }
   }
 
   Future<void> _checkStoreVersion() async {
@@ -265,6 +317,7 @@ class UserSession extends ChangeNotifier {
     clubStats = null;
     notifications = null;
     studentAddtnlInfo = null;
+    outstandingList = null;
     unreadNotifications = 0;
     ApiService.clearToken();
     notifyListeners();
