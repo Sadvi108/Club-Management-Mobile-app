@@ -263,6 +263,15 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
   void _openPayModal() {
     final c = context.appColors;
+    // Compute live total at open-time so the modal always shows the
+    // current outstanding amount, not a stale mock value.
+    final liveTotal = _liveOutstandingTotal();
+    final session = UserSession.instance;
+    final modalAmount = liveTotal > 0
+        ? liveTotal.toStringAsFixed(2)
+        : (session.dueAmount > 0
+            ? session.dueAmount.toStringAsFixed(2)
+            : kStudent.nextPayment.amount.toString());
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -281,7 +290,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             const SizedBox(height: 4),
             Text('Choose payment method', style: TextStyle(color: c.textSecondary, fontSize: 12)),
             const SizedBox(height: 12),
-            Text('RM ${kStudent.nextPayment.amount.toString()}', style: TextStyle(color: c.primary, fontSize: 32, fontWeight: FontWeight.w800)),
+            Text('RM $modalAmount', style: TextStyle(color: c.primary, fontSize: 32, fontWeight: FontWeight.w800)),
             const SizedBox(height: 10),
             ...kPayMethods.map((m) {
               final active = selectedMethod == m.id;
@@ -322,7 +331,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     context: context,
                     builder: (_) => AlertDialog(
                       title: const Text('Payment Successful'),
-                      content: Text('RM ${kStudent.nextPayment.amount} paid via $method'),
+                      content: Text('RM $modalAmount paid via $method'),
                       actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
                     ),
                   );
@@ -373,6 +382,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         : (session.invoiceCount > 0
             ? '${session.invoiceCount} outstanding invoice(s)'
             : kStudent.nextPayment.label);
+    final liveDueDate = session.earliestDueDate.isNotEmpty
+        ? session.earliestDueDate
+        : kStudent.nextPayment.dueDate;
     return Container(
       color: c.background,
       child: CustomScrollView(slivers: [
@@ -409,7 +421,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 const SizedBox(height: 2),
                 Text(liveLabel, style: const TextStyle(color: Color(0xE6FFFFFF), fontSize: 13, fontWeight: FontWeight.w500)),
                 const SizedBox(height: 2),
-                Text('Due by ${kStudent.nextPayment.dueDate}', style: const TextStyle(color: Color(0xCCFFFFFF), fontSize: 12)),
+                Text('Due by $liveDueDate', style: const TextStyle(color: Color(0xCCFFFFFF), fontSize: 12)),
                 const SizedBox(height: 18),
                 InkWell(
                   onTap: _openPayModal,

@@ -109,52 +109,139 @@ class UserSession extends ChangeNotifier {
     return '';
   }
 
-  /// Total amount due. For instructors this is the SUM of every unpaid
-  /// invoice across the branch (loaded from `/Outstanding/Fetch`). For
-  /// students it's the personal `dueAmount` from `/Reports/HomePageStats`.
+  /// Total amount due. Prefers the live sum of [outstandingList] when
+  /// it's available (works for both instructors and students). Falls back
+  /// to `homeStats` keys when no list was loaded.
   num get dueAmount {
-    // Instructors → real-time sum from the outstanding list
-    if (isInstructor && outstandingList != null) {
+    final list = outstandingList;
+    if (list != null && list.isNotEmpty) {
       num total = 0;
-      for (final row in outstandingList!) {
-        if (row is Map) {
-          for (final k in ['dueAmount', 'amount', 'dueAmt', 'outstandingAmount',
-                            'balance', 'amountDue', 'totalAmount', 'value']) {
-            final v = row[k];
-            if (v is num) { total += v; break; }
-            if (v is String) {
-              final n = num.tryParse(v.replaceAll(',', ''));
-              if (n != null) { total += n; break; }
-            }
-          }
-        }
+      for (final row in list) {
+        if (row is Map) total += _readAmount(row);
       }
-      return total;
+      // If the sum produced something non-zero, return it. Otherwise fall
+      // through to homeStats — the row fields might not match any of our
+      // amount key heuristics.
+      if (total != 0) return total;
     }
-    // Students → homeStats keys
     final m = homeStats;
     if (m == null) return 0;
-    for (final k in ['dueAmount', 'dueAmt', 'totalDue', 'totalAmount', 'outstandingAmount']) {
+    for (final k in [
+      'dueAmount', 'dueAmt', 'totalDue', 'totalAmount', 'outstandingAmount'
+    ]) {
       final v = m[k];
-      if (v is num) return v;
+      final n = _toNum(v);
+      if (n != null) return n;
     }
     return 0;
   }
 
-  /// Number of unpaid invoices. Instructors → outstanding list length.
-  /// Students → homeStats keys.
+  /// Number of unpaid invoices. Prefers `outstandingList.length`, falls
+  /// back to `homeStats` keys.
   int get invoiceCount {
-    if (isInstructor && outstandingList != null) {
-      return outstandingList!.length;
-    }
+    final list = outstandingList;
+    if (list != null) return list.length;
     final m = homeStats;
     if (m == null) return 0;
-    for (final k in ['invoiceCount', 'pendingInvoice', 'dueInvoice', 'invoices', 'pendingCount']) {
+    for (final k in [
+      'invoiceCount', 'pendingInvoice', 'dueInvoice', 'invoices', 'pendingCount'
+    ]) {
       final v = m[k];
       if (v is int) return v;
       if (v is num) return v.toInt();
     }
     return 0;
+  }
+
+  /// Earliest due date across the outstanding list (yyyy-MM-dd or first
+  /// usable date string). Empty when nothing is loaded.
+  String get earliestDueDate {
+    final list = outstandingList;
+    if (list == null || list.isEmpty) return '';
+    String? earliest;
+    for (final row in list) {
+      if (row is! Map) continue;
+      for (final k in ['dueDate', 'due_date', 'invoiceDate', 'date',
+                        'paymentDue', 'expiryDate']) {
+        final v = row[k];
+        if (v == null) continue;
+        final s = v.toString();
+        if (s.isEmpty) continue;
+        if (earliest == null || s.compareTo(earliest) < 0) {
+          earliest = s;
+        }
+        break;
+      }
+    }
+    return earliest ?? '';
+  }
+
+  /// Extract a numeric amount from an outstanding-list row, trying:
+  ///   1. exact keys we've seen in different swag responses
+  ///   2. case-insensitive substring match for "amount" / "due" / "balance"
+  ///   3. number parsing that strips currency symbols + commas
+  static num _readAmount(Map row) {
+    const exactKeys = [
+      'dueAmount', 'dueAmt', 'amount', 'amountDue', 'outstandingAmount',
+      'outstandingAmt', 'balance', 'totalAmount', 'totalDue', 'value',
+      'invoiceAmount', 'amtDue'
+    ];
+    for (final k in exactKeys) {
+      final n = _toNum(row[k]);
+      if (n != null) return n;
+    }
+    // Fuzzy: any key whose lowercased name mentions money concepts.
+    for (final entry in row.entries) {
+      final key = entry.key.toString().toLowerCase();
+      if (key.contains('amount') ||
+          key.contains('amt') ||
+          key.contains('balance') ||
+          (key.contains('due') && !key.contains('date'))) {
+        final n = _toNum(entry.value);
+        if (n != null) return n;
+      }
+    }
+    return 0;
+  }
+
+  static num? _toNum(dynamic v) {
+    if (v is num) return v;
+    if (v is String && v.isNotEmpty) {
+      // Strip "RM", "$", commas, spaces, any non-numeric except - and .
+      final cleaned = v.replaceAll(RegExp(r'[^\d.\-]'), '');
+      if (cleaned.isEmpty) return null;
+      return num.tryParse(cleaned);
+    }
+    return null;
+  }
+
+  /// Recursively dig through a response object looking for the first List
+  /// of records (so we tolerate `{data: [...]}`, `{data: {invoices: [...]}}`,
+  /// `{records: [...]}`, etc.).
+  static List<dynamic>? _findList(dynamic resp) {
+    if (resp == null) return null;
+    if (resp is List) return resp;
+    if (resp is Map) {
+      // Common wrapper keys first.
+      for (final k in const [
+        'data', 'invoices', 'records', 'outstanding', 'list',
+        'items', 'rows', 'results', 'value'
+      ]) {
+        if (resp.containsKey(k)) {
+          final inner = _findList(resp[k]);
+          if (inner != null) return inner;
+        }
+      }
+      // Otherwise scan every value once.
+      for (final v in resp.values) {
+        if (v is List) return v;
+        if (v is Map) {
+          final inner = _findList(v);
+          if (inner != null) return inner;
+        }
+      }
+    }
+    return null;
   }
 
   /// True when the authenticated user is an instructor.
@@ -254,23 +341,30 @@ class UserSession extends ChangeNotifier {
         if (d is Map) studentAddtnlInfo = Map<String, dynamic>.from(d);
       }));
     }
-    // Outstanding/Fetch is the real source of unpaid invoices for
-    // instructors. /Reports/HomePageStats does NOT include dueAmount /
-    // invoiceCount for instructor accounts, so compute them from this list.
-    if (isInstructor) {
-      futures.add(_safePost('/Outstanding/Fetch').then((d) {
-        if (d is List) outstandingList = d;
-      }));
-    }
+    // /Outstanding/Fetch returns unpaid invoices — branch-wide for
+    // instructors, personal for students. We load it for everyone so the
+    // dueAmount/invoiceCount getters have a reliable live source even if
+    // /Reports/HomePageStats omits those fields.
+    futures.add(_safePostRaw('/Outstanding/Fetch').then((d) {
+      final list = _findList(d);
+      if (list != null) {
+        outstandingList = list;
+        debugPrint('💰 Outstanding loaded: ${list.length} records, '
+            'sum=${dueAmount.toStringAsFixed(2)}');
+      } else {
+        debugPrint('💰 Outstanding: no list found in response shape: '
+            '${d.runtimeType}');
+      }
+    }));
     await Future.wait(futures);
   }
 
-  Future<dynamic> _safePost(String endpoint,
+  /// POST helper that returns the raw response (without auto-unwrapping
+  /// `data`). [_findList] is more flexible about response shapes.
+  Future<dynamic> _safePostRaw(String endpoint,
       [Map<String, dynamic> body = const {}]) async {
     try {
-      final resp = await ApiService.post(endpoint, body);
-      if (resp is Map && resp.containsKey('data')) return resp['data'];
-      return resp;
+      return await ApiService.post(endpoint, body);
     } catch (e) {
       debugPrint('Failed POST $endpoint: $e');
       return null;

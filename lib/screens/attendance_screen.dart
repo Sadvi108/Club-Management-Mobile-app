@@ -72,6 +72,39 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
+  /// Live attendance summary computed from /Reports/Attendance rows.
+  /// Falls back to mock values when no live data has loaded yet.
+  Map<String, int> _liveStats() {
+    final list = _liveAttendance;
+    if (list == null || list.isEmpty) {
+      return {
+        'present': kAttendance.present,
+        'total': kAttendance.total,
+        'missed': kAttendance.total - kAttendance.present,
+        'percent': kAttendance.percentage,
+      };
+    }
+    int present = 0;
+    int total = 0;
+    for (final row in list) {
+      if (row is! Map) continue;
+      total++;
+      final s = (row['status'] ?? row['value'] ?? row['attendanceStatus'] ?? '')
+          .toString()
+          .toLowerCase();
+      if (s.contains('present') || s == '1' || s == 'true' || s == 'yes' || s == 'p') {
+        present++;
+      }
+    }
+    final pct = total == 0 ? 0 : ((present / total) * 100).round();
+    return {
+      'present': present,
+      'total': total,
+      'missed': total - present,
+      'percent': pct,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
@@ -81,6 +114,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         .where((n) => n is Map)
         .cast<Map>()
         .toList();
+    final stats = _liveStats();
     return Scaffold(
       backgroundColor: c.background,
       body: CustomScrollView(slivers: [
@@ -136,7 +170,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       width: 108,
                       height: 108,
                       child: CircularProgressIndicator(
-                        value: kAttendance.percentage / 100,
+                        value: (stats['percent']!) / 100,
                         strokeWidth: 6,
                         backgroundColor: Colors.transparent,
                         valueColor:
@@ -144,7 +178,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ),
                     ),
                     Column(mainAxisSize: MainAxisSize.min, children: [
-                      Text('${kAttendance.percentage}%',
+                      Text('${stats['percent']}%',
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 22,
@@ -162,8 +196,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Great Discipline!',
-                            style: TextStyle(
+                        Text(
+                            (stats['percent'] ?? 0) >= 80
+                                ? 'Great Discipline!'
+                                : 'Keep it up!',
+                            style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 18,
                                 fontWeight: FontWeight.w800)),
@@ -173,12 +210,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                 color: Color(0xE6FFFFFF), fontSize: 11)),
                         const SizedBox(height: 12),
                         Row(children: [
-                          _mStat('${kAttendance.present}', 'Present'),
+                          _mStat('${stats['present']}', 'Present'),
                           const SizedBox(width: 8),
-                          _mStat('${kAttendance.total - kAttendance.present}',
-                              'Missed'),
+                          _mStat('${stats['missed']}', 'Missed'),
                           const SizedBox(width: 8),
-                          _mStat('${kAttendance.total}', 'Total'),
+                          _mStat('${stats['total']}', 'Total'),
                         ]),
                       ]),
                 ),

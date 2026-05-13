@@ -19,9 +19,12 @@ class HomeScreen extends StatelessWidget {
     final liveMembership = session.clubName.isNotEmpty ? session.clubName : kStudent.membership;
     final livePhoto = session.studentPhoto.isNotEmpty ? session.studentPhoto : kStudent.photo;
     final liveBelt = session.currentGrade.isNotEmpty ? session.currentGrade : kStudent.belt;
-    final liveDue = session.dueAmount > 0 ? 'RM ${session.dueAmount}' : 'RM ${kStudent.nextPayment.amount}';
+    final liveDue = session.dueAmount > 0
+        ? 'RM ${session.dueAmount.toStringAsFixed(2)}'
+        : 'RM ${kStudent.nextPayment.amount}';
     final liveDueLabel = session.invoiceCount > 0
         ? '${session.invoiceCount} invoice(s) outstanding'
+            '${session.earliestDueDate.isNotEmpty ? " · due ${session.earliestDueDate}" : ""}'
         : 'Due ${kStudent.nextPayment.dueDate}';
     return Container(
       color: c.background,
