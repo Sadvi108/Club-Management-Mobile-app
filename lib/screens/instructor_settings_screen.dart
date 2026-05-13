@@ -174,30 +174,23 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
                 itemBuilder: (_, i) {
                   final b = branches[i];
                   final id = (b['id'] as num?)?.toInt() ?? 0;
+                  final label = (b['text'] ?? '').toString();
                   return ListTile(
-                    title: Text((b['text'] ?? '').toString(),
+                    title: Text(label,
                         style: TextStyle(
                             color: c.textPrimary,
                             fontWeight: FontWeight.w700,
                             fontSize: 14)),
                     onTap: () async {
                       Navigator.pop(ctx);
-                      try {
-                        await Api.accountChangeClub(
-                            <String, dynamic>{'branchId': id});
-                        if (!mounted) return;
-                        await UserSession.instance.refresh();
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Branch switched')),
-                        );
-                      } catch (e) {
-                        debugPrint('ChangeClub failed: $e');
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed: $e')),
-                        );
-                      }
+                      final ok = await UserSession.instance
+                          .switchBranch(id, clubCode: clubCode);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(ok
+                            ? 'Switched to $label'
+                            : 'Failed: ${UserSession.instance.error ?? "unknown"}'),
+                      ));
                     },
                   );
                 },

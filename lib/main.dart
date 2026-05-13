@@ -34,6 +34,7 @@ class DClixApp extends StatelessWidget {
       darkTheme: AppTheme.dark(),
       themeMode: themeProvider.mode,
       routerConfig: appRouter,
+      scaffoldMessengerKey: UserSession.scaffoldMessengerKey,
     );
   }
 }

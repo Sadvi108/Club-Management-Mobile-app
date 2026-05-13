@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../data/mock_data.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
+import '../widgets/notification_bell.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -85,14 +86,11 @@ class HomeScreen extends StatelessWidget {
                         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
                         child: ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.asset(kLogoAssetPath, fit: BoxFit.cover)),
                       ),
-                      Stack(children: [
-                        Container(
-                          width: 42, height: 42,
-                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.22), shape: BoxShape.circle),
-                          child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 20),
-                        ),
-                        Positioned(top: 10, right: 10, child: Container(width: 8, height: 8, decoration: BoxDecoration(color: const Color(0xFFFDE68A), shape: BoxShape.circle, border: Border.all(color: c.primary, width: 2)))),
-                      ]),
+                      NotificationBell(
+                        backgroundColor: Colors.white.withOpacity(0.22),
+                        iconColor: Colors.white,
+                        iconSize: 20,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 22),

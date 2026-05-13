@@ -1,9 +1,16 @@
-import 'package:flutter/foundation.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'api_service.dart';
 
 class UserSession extends ChangeNotifier {
   static final UserSession instance = UserSession._();
   UserSession._();
+
+  /// App-wide messenger key used by [UserSession] to surface toast / SnackBar
+  /// alerts (e.g. new notifications) without needing a BuildContext.
+  static final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
 
   Map<String, dynamic>? authData;
   Map<String, dynamic>? myInfo;
@@ -19,6 +26,14 @@ class UserSession extends ChangeNotifier {
   int unreadNotifications = 0;
   bool loading = false;
   String? error;
+
+  // -------- Notification polling --------
+  /// Live polling interval (seconds). Default 30s — light on the API but
+  /// makes new notifications feel "real-time".
+  static const Duration notificationPollInterval = Duration(seconds: 30);
+  Timer? _notifTimer;
+  int _previousUnread = 0;
+  bool _pollingPaused = false;
 
   /// Latest store version returned by /Listing/StoreVersion. Compared against
   /// [currentAppVersion] to decide whether to show the "new version" banner.
@@ -199,6 +214,8 @@ class UserSession extends ChangeNotifier {
       ApiService.setToken(token);
       authData = data;
       await _loadAll();
+      _previousUnread = unreadNotifications;
+      startNotificationPolling();
       // Boot-time post-login extras (best-effort, never throw).
       _checkStoreVersion();
       _registerPushToken();
@@ -291,6 +308,222 @@ class UserSession extends ChangeNotifier {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Real-time notification polling
+  // ---------------------------------------------------------------------------
+
+  /// Start the periodic poll. Safe to call multiple times.
+  void startNotificationPolling() {
+    _notifTimer?.cancel();
+    _previousUnread = unreadNotifications;
+    _notifTimer = Timer.periodic(notificationPollInterval, (_) => _pollNotifications());
+    debugPrint('🔔 Notification polling started (every ${notificationPollInterval.inSeconds}s)');
+  }
+
+  void stopNotificationPolling() {
+    _notifTimer?.cancel();
+    _notifTimer = null;
+  }
+
+  /// Temporarily skip a poll cycle (used while a switch/refresh is in flight).
+  void pauseNotificationPolling() => _pollingPaused = true;
+  void resumeNotificationPolling() => _pollingPaused = false;
+
+  Future<void> _pollNotifications() async {
+    if (!isLoggedIn || _pollingPaused) return;
+    try {
+      final countResp = await ApiService.get('/Profile/MyUnreadNotificationCount');
+      final c = (countResp is Map && countResp.containsKey('data'))
+          ? countResp['data']
+          : countResp;
+      int newCount = unreadNotifications;
+      if (c is int) newCount = c;
+      if (c is num) newCount = c.toInt();
+
+      // No change → nothing to do.
+      if (newCount == _previousUnread) return;
+
+      // Pull the latest list so the bell sheet & toast have content.
+      Map<String, dynamic>? newest;
+      try {
+        final listResp = await ApiService.get('/Profile/MyNotifications');
+        final list = (listResp is Map && listResp.containsKey('data'))
+            ? listResp['data']
+            : listResp;
+        if (list is List) {
+          notifications = list;
+          if (newCount > _previousUnread && list.isNotEmpty && list.first is Map) {
+            newest = Map<String, dynamic>.from(list.first as Map);
+          }
+        }
+      } catch (e) {
+        debugPrint('Poll list failed: $e');
+      }
+
+      unreadNotifications = newCount;
+      _previousUnread = newCount;
+      notifyListeners();
+
+      if (newest != null) _showNotificationToast(newest);
+    } catch (e) {
+      debugPrint('Notification poll failed: $e');
+    }
+  }
+
+  void _showNotificationToast(Map<String, dynamic> n) {
+    final title = (n['text'] ?? n['title'] ?? n['name'] ?? 'New notification').toString();
+    final body = (n['value'] ?? n['description'] ?? '')
+        .toString()
+        .replaceAll(RegExp(r'<[^>]+>'), '')
+        .replaceAll('&nbsp;', ' ')
+        .trim();
+    final messenger = scaffoldMessengerKey.currentState;
+    if (messenger == null) return;
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      duration: const Duration(seconds: 5),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: const Color(0xFF0F172A),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      content: Row(children: [
+        Container(
+          width: 34, height: 34,
+          decoration: const BoxDecoration(
+            color: Color(0xFFFB923C),
+            shape: BoxShape.circle,
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.notifications_active, color: Colors.white, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13)),
+              if (body.isNotEmpty)
+                Text(body,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Color(0xCCFFFFFF), fontSize: 11)),
+            ],
+          ),
+        ),
+      ]),
+    ));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Real-time student / branch switching
+  // ---------------------------------------------------------------------------
+
+  /// Switch the active student profile in-place. Calls
+  /// `POST /Account/ChangeStudent`, swaps the bearer token via
+  /// [ApiService.setToken], then re-runs [_loadAll] so every screen
+  /// re-renders with the new student's data.
+  Future<bool> switchStudent(Object studentId) async {
+    if (!isLoggedIn) return false;
+    pauseNotificationPolling();
+    loading = true;
+    notifyListeners();
+    try {
+      final oldToken = (authData?['accessToken'] ?? '').toString();
+      final resp = await ApiService.post('/Account/ChangeStudent', {
+        'studentId': studentId,
+        'accessToken': oldToken,
+      });
+      Map<String, dynamic>? newData;
+      if (resp is Map && resp['data'] is Map) {
+        newData = Map<String, dynamic>.from(resp['data'] as Map);
+      } else if (resp is Map) {
+        newData = Map<String, dynamic>.from(resp);
+      }
+      if (newData == null) throw Exception('ChangeStudent returned no data');
+
+      final newToken = (newData['accessToken'] ?? oldToken).toString();
+      if (newToken.isNotEmpty) ApiService.setToken(newToken);
+      authData = newData;
+
+      // Clear stale per-student data before re-fetching.
+      myInfo = null;
+      homeStats = null;
+      clubStats = null;
+      notifications = null;
+      studentAddtnlInfo = null;
+      outstandingList = null;
+
+      await _loadAll();
+      _previousUnread = unreadNotifications;
+      return true;
+    } catch (e) {
+      error = e.toString();
+      debugPrint('switchStudent failed: $e');
+      return false;
+    } finally {
+      loading = false;
+      resumeNotificationPolling();
+      notifyListeners();
+    }
+  }
+
+  /// Switch the active branch / club (works for both student & instructor).
+  /// Calls `POST /Account/ChangeClub`, swaps the bearer token, refreshes data.
+  Future<bool> switchBranch(Object branchId, {String? clubCode}) async {
+    if (!isLoggedIn) return false;
+    pauseNotificationPolling();
+    loading = true;
+    notifyListeners();
+    try {
+      final oldToken = (authData?['accessToken'] ?? '').toString();
+      final body = <String, dynamic>{
+        'branchId': branchId,
+        'accessToken': oldToken,
+      };
+      if (clubCode != null && clubCode.isNotEmpty) body['clubCode'] = clubCode;
+      final resp = await ApiService.post('/Account/ChangeClub', body);
+      Map<String, dynamic>? newData;
+      if (resp is Map && resp['data'] is Map) {
+        newData = Map<String, dynamic>.from(resp['data'] as Map);
+      } else if (resp is Map) {
+        newData = Map<String, dynamic>.from(resp);
+      }
+      if (newData == null) throw Exception('ChangeClub returned no data');
+
+      final newToken = (newData['accessToken'] ?? oldToken).toString();
+      if (newToken.isNotEmpty) ApiService.setToken(newToken);
+      authData = newData;
+
+      myInfo = null;
+      homeStats = null;
+      clubStats = null;
+      notifications = null;
+      studentAddtnlInfo = null;
+      outstandingList = null;
+
+      await _loadAll();
+      _previousUnread = unreadNotifications;
+      return true;
+    } catch (e) {
+      error = e.toString();
+      debugPrint('switchBranch failed: $e');
+      return false;
+    } finally {
+      loading = false;
+      resumeNotificationPolling();
+      notifyListeners();
+    }
+  }
+
   Future<dynamic> _safeGet(String endpoint) async {
     try {
       final resp = await ApiService.get(endpoint);
@@ -311,6 +544,7 @@ class UserSession extends ChangeNotifier {
   }
 
   void logout() {
+    stopNotificationPolling();
     authData = null;
     myInfo = null;
     homeStats = null;
@@ -319,6 +553,7 @@ class UserSession extends ChangeNotifier {
     studentAddtnlInfo = null;
     outstandingList = null;
     unreadNotifications = 0;
+    _previousUnread = 0;
     ApiService.clearToken();
     notifyListeners();
   }

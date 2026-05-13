@@ -147,28 +147,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               return InkWell(
                 onTap: () async {
                   Navigator.pop(ctx);
-                  try {
-                    final token = (UserSession.instance.authData?['accessToken'] ?? '').toString();
-                    final resp = await Api.accountChangeStudent(<String, dynamic>{
-                      'studentId': sid,
-                      'accessToken': token,
-                    });
-                    if (resp is Map && resp['data'] is Map) {
-                      UserSession.instance.authData =
-                          Map<String, dynamic>.from(resp['data'] as Map);
-                    }
-                    await UserSession.instance.refresh();
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Switched to $name')),
-                    );
-                  } catch (e) {
-                    debugPrint('ChangeStudent failed: $e');
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Switch failed: $e')),
-                    );
-                  }
+                  if (sid == null) return;
+                  final ok = await UserSession.instance.switchStudent(sid);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(ok
+                        ? 'Switched to $name'
+                        : 'Switch failed: ${UserSession.instance.error ?? "unknown"}'),
+                  ));
                 },
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),
@@ -222,29 +208,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               return InkWell(
                 onTap: () async {
                   Navigator.pop(ctx);
-                  try {
-                    final token = (session.authData?['accessToken'] ?? '').toString();
-                    final resp = await Api.accountChangeClub(<String, dynamic>{
-                      'branchId': bid,
-                      'clubCode': clubCode,
-                      'accessToken': token,
-                    });
-                    if (resp is Map && resp['data'] is Map) {
-                      UserSession.instance.authData =
-                          Map<String, dynamic>.from(resp['data'] as Map);
-                    }
-                    await UserSession.instance.refresh();
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Switched to $name')),
-                    );
-                  } catch (e) {
-                    debugPrint('ChangeClub failed: $e');
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Switch failed: $e')),
-                    );
-                  }
+                  if (bid == null) return;
+                  final ok = await UserSession.instance
+                      .switchBranch(bid, clubCode: clubCode);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(ok
+                        ? 'Switched to $name'
+                        : 'Switch failed: ${UserSession.instance.error ?? "unknown"}'),
+                  ));
                 },
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),

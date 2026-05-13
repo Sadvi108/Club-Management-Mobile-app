@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
+import '../widgets/notification_bell.dart';
 
 class InstructorHomeScreen extends StatefulWidget {
   const InstructorHomeScreen({super.key});
@@ -85,6 +86,8 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
             ],
           ),
         ),
+        const NotificationBell(),
+        const SizedBox(width: 10),
         Container(
           width: 48,
           height: 48,
