@@ -7,7 +7,9 @@ class TabsShell extends StatelessWidget {
   final String location;
   const TabsShell({super.key, required this.child, required this.location});
 
-  static const _routes = ['/home', '/training', '/schedule', '/payments', '/profile'];
+  /// Bottom-tab order per D-Clix 2026 spec:
+  ///   Home · Schedule · [FAB] · Progress · Profile
+  static const _routes = ['/home', '/schedule', '/progress', '/profile'];
 
   int _idxFromLocation() {
     final i = _routes.indexWhere((r) => location.startsWith(r));
@@ -21,27 +23,9 @@ class TabsShell extends StatelessWidget {
     return Scaffold(
       extendBody: true,
       body: child,
-      floatingActionButton: Container(
-        margin: const EdgeInsets.only(top: 30),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: c.background, width: 4),
-          boxShadow: Shadows.strong(c),
-        ),
-        child: FloatingActionButton(
-          heroTag: 'qrFab',
-          onPressed: () => context.push('/qr-scan'),
-          tooltip: 'Check-in',
-          backgroundColor: c.primary,
-          child: Container(
-            width: 58, height: 58,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: c.gradient),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.qr_code_2, size: 28, color: Colors.white),
-          ),
-        ),
+      floatingActionButton: _ScannerFab(
+        onTap: () => context.push('/qr-scan'),
+        heroTag: 'qrFab',
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Container(
@@ -58,7 +42,7 @@ class TabsShell extends StatelessWidget {
                   ),
                 ],
         ),
-        child: BottomAppBar(
+        child: SafeArea(top: false, child: BottomAppBar(
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
         color: c.surface,
@@ -67,14 +51,13 @@ class TabsShell extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _tab(context, 0, idx, Icons.home_outlined, Icons.home, 'Home', '/home'),
-            _tab(context, 1, idx, Icons.fitness_center_outlined, Icons.fitness_center, 'Training', '/training'),
-            const SizedBox(width: 60), // notch space
-            _tab(context, 2, idx, Icons.calendar_month_outlined, Icons.calendar_month, 'Schedule', '/schedule'),
-            _tab(context, 3, idx, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Payments', '/payments'),
-            _tab(context, 4, idx, Icons.person_outline, Icons.person, 'Profile', '/profile'),
+            _tab(context, 1, idx, Icons.calendar_month_outlined, Icons.calendar_month, 'Schedule', '/schedule'),
+            const SizedBox(width: 60), // notch space for FAB
+            _tab(context, 2, idx, Icons.trending_up_outlined, Icons.trending_up, 'Progress', '/progress'),
+            _tab(context, 3, idx, Icons.person_outline, Icons.person, 'Profile', '/profile'),
           ],
         ),
-        ),
+        )),
       ),
     );
   }
@@ -103,6 +86,63 @@ class TabsShell extends StatelessWidget {
               const SizedBox(height: 2),
               Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: active ? c.primary : c.textMuted)),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Rounded-square QR scanner button matching the D-Clix 2026 design.
+/// Soft orange gradient body, white viewfinder icon (corner brackets +
+/// scan line), and a warm orange glow around the rounded square.
+class _ScannerFab extends StatelessWidget {
+  final VoidCallback onTap;
+  final String heroTag;
+  const _ScannerFab({required this.onTap, required this.heroTag});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    return Container(
+      margin: const EdgeInsets.only(top: 30),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                colors: c.gradient,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              border: Border.all(color: c.background, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: c.primary.withOpacity(0.45),
+                  blurRadius: 22,
+                  offset: const Offset(0, 8),
+                  spreadRadius: -2,
+                ),
+                BoxShadow(
+                  color: c.primaryDark.withOpacity(0.22),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.qr_code_scanner,
+                color: Colors.white,
+                size: 26,
+              ),
+            ),
           ),
         ),
       ),

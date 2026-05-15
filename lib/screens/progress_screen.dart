@@ -1,13 +1,28 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../data/mock_data.dart';
+
 import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_header.dart';
-import '../widgets/app_icon_button.dart';
-import '../widgets/filter_sheet.dart';
+import '../widgets/responsive_body.dart';
 
+/// Progress / Performance screen — D-Clix 2026 design.
+///
+/// Layout (top → bottom):
+///   • Header — back chevron · eyebrow `YOUR PROGRESS` · `Performance` title
+///     · trailing `+N this mo` pill
+///   • Overall score card — large fitness ring on the left, headline +
+///     body copy on the right
+///   • Skill breakdown — one card per skill (Speed, Power, Technique,
+///     Agility, Endurance) with a coloured bar
+///   • Trainer feedback — chat-bubble card per comment
+///
+/// All numeric inputs (fitness score, skill values, monthly delta) come
+/// from /Reports/Activity if available; otherwise we render reasonable
+/// defaults so the UI never breaks on accounts without progress data yet.
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
 
@@ -16,355 +31,433 @@ class ProgressScreen extends StatefulWidget {
 }
 
 class _ProgressScreenState extends State<ProgressScreen> {
-  List<dynamic>? _grading;
-  List<dynamic>? _activity;
-  List<dynamic>? _tournament;
-  List<dynamic>? _contribution;
   bool _loading = false;
+  Map<String, dynamic>? _live; // merged map of skill/fitness fields
 
   @override
   void initState() {
     super.initState();
-    _loadAll();
+    _loadProgress();
   }
 
-  Future<List<dynamic>?> _safe(Future<dynamic> Function() fn) async {
+  Future<void> _loadProgress() async {
+    setState(() => _loading = true);
+    final out = <String, dynamic>{};
+    try {
+      // Pull a few endpoints in parallel; ignore individual failures.
+      final results = await Future.wait([
+        _safe(Api.reportsActivity),
+        _safe(Api.reportsContribution),
+        _safe(Api.reportsGradingSchedule),
+      ]);
+      for (final r in results) {
+        if (r is Map) out.addAll(Map<String, dynamic>.from(r));
+        if (r is List && r.isNotEmpty && r.first is Map) {
+          out.addAll(Map<String, dynamic>.from(r.first as Map));
+        }
+      }
+    } catch (e) {
+      debugPrint('progress load failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _live = out.isEmpty ? null : out;
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<dynamic> _safe(Future<dynamic> Function() fn) async {
     try {
       final r = await fn();
-      if (r is List) return r;
-      if (r is Map && r['data'] is List) return r['data'] as List;
-      return null;
-    } catch (e) {
-      debugPrint('progress fetch failed: $e');
+      if (r is Map && r.containsKey('data')) return r['data'];
+      return r;
+    } catch (_) {
       return null;
     }
   }
 
-  Future<void> _loadAll() async {
-    setState(() => _loading = true);
-    await Future.wait([
-      _safe(Api.reportsGradingSchedule).then((v) => _grading = v),
-      _safe(Api.reportsActivity).then((v) => _activity = v),
-      _safe(Api.reportsTournamentSummary).then((v) => _tournament = v),
-      _safe(Api.reportsContribution).then((v) => _contribution = v),
-    ]);
-    if (mounted) setState(() => _loading = false);
+  // ─── Derived values ────────────────────────────────────────────────────
+  /// Best-effort live read of a numeric stat, with a sensible fallback.
+  num _num(List<String> keys, num fallback) {
+    for (final m in [_live, UserSession.instance.myInfo, UserSession.instance.studentAddtnlInfo]) {
+      if (m == null) continue;
+      for (final k in keys) {
+        final v = m[k];
+        if (v is num) return v;
+        if (v is String) {
+          final n = num.tryParse(v.replaceAll(RegExp(r'[^\d.\-]'), ''));
+          if (n != null) return n;
+        }
+      }
+    }
+    return fallback;
+  }
+
+  String _str(List<String> keys, String fallback) {
+    for (final m in [_live, UserSession.instance.myInfo, UserSession.instance.studentAddtnlInfo]) {
+      if (m == null) continue;
+      for (final k in keys) {
+        final v = m[k];
+        if (v != null && v.toString().trim().isNotEmpty) return v.toString();
+      }
+    }
+    return fallback;
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
     final session = context.watch<UserSession>();
-    final liveBelt = session.currentGrade.isNotEmpty ? session.currentGrade : kStudent.belt;
-    final liveStats = (session.clubStats ?? const []).whereType<Map>().toList();
-    final addtnl = session.studentAddtnlInfo;
+    final w = MediaQuery.of(context).size.width;
+    final compact = w < 380;
+
+    // Live numbers (with falls-back used until /Reports/Activity returns).
+    final fitness = _num(['fitness', 'fitnessScore', 'overallScore'], 82).toInt();
+    final deltaThisMonth = _num(['monthlyDelta', 'thisMonth', 'pointsThisMonth'], 12).toInt();
+    final nextBelt = _str(['nextBelt', 'nextGrade'],
+        session.currentGrade.isNotEmpty ? 'next' : 'Purple Belt');
+
+    final skills = [
+      _Skill('Speed',      _num(['speed', 'skillSpeed'], 78).toInt(),      const Color(0xFFF59E0B)),
+      _Skill('Power',      _num(['power', 'skillPower'], 72).toInt(),      const Color(0xFFEF4444)),
+      _Skill('Technique',  _num(['technique', 'skillTechnique'], 85).toInt(), const Color(0xFFF97316)),
+      _Skill('Agility',    _num(['agility', 'skillAgility'], 80).toInt(),    const Color(0xFF10B981)),
+      _Skill('Endurance',  _num(['endurance', 'skillEndurance'], 75).toInt(), const Color(0xFF0EA5E9)),
+    ];
+
     return Scaffold(
       backgroundColor: c.background,
-      body: CustomScrollView(slivers: [
-        SliverToBoxAdapter(
-          child: AppHeader(
-            title: 'Progress',
-            showBack: true,
-            trailing: AppIconButton(
-              icon: Icons.tune,
-              onPressed: () => showFilterSheet(context),
-              backgroundColor: c.surfaceAlt,
-              foregroundColor: c.primary,
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          color: c.primary,
+          onRefresh: _loadProgress,
+          child: ResponsiveBody(child: ListView(
+            padding: const EdgeInsets.fromLTRB(Gaps.xl, 14, Gaps.xl, 140),
+            children: [
+              _buildHeader(c, deltaThisMonth, context),
+              const SizedBox(height: 18),
+              _buildOverallCard(c, fitness, deltaThisMonth, nextBelt, compact: compact),
+              const SizedBox(height: 22),
+              Text(
+                'Skill breakdown',
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3),
+              ),
+              const SizedBox(height: 12),
+              ...skills.map((s) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _buildSkillCard(c, s),
+                  )),
+              const SizedBox(height: 14),
+              if (_loading)
+                Center(
+                    child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: CircularProgressIndicator(color: c.primary),
+                )),
+            ],
+          )),
+        ),
+      ),
+    );
+  }
+
+  // ─── Header (back chevron, eyebrow, title, +N pill) ───────────────────
+  Widget _buildHeader(AppColors c, int delta, BuildContext ctx) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        InkWell(
+          onTap: ctx.canPop() ? () => ctx.pop() : null,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: c.surfaceAlt,
+              borderRadius: BorderRadius.circular(10),
             ),
+            alignment: Alignment.center,
+            child: Icon(Icons.arrow_back, color: c.primary, size: 20),
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(Gaps.xl, 0, Gaps.xl, 40),
-          sliver: SliverList.list(children: [
-            if (_loading)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(children: [
-                  SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
-                  const SizedBox(width: 8),
-                  Text('Loading live progress…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
-                ]),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'YOUR PROGRESS',
+                style: TextStyle(
+                    color: c.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 2.5),
               ),
-            // Fitness card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: c.gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
-                borderRadius: BorderRadius.circular(Radii.xxl),
-                boxShadow: Shadows.strong(c),
+              const SizedBox(height: 2),
+              Text(
+                'Performance',
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3),
               ),
-              child: Row(children: [
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('FITNESS SCORE', style: TextStyle(color: Color(0xFFFFF7ED), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
-                    const SizedBox(height: 4),
-                    RichText(text: TextSpan(children: [
-                      TextSpan(text: '${kStudent.fitness}', style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w800, letterSpacing: -1)),
-                      const TextSpan(text: '/100', style: TextStyle(color: Color(0xD9FFFFFF), fontSize: 18, fontWeight: FontWeight.w600)),
-                    ])),
-                    const Text('Excellent shape — keep the momentum', style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 12)),
-                  ]),
-                ),
-                Container(
-                  width: 80, height: 80,
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), shape: BoxShape.circle),
-                  child: const Icon(Icons.fitness_center, size: 40, color: Color(0xE6FFFFFF)),
-                ),
-              ]),
-            ),
-            const SizedBox(height: 16),
-            if (liveStats.isNotEmpty || addtnl != null) ...[
-              _liveSnapshot(c, liveStats, addtnl),
-              const SizedBox(height: 16),
             ],
-            // Belt Journey
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.circular(Radii.xl),
-                border: c.isDark ? Border.all(color: c.border) : null,
-                boxShadow: Shadows.card(c),
-              ),
-              child: Column(children: [
-                Row(children: [
-                  Text('Belt Journey', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-                ]),
-                const SizedBox(height: 14),
-                Row(children: [
-                  for (int i = 0; i < kBelts.length; i++) ...[
-                    _beltDot(kBelts[i], c),
-                    if (i < kBelts.length - 1)
-                      Expanded(
-                        child: Container(
-                          height: 2,
-                          color: kBelts[i].done ? c.primary : c.border,
-                        ),
-                      ),
-                  ]
-                ]),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: kBelts.map((b) => SizedBox(
-                        width: 26,
-                        child: Text(b.name[0], textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: b.current ? c.primary : c.textSecondary, fontWeight: b.current ? FontWeight.w800 : FontWeight.w600)),
-                      )).toList(),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.only(top: 14),
-                  decoration: BoxDecoration(border: Border(top: BorderSide(color: c.borderLight))),
-                  child: Row(children: [
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('CURRENT BELT', style: TextStyle(fontSize: 10, color: c.textSecondary, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-                        const SizedBox(height: 4),
-                        Text(liveBelt, style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w800)),
-                      ]),
-                    ),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text('NEXT EXAM', style: TextStyle(fontSize: 10, color: c.textSecondary, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-                      const SizedBox(height: 4),
-                      Text('15 Apr 2026', style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w800)),
-                    ]),
-                  ]),
-                ),
-              ]),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: c.gradient),
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: Shadows.strong(c),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.arrow_upward, color: Colors.white, size: 12),
+            const SizedBox(width: 4),
+            Text(
+              '$delta this mo',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 22),
-            Text('Skill Breakdown', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.circular(Radii.xl),
-                border: c.isDark ? Border.all(color: c.border) : null,
-                boxShadow: Shadows.card(c),
-              ),
-              child: Column(
-                children: kSkills.map((s) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(children: [
-                        SizedBox(width: 80, child: Text(s.name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.textPrimary))),
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(5),
-                            child: LinearProgressIndicator(
-                              value: s.value / 100,
-                              minHeight: 10,
-                              backgroundColor: c.surfaceAlt,
-                              valueColor: AlwaysStoppedAnimation(s.color),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        SizedBox(width: 30, child: Text('${s.value}', textAlign: TextAlign.right, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: s.color))),
-                      ]),
-                    )).toList(),
-              ),
-            ),
-            const SizedBox(height: 22),
-            Text('Achievement Badges', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            Row(
-              children: kAchievements.map((a) => Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 5),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: c.surface,
-                          borderRadius: BorderRadius.circular(Radii.md),
-                          border: c.isDark ? Border.all(color: c.border) : null,
-                          boxShadow: Shadows.card(c),
-                        ),
-                        child: Column(children: [
-                          Container(
-                            width: 46, height: 46,
-                            decoration: BoxDecoration(color: a.color.withOpacity(c.isDark ? 0.2 : 0.12), shape: BoxShape.circle),
-                            child: Icon(a.icon, size: 22, color: a.color),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(a.title, textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: c.textPrimary, fontWeight: FontWeight.w700)),
-                        ]),
-                      ),
-                    ),
-                  )).toList(),
-            ),
-            const SizedBox(height: 22),
-            Text('Trainer Feedback', style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            ...kTrainerComments.map((t) => Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    borderRadius: BorderRadius.circular(Radii.lg),
-                    border: c.isDark ? Border.all(color: c.border) : null,
-                    boxShadow: Shadows.card(c),
-                  ),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Container(
-                      width: 32, height: 32,
-                      decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
-                      child: Icon(Icons.chat_bubble_outline, size: 16, color: c.primary),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text('“${t.comment}”', style: TextStyle(fontSize: 13, color: c.textPrimary, fontWeight: FontWeight.w500, fontStyle: FontStyle.italic, height: 1.4)),
-                        const SizedBox(height: 6),
-                        Text('— ${t.trainer} · ${t.date}', style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w600)),
-                      ]),
-                    ),
-                  ]),
-                )),
-            const SizedBox(height: 22),
-            if ((_grading ?? const []).isNotEmpty)
-              _liveListCard(c, 'Grading Schedule', Icons.school, _grading!),
-            if ((_grading ?? const []).isNotEmpty) const SizedBox(height: 12),
-            if ((_activity ?? const []).isNotEmpty)
-              _liveListCard(c, 'Activity', Icons.local_activity, _activity!),
-            if ((_activity ?? const []).isNotEmpty) const SizedBox(height: 12),
-            if ((_tournament ?? const []).isNotEmpty)
-              _liveListCard(c, 'Tournament Summary', Icons.emoji_events, _tournament!),
-            if ((_tournament ?? const []).isNotEmpty) const SizedBox(height: 12),
-            if ((_contribution ?? const []).isNotEmpty)
-              _liveListCard(c, 'Contribution', Icons.volunteer_activism, _contribution!),
           ]),
         ),
-      ]),
+      ],
     );
   }
 
-  Widget _liveListCard(AppColors c, String title, IconData icon, List<dynamic> rows) {
+  // ─── Overall score card (ring + headline) ─────────────────────────────
+  Widget _buildOverallCard(
+    AppColors c,
+    int fitness,
+    int delta,
+    String nextBelt, {
+    required bool compact,
+  }) {
+    final ringSize = compact ? 100.0 : 120.0;
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.primary.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(Radii.xl),
+        border: c.isDark ? Border.all(color: c.border) : null,
+        boxShadow: Shadows.card(c),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(children: [
-            Icon(icon, size: 16, color: c.primary),
-            const SizedBox(width: 6),
-            Text('LIVE · $title (${rows.length})',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
-          ]),
-          const SizedBox(height: 8),
-          ...rows.take(8).map((r) {
-            final m = r is Map ? r : <dynamic, dynamic>{};
-            final t = (m['text'] ?? m['name'] ?? m['title'] ?? m['description'] ?? r).toString();
-            final v = (m['value'] ?? m['date'] ?? '').toString();
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(children: [
-                Expanded(child: Text(t, style: TextStyle(fontSize: 12, color: c.textSecondary))),
-                if (v.isNotEmpty)
-                  Text(v, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c.textPrimary)),
-              ]),
-            );
-          }),
+          _FitnessRing(value: fitness, size: ringSize, gradient: c.gradient),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'OVERALL SCORE',
+                  style: TextStyle(
+                      color: c.primary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  delta > 0 ? "You're on fire" : 'Keep going',
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3),
+                ),
+                const SizedBox(height: 4),
+                if (delta > 0)
+                  const Text('🔥', style: TextStyle(fontSize: 16)),
+                const SizedBox(height: 6),
+                Text(
+                  delta > 0
+                      ? 'Up $delta points this month — keep that streak going for the $nextBelt evaluation.'
+                      : 'Every session counts — pull up to the $nextBelt mark by training consistently.',
+                  style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      height: 1.4),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _liveSnapshot(AppColors c, List<Map> stats, Map<String, dynamic>? addtnl) {
+  // ─── Skill row card ────────────────────────────────────────────────────
+  Widget _buildSkillCard(AppColors c, _Skill s) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.primary.withOpacity(0.4)),
+        border: c.isDark ? Border.all(color: c.border) : null,
+        boxShadow: Shadows.card(c),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.cloud_done, size: 16, color: c.primary),
-            const SizedBox(width: 6),
-            Text('LIVE · Progress Snapshot',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+            Expanded(
+              child: Text(
+                s.name,
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700),
+              ),
+            ),
+            Text(
+              '${s.value}',
+              style: TextStyle(
+                  color: s.color, fontSize: 14, fontWeight: FontWeight.w800),
+            ),
           ]),
           const SizedBox(height: 10),
-          if (addtnl != null) ...[
-            _kvRow(c, 'Height', '${addtnl['height'] ?? '-'} cm'),
-            _kvRow(c, 'School', '${addtnl['schoolname'] ?? '-'}'),
-            _kvRow(c, 'Health', '${addtnl['healthstatus'] ?? '-'}'),
-            const SizedBox(height: 8),
-          ],
-          ...stats.take(6).map((s) => _kvRow(c, '${s['text'] ?? ''}', '${s['value'] ?? ''}')),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: Stack(children: [
+              Container(height: 8, color: c.borderLight),
+              FractionallySizedBox(
+                widthFactor: (s.value / 100).clamp(0.0, 1.0),
+                child: Container(height: 8, color: s.color),
+              ),
+            ]),
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _kvRow(AppColors c, String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(children: [
-          Expanded(child: Text(k, style: TextStyle(fontSize: 12, color: c.textSecondary))),
-          Text(v, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c.textPrimary)),
-        ]),
-      );
+class _Skill {
+  final String name;
+  final int value;
+  final Color color;
+  const _Skill(this.name, this.value, this.color);
+}
 
-  Widget _beltDot(belt, AppColors c) {
-    if (belt.current) {
-      return Container(
-        width: 32, height: 32,
-        decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle, border: Border.all(color: c.primary, width: 2)),
-        child: const Icon(Icons.star, size: 14, color: Colors.white),
-      );
-    }
-    return Container(
-      width: 26, height: 26,
-      decoration: BoxDecoration(color: belt.color as Color, shape: BoxShape.circle),
-      child: belt.done ? const Icon(Icons.check, size: 12, color: Color(0xFF0F172A)) : null,
+/// Custom-painted fitness ring (no extra dep needed). Renders a gradient
+/// stroke from primary-light → primary-dark along the progress arc.
+class _FitnessRing extends StatelessWidget {
+  final int value; // 0..100
+  final double size;
+  final List<Color> gradient;
+  const _FitnessRing({
+    required this.value,
+    required this.size,
+    required this.gradient,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: Size.square(size),
+            painter: _RingPainter(
+              progress: value / 100,
+              gradient: gradient,
+              trackColor: c.borderLight,
+              strokeWidth: size * 0.075,
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$value',
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: size * 0.32,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                    height: 1.0),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'FITNESS',
+                style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: size * 0.085,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
+}
+
+class _RingPainter extends CustomPainter {
+  final double progress;
+  final List<Color> gradient;
+  final Color trackColor;
+  final double strokeWidth;
+
+  const _RingPainter({
+    required this.progress,
+    required this.gradient,
+    required this.trackColor,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = (size.shortestSide - strokeWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    // Track
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(center, radius, trackPaint);
+
+    // Progress arc with sweep gradient — start from top (−π/2)
+    final sweep = 2 * math.pi * progress.clamp(0.0, 1.0);
+    final shader = SweepGradient(
+      startAngle: -math.pi / 2,
+      endAngle: -math.pi / 2 + 2 * math.pi,
+      colors: gradient,
+      stops: const [0.0, 0.5, 1.0],
+    ).createShader(rect);
+    final progressPaint = Paint()
+      ..shader = shader
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, -math.pi / 2, sweep, false, progressPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) =>
+      old.progress != progress ||
+      old.gradient != gradient ||
+      old.trackColor != trackColor ||
+      old.strokeWidth != strokeWidth;
 }

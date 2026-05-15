@@ -23,6 +23,19 @@ class UserSession extends ChangeNotifier {
   /// `invoiceCount` since `/Reports/HomePageStats` doesn't include them
   /// for instructor accounts.
   List<dynamic>? outstandingList;
+
+  /// `/ClassBooking/NextBookings` — upcoming sessions for the student.
+  List<dynamic>? nextBookings;
+  /// `/ClassBooking/GetBookings` — full booking history.
+  List<dynamic>? allBookings;
+
+  /// Last raw response from /Outstanding/Fetch (kept for in-app debugging).
+  dynamic outstandingRaw;
+  /// Error message if the last /Outstanding/Fetch call threw.
+  String? outstandingError;
+  /// Last raw response from /Reports/HomePageStats (kept for in-app debugging).
+  dynamic homeStatsRaw;
+  String? homeStatsError;
   int unreadNotifications = 0;
   bool loading = false;
   String? error;
@@ -71,23 +84,114 @@ class UserSession extends ChangeNotifier {
 
   bool get isLoggedIn => authData != null && (authData!['accessToken'] ?? '').toString().isNotEmpty;
 
-  String get displayName =>
-      (myInfo?['name'] ?? authData?['name'] ?? '').toString();
+  /// Active student/instructor name. Resolution order:
+  ///   1. `/Profile/MyInfo` (refreshes after ChangeStudent)
+  ///   2. `/Account/Authenticate` payload
+  ///   3. Fuzzy match — any string field whose lowercased key contains
+  ///      "name" but does NOT look like a club / centre / instructor /
+  ///      parent / sibling / login name.
+  String get displayName {
+    final pick = _pick([myInfo, authData],
+        ['name', 'fullName', 'studentName', 'displayName',
+         'Name', 'FullName', 'StudentName', 'userName', 'firstName',
+         'fname', 'first_name', 'givenName']);
+    if (pick.isNotEmpty) return pick;
+    // Fuzzy: any key with "name" in it that isn't a different entity.
+    const skip = ['clubname', 'centername', 'centrename',
+                  'instructorname', 'parentname', 'siblingname',
+                  'username', 'companyname', 'organizationname',
+                  'logoname', 'modulename', 'classname', 'tcname',
+                  'tcentername', 'scentername', 'examcentername'];
+    for (final src in [myInfo, authData]) {
+      if (src == null) continue;
+      for (final entry in src.entries) {
+        final key = entry.key.toString();
+        final lower = key.toLowerCase();
+        if (!lower.contains('name')) continue;
+        if (skip.any(lower.contains)) continue;
+        final v = entry.value;
+        if (v is String && v.trim().isNotEmpty) {
+          debugPrint('🔎 displayName fuzzy-matched from "$key": ${v.trim()}');
+          return v.trim();
+        }
+      }
+    }
+    return '';
+  }
 
-  String get registrationNo =>
-      (myInfo?['registrationNo'] ?? authData?['code'] ?? '').toString();
+  String get registrationNo => _pick([myInfo, authData],
+      ['registrationNo', 'registrationNumber', 'regNo', 'code',
+       'RegistrationNo', 'studentCode']);
 
-  String get currentGrade =>
-      (myInfo?['currentGrade'] ?? authData?['currentGrade'] ?? '').toString();
+  String get currentGrade => _pick([myInfo, authData],
+      ['currentGrade', 'belt', 'grade', 'CurrentGrade']);
 
-  String get instructorName => (myInfo?['instructorName'] ?? '').toString();
-  String get trainingTime => (myInfo?['trainingTme'] ?? '').toString();
-  String get tCenterName => (myInfo?['tCenterName'] ?? '').toString();
-  String get clubName => (authData?['clubName'] ?? '').toString();
-  String get clubPic => (authData?['clubPic'] ?? '').toString();
-  String get phone => (authData?['handPhone'] ?? '').toString();
-  String get email =>
-      (myInfo?['email'] ?? authData?['email'] ?? '').toString();
+  String get instructorName => _pick([myInfo],
+      ['instructorName', 'trainer', 'sensei', 'coachName', 'InstructorName']);
+
+  String get trainingTime => _pick([myInfo],
+      ['trainingTme', 'trainingTime', 'tTime', 'TrainingTime', 'classTime']);
+
+  String get tCenterName => _pick([myInfo],
+      ['tCenterName', 'trainingCenter', 'trainingCentre',
+       'TCenterName', 'tcName', 'centerName']);
+
+  String get clubName => _pick([authData, myInfo],
+      ['clubName', 'club', 'ClubName', 'organizationName']);
+
+  String get clubPic => _pick([authData, myInfo],
+      ['clubPic', 'clubLogo', 'logo', 'logoUrl', 'ClubPic']);
+
+  String get phone => _pick([myInfo, authData],
+      ['handPhone', 'mobile', 'phone', 'HandPhone', 'mobileNo', 'contactNo']);
+
+  String get email => _pick([myInfo, authData],
+      ['email', 'emailAddress', 'Email', 'mail']);
+
+  /// First integer value found in `authData` (or `myInfo` as fallback) for
+  /// any of the candidate keys. Returns 0 when nothing matches.
+  int _intFromAuth(List<String> keys) {
+    for (final src in [authData, myInfo]) {
+      if (src == null) continue;
+      for (final k in keys) {
+        final v = src[k];
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        if (v is String) {
+          final n = int.tryParse(v.trim());
+          if (n != null) return n;
+        }
+      }
+    }
+    return 0;
+  }
+
+  String _strFromAuth(List<String> keys) {
+    for (final src in [authData, myInfo]) {
+      if (src == null) continue;
+      for (final k in keys) {
+        final v = src[k];
+        if (v != null && v.toString().trim().isNotEmpty) return v.toString().trim();
+      }
+    }
+    return '';
+  }
+
+  /// Try each `source` map (skipping nulls) for each key in order. Returns
+  /// the first non-empty string value found, or an empty string.
+  static String _pick(List<Map<String, dynamic>?> sources, List<String> keys) {
+    for (final src in sources) {
+      if (src == null) continue;
+      for (final k in keys) {
+        final v = src[k];
+        if (v != null) {
+          final s = v.toString().trim();
+          if (s.isNotEmpty) return s;
+        }
+      }
+    }
+    return '';
+  }
 
   /// Student's actual profile picture. Checks multiple myInfo / studentAddtnlInfo
   /// fields before falling back to the club logo (clubPic).
@@ -109,46 +213,120 @@ class UserSession extends ChangeNotifier {
     return '';
   }
 
-  /// Total amount due. Prefers the live sum of [outstandingList] when
-  /// it's available (works for both instructors and students). Falls back
-  /// to `homeStats` keys when no list was loaded.
+  /// All outstanding rows for the current token's scope.
+  ///
+  /// `/Outstanding/Fetch` returns every invoice the logged-in account can
+  /// see — for a parent/guardian account that's all children's invoices
+  /// merged. Production behaviour is to show the aggregate; per-student
+  /// scoping happens server-side via `/Account/ChangeStudent` (the token
+  /// gets re-issued for the chosen student, so the next /Outstanding/Fetch
+  /// returns only that student's rows). Therefore: no client-side filter.
+  List<dynamic> get outstandingForCurrentStudent =>
+      outstandingList ?? const [];
+
+  /// Total amount due. Tries, in order:
+  ///   1. Sum of [outstandingForCurrentStudent] amounts
+  ///   2. `homeStats` fields via fuzzy [_readAmount]
+  ///   3. The raw outstanding response root (covers `{dueAmount: X, data: [...]}`)
+  ///   4. The `data` wrapper of the raw outstanding response
   num get dueAmount {
-    final list = outstandingList;
-    if (list != null && list.isNotEmpty) {
+    final list = outstandingForCurrentStudent;
+    if (list.isNotEmpty) {
       num total = 0;
       for (final row in list) {
         if (row is Map) total += _readAmount(row);
       }
-      // If the sum produced something non-zero, return it. Otherwise fall
-      // through to homeStats — the row fields might not match any of our
-      // amount key heuristics.
       if (total != 0) return total;
     }
-    final m = homeStats;
-    if (m == null) return 0;
-    for (final k in [
-      'dueAmount', 'dueAmt', 'totalDue', 'totalAmount', 'outstandingAmount'
-    ]) {
-      final v = m[k];
-      final n = _toNum(v);
-      if (n != null) return n;
+    final n1 = _deepReadAmount(homeStats);
+    if (n1 != 0) return n1;
+    final n2 = _deepReadAmount(homeStatsRaw);
+    if (n2 != 0) return n2;
+    final n3 = _deepReadAmount(outstandingRaw);
+    if (n3 != 0) return n3;
+    return 0;
+  }
+
+  /// Recursively walk any response (Map/List), returning the first
+  /// non-zero amount produced by [_readAmount].
+  static num _deepReadAmount(dynamic v) {
+    if (v is Map) {
+      final n = _readAmount(v);
+      if (n != 0) return n;
+      for (final inner in v.values) {
+        final m = _deepReadAmount(inner);
+        if (m != 0) return m;
+      }
+    } else if (v is List) {
+      for (final item in v) {
+        final m = _deepReadAmount(item);
+        if (m != 0) return m;
+      }
     }
     return 0;
   }
 
-  /// Number of unpaid invoices. Prefers `outstandingList.length`, falls
-  /// back to `homeStats` keys.
+  /// Recursively walk any response (Map/List), returning the first
+  /// non-zero count produced by [_readCount].
+  static int _deepReadCount(dynamic v) {
+    if (v is Map) {
+      final n = _readCount(v);
+      if (n != 0) return n;
+      for (final inner in v.values) {
+        final m = _deepReadCount(inner);
+        if (m != 0) return m;
+      }
+    } else if (v is List) {
+      for (final item in v) {
+        final m = _deepReadCount(item);
+        if (m != 0) return m;
+      }
+    }
+    return 0;
+  }
+
+  /// Number of unpaid invoices. Tries:
+  ///   1. `outstandingList.length`
+  ///   2. `homeStats` known + fuzzy keys (case-insensitive substring)
+  ///   3. Same lookup on the outstanding raw response wrapper
   int get invoiceCount {
-    final list = outstandingList;
-    if (list != null) return list.length;
-    final m = homeStats;
+    final list = outstandingForCurrentStudent;
+    if (list.isNotEmpty) return list.length;
+    final n1 = _deepReadCount(homeStats);
+    if (n1 != 0) return n1;
+    final n2 = _deepReadCount(homeStatsRaw);
+    if (n2 != 0) return n2;
+    final n3 = _deepReadCount(outstandingRaw);
+    if (n3 != 0) return n3;
+    return list?.length ?? 0;
+  }
+
+  /// Extract an integer count from any map by trying exact keys then a
+  /// fuzzy lowercased substring match.
+  static int _readCount(Map? m) {
     if (m == null) return 0;
-    for (final k in [
-      'invoiceCount', 'pendingInvoice', 'dueInvoice', 'invoices', 'pendingCount'
-    ]) {
+    const exactKeys = [
+      'invoiceCount', 'pendingInvoice', 'dueInvoice', 'invoices',
+      'pendingCount', 'unpaidInvoices', 'invoiceQty', 'invQty',
+      'numInvoices', 'totalInvoices', 'outstandingCount'
+    ];
+    for (final k in exactKeys) {
       final v = m[k];
       if (v is int) return v;
       if (v is num) return v.toInt();
+    }
+    for (final entry in m.entries) {
+      final key = entry.key.toString().toLowerCase();
+      // any key that says "invoice" or "outstanding" and points at a number
+      if (key.contains('invoice') || key.contains('outstanding')) {
+        final v = entry.value;
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        if (v is String) {
+          final n = int.tryParse(v.trim());
+          if (n != null) return n;
+        }
+      }
     }
     return 0;
   }
@@ -156,8 +334,8 @@ class UserSession extends ChangeNotifier {
   /// Earliest due date across the outstanding list (yyyy-MM-dd or first
   /// usable date string). Empty when nothing is loaded.
   String get earliestDueDate {
-    final list = outstandingList;
-    if (list == null || list.isEmpty) return '';
+    final list = outstandingForCurrentStudent;
+    if (list.isEmpty) return '';
     String? earliest;
     for (final row in list) {
       if (row is! Map) continue;
@@ -175,6 +353,43 @@ class UserSession extends ChangeNotifier {
     }
     return earliest ?? '';
   }
+
+  /// Bookings whose date matches today. Reads from `nextBookings` first
+  /// (typically upcoming), then falls back to `allBookings`.
+  List<Map<String, dynamic>> get todayBookings {
+    final src = (nextBookings != null && nextBookings!.isNotEmpty)
+        ? nextBookings
+        : allBookings;
+    if (src == null || src.isEmpty) return const [];
+    final now = DateTime.now();
+    final out = <Map<String, dynamic>>[];
+    for (final row in src) {
+      if (row is! Map) continue;
+      final d = _bookingDate(row);
+      if (d == null) continue;
+      if (_isSameDay(now, d)) {
+        out.add(Map<String, dynamic>.from(row));
+      }
+    }
+    return out;
+  }
+
+  static DateTime? _bookingDate(Map row) {
+    for (final k in ['date', 'bookingDate', 'startTime', 'classDate',
+                      'sessionDate', 'time', 'sessionTime']) {
+      final v = row[k];
+      if (v == null) continue;
+      if (v is DateTime) return v;
+      final s = v.toString();
+      if (s.isEmpty) continue;
+      final parsed = DateTime.tryParse(s);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  static bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   /// Extract a numeric amount from an outstanding-list row, trying:
   ///   1. exact keys we've seen in different swag responses
@@ -217,32 +432,47 @@ class UserSession extends ChangeNotifier {
 
   /// Recursively dig through a response object looking for the first List
   /// of records (so we tolerate `{data: [...]}`, `{data: {invoices: [...]}}`,
-  /// `{records: [...]}`, etc.).
-  static List<dynamic>? _findList(dynamic resp) {
+  /// `{records: [...]}`, etc.). When no List is found but the Map's values
+  /// are themselves Maps (looks like an "indexed-by-id" collection), the
+  /// values are returned as a synthetic list.
+  static List<dynamic>? findList(dynamic resp) {
     if (resp == null) return null;
     if (resp is List) return resp;
     if (resp is Map) {
       // Common wrapper keys first.
       for (final k in const [
         'data', 'invoices', 'records', 'outstanding', 'list',
-        'items', 'rows', 'results', 'value'
+        'items', 'rows', 'results', 'value', 'siblings', 'children'
       ]) {
         if (resp.containsKey(k)) {
-          final inner = _findList(resp[k]);
+          final inner = findList(resp[k]);
           if (inner != null) return inner;
         }
       }
-      // Otherwise scan every value once.
+      // Scan every value once.
       for (final v in resp.values) {
         if (v is List) return v;
         if (v is Map) {
-          final inner = _findList(v);
+          final inner = findList(v);
           if (inner != null) return inner;
         }
+      }
+      // Last resort: if every value in this Map is itself a Map, treat
+      // them as an indexed collection (e.g. {"1": {...}, "2": {...}}).
+      if (resp.isNotEmpty && resp.values.every((v) => v is Map)) {
+        return resp.values.toList();
       }
     }
     return null;
   }
+
+  /// Backwards-compatible alias.
+  static List<dynamic>? _findList(dynamic resp) => findList(resp);
+
+  /// Public hook so external screens can ask listeners to rebuild
+  /// after they've mutated session fields directly. (`notifyListeners`
+  /// is protected on [ChangeNotifier], so we expose this thin wrapper.)
+  void touch() => notifyListeners();
 
   /// True when the authenticated user is an instructor.
   /// The Authenticate response sets `userType == 2` for instructors.
@@ -300,6 +530,7 @@ class UserSession extends ChangeNotifier {
       }
       ApiService.setToken(token);
       authData = data;
+      debugPrint('🔐 AuthData keys: ${data.keys.toList()}');
       await _loadAll();
       _previousUnread = unreadNotifications;
       startNotificationPolling();
@@ -319,11 +550,14 @@ class UserSession extends ChangeNotifier {
   Future<void> _loadAll() async {
     final futures = <Future>[
       _safeGet('/Profile/MyInfo').then((d) {
-        if (d is Map) myInfo = Map<String, dynamic>.from(d);
+        if (d is Map) {
+          myInfo = Map<String, dynamic>.from(d);
+          debugPrint('👤 MyInfo keys: ${myInfo!.keys.toList()}');
+        } else {
+          debugPrint('👤 MyInfo response was not a Map (was ${d?.runtimeType})');
+        }
       }),
-      _safeGet('/Reports/HomePageStats').then((d) {
-        if (d is Map) homeStats = Map<String, dynamic>.from(d);
-      }),
+      _loadHomeStats(),
       _safeGet('/Profile/MyClubStats').then((d) {
         if (d is List) clubStats = d;
       }),
@@ -345,17 +579,26 @@ class UserSession extends ChangeNotifier {
     // instructors, personal for students. We load it for everyone so the
     // dueAmount/invoiceCount getters have a reliable live source even if
     // /Reports/HomePageStats omits those fields.
-    futures.add(_safePostRaw('/Outstanding/Fetch').then((d) {
-      final list = _findList(d);
-      if (list != null) {
-        outstandingList = list;
-        debugPrint('💰 Outstanding loaded: ${list.length} records, '
-            'sum=${dueAmount.toStringAsFixed(2)}');
-      } else {
-        debugPrint('💰 Outstanding: no list found in response shape: '
-            '${d.runtimeType}');
-      }
-    }));
+    futures.add(_loadOutstanding());
+    // Class-booking endpoints — power student schedule + home Today's Class.
+    if (!isInstructor) {
+      futures.add(_safeGet('/ClassBooking/NextBookings').then((d) {
+        if (d is List) {
+          nextBookings = d;
+        } else if (d != null) {
+          nextBookings = findList(d);
+        }
+        debugPrint('📅 NextBookings: ${nextBookings?.length ?? 0} rows');
+      }));
+      futures.add(_safeGet('/ClassBooking/GetBookings').then((d) {
+        if (d is List) {
+          allBookings = d;
+        } else if (d != null) {
+          allBookings = findList(d);
+        }
+        debugPrint('📅 AllBookings: ${allBookings?.length ?? 0} rows');
+      }));
+    }
     await Future.wait(futures);
   }
 
@@ -368,6 +611,100 @@ class UserSession extends ChangeNotifier {
     } catch (e) {
       debugPrint('Failed POST $endpoint: $e');
       return null;
+    }
+  }
+
+  /// Pull /Reports/HomePageStats and keep both the parsed map AND the raw
+  /// response. Some deployments wrap the payload twice (`{data: {data: {...}}}`)
+  /// so we recursively descend until we find the actual stats object.
+  Future<void> _loadHomeStats() async {
+    homeStatsError = null;
+    homeStatsRaw = null;
+    try {
+      final resp = await ApiService.get('/Reports/HomePageStats');
+      homeStatsRaw = resp;
+      Map<String, dynamic>? best;
+      void walk(dynamic v) {
+        if (v is! Map) return;
+        // Heuristic: a map is "stats-like" if it contains any of the
+        // common keys we care about.
+        final keys = v.keys.map((k) => k.toString().toLowerCase()).toSet();
+        const interesting = {
+          'dueamount', 'duamount', 'dueamt', 'totaldue', 'totalamount',
+          'outstandingamount', 'invoicecount', 'invoices',
+          'pendinginvoice', 'mynews', 'myoffers', 'newsfeed'
+        };
+        if (keys.any(interesting.contains)) {
+          best = Map<String, dynamic>.from(v);
+        }
+        for (final inner in v.values) {
+          walk(inner);
+        }
+      }
+      walk(resp);
+      homeStats = best ?? (resp is Map ? Map<String, dynamic>.from(resp) : null);
+      debugPrint('🏠 HomeStats: keys=${homeStats?.keys.toList()}');
+    } catch (e) {
+      homeStatsError = e.toString();
+      debugPrint('🏠 HomeStats failed: $e');
+    }
+  }
+
+  /// Pulls /Outstanding/Fetch with a few candidate request bodies so we
+  /// tolerate APIs that require explicit (even if empty) filter fields.
+  /// Stops at the first call that returns a non-empty list.
+  Future<void> _loadOutstanding() async {
+    outstandingError = null;
+    outstandingRaw = null;
+    // Per swag.json the body is `OutstandingFetchViewModel` with fields:
+    //   studentId, studentName, icNo, startDate, endDate,
+    //   eCenterId, tCenterId, sCenterId, transactionType.
+    // Server appears to require the shape even when fields are zero/empty,
+    // so we send a fully-populated body keyed off the auth payload.
+    final sid = _intFromAuth([
+      'studentId', 'StudentId', 'id', 'Id', 'userId', 'UserId'
+    ]);
+    final icNo = _strFromAuth(['icNo', 'IcNo', 'nric', 'identityNo']);
+    final now = DateTime.now();
+    // Wide date window: 2 years back → 2 years forward.
+    final start = DateTime(now.year - 2, 1, 1).toIso8601String();
+    final end   = DateTime(now.year + 2, 12, 31).toIso8601String();
+    final fullBody = <String, dynamic>{
+      'studentId': sid,
+      'studentName': '',
+      'icNo': icNo,
+      'startDate': start,
+      'endDate': end,
+      'eCenterId': 0,
+      'tCenterId': 0,
+      'sCenterId': 0,
+      'transactionType': '',
+    };
+    final candidateBodies = <Map<String, dynamic>>[
+      fullBody,
+      // Same shape but studentId=0 (server-uses-token fallback).
+      {...fullBody, 'studentId': 0},
+      // Last-ditch empty (legacy spec).
+      const <String, dynamic>{},
+    ];
+    for (final body in candidateBodies) {
+      try {
+        final resp = await ApiService.post('/Outstanding/Fetch', body);
+        outstandingRaw = resp;
+        final list = _findList(resp);
+        if (list != null) {
+          outstandingList = list;
+          debugPrint('💰 Outstanding: ${list.length} records, '
+              'sum=${dueAmount.toStringAsFixed(2)}, '
+              'body=$body');
+          if (list.isNotEmpty) return; // good, stop trying
+        } else {
+          debugPrint('💰 Outstanding: no list in response (type=${resp.runtimeType}, body=$body)');
+        }
+      } catch (e) {
+        outstandingError = e.toString();
+        debugPrint('💰 Outstanding failed (body=$body): $e');
+      }
     }
   }
 
@@ -646,6 +983,12 @@ class UserSession extends ChangeNotifier {
     notifications = null;
     studentAddtnlInfo = null;
     outstandingList = null;
+    outstandingRaw = null;
+    outstandingError = null;
+    homeStatsRaw = null;
+    homeStatsError = null;
+    nextBookings = null;
+    allBookings = null;
     unreadNotifications = 0;
     _previousUnread = 0;
     ApiService.clearToken();

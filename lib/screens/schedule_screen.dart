@@ -57,10 +57,63 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     return result;
   }
 
+  // ─── Live 7-day strip + per-day bookings ────────────────────────────────
+  /// Today through today+6, used to drive the day-picker strip.
+  List<DateTime> get _days7 {
+    final start = DateTime.now();
+    return List.generate(7, (i) => DateTime(start.year, start.month, start.day + i));
+  }
+
+  static const _weekday = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  DateTime? _bookingDate(Map row) {
+    for (final k in ['date', 'bookingDate', 'startTime', 'classDate',
+                      'sessionDate', 'time', 'sessionTime']) {
+      final v = row[k];
+      if (v == null) continue;
+      if (v is DateTime) return v;
+      final s = v.toString();
+      if (s.isEmpty) continue;
+      final parsed = DateTime.tryParse(s);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _bookingsForDay(DateTime d) {
+    final src = (_liveBookings != null && _liveBookings!.isNotEmpty)
+        ? _liveBookings
+        : _allBookings;
+    if (src == null) return const [];
+    final out = <Map<String, dynamic>>[];
+    for (final row in src) {
+      if (row is! Map) continue;
+      final bd = _bookingDate(row);
+      if (bd != null && _isSameDay(bd, d)) {
+        out.add(Map<String, dynamic>.from(row));
+      }
+    }
+    return out;
+  }
+
+  String _pick(Map<String, dynamic> m, List<String> keys, [String fallback = '']) {
+    for (final k in keys) {
+      final v = m[k];
+      if (v != null && v.toString().trim().isNotEmpty) return v.toString().trim();
+    }
+    return fallback;
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    final day = kSchedule[active];
+    final days = _days7;
+    if (active >= days.length) active = 0;
+    final selectedDay = days[active];
+    final sessions = _bookingsForDay(selectedDay);
     return Stack(children: [
       Container(
       color: c.background,
@@ -88,11 +141,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: Gaps.xl, vertical: 10),
-              itemCount: kSchedule.length,
+              itemCount: days.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (_, i) {
-                final d = kSchedule[i];
+                final d = days[i];
                 final isActive = i == active;
+                final hasSessions = _bookingsForDay(d).isNotEmpty;
+                final dayLabel = _weekday[d.weekday - 1];
                 return InkWell(
                   onTap: () => setState(() => active = i),
                   borderRadius: BorderRadius.circular(Radii.lg),
@@ -107,12 +162,28 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(d.day, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: isActive ? Colors.white.withOpacity(0.85) : c.textSecondary, letterSpacing: 1)),
+                        Text(dayLabel,
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: isActive
+                                    ? Colors.white.withOpacity(0.85)
+                                    : c.textSecondary,
+                                letterSpacing: 1)),
                         const SizedBox(height: 4),
-                        Text(d.date, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: isActive ? Colors.white : c.textPrimary)),
-                        if (d.sessions.isNotEmpty) ...[
+                        Text('${d.day}',
+                            style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: isActive ? Colors.white : c.textPrimary)),
+                        if (hasSessions) ...[
                           const SizedBox(height: 6),
-                          Container(width: 4, height: 4, decoration: BoxDecoration(color: isActive ? Colors.white : c.primary, borderRadius: BorderRadius.circular(2))),
+                          Container(
+                              width: 4,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                  color: isActive ? Colors.white : c.primary,
+                                  borderRadius: BorderRadius.circular(2))),
                         ],
                       ],
                     ),
@@ -130,23 +201,32 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 Padding(
                   padding: const EdgeInsets.only(top: 10, bottom: 14),
                   child: Text(
-                    day.sessions.isEmpty ? 'Rest Day' : '${day.sessions.length} session${day.sessions.length > 1 ? 's' : ''} scheduled',
+                    sessions.isEmpty
+                        ? 'Rest Day'
+                        : '${sessions.length} session${sessions.length > 1 ? 's' : ''} scheduled',
                     style: TextStyle(color: c.textSecondary, fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
-                if (day.sessions.isEmpty)
+                if (sessions.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 60),
                     child: Column(children: [
                       Icon(Icons.hotel, size: 40, color: c.textMuted),
                       const SizedBox(height: 12),
-                      Text('Enjoy your rest day', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+                      Text('No classes scheduled',
+                          style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
-                      Text('Recovery is part of the journey', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+                      Text('Recovery is part of the journey',
+                          style:
+                              TextStyle(fontSize: 12, color: c.textSecondary)),
                     ]),
                   ),
-                ...day.sessions.map((s) => _sessionCard(c, s)),
+                ...sessions.map((s) => _liveSessionCard(c, s)),
                 const SizedBox(height: 16),
+                // Holidays — awaiting holidays endpoint; mock placeholder kept intentionally.
                 _holidaysCard(c),
               ],
             ),
@@ -427,6 +507,108 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         decoration: BoxDecoration(color: filled ? c.primary : c.surfaceAlt, borderRadius: BorderRadius.circular(Radii.sm)),
         child: Text(l, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: filled ? Colors.white : c.textPrimary)),
       );
+
+  /// Renders a session card from a live `/ClassBooking/*` row. Field
+  /// lookups use multi-key fallback because the swag response shape isn't
+  /// strictly typed.
+  Widget _liveSessionCard(AppColors c, Map<String, dynamic> row) {
+    final title = _pick(row,
+        ['title', 'name', 'sessionName', 'className', 'programName', 'subject'],
+        'Session');
+    final trainer = _pick(row,
+        ['trainer', 'instructorName', 'coach', 'instructor', 'sensei'],
+        '');
+    final duration = _pick(row,
+        ['duration', 'durationMin', 'lengthMin'],
+        '');
+    // Time label: prefer raw HH:mm from date if present.
+    String timeLabel = _pick(row, ['time', 'timeLabel', 'startTimeLabel'], '');
+    final ampm = _pick(row, ['ampm', 'meridiem'], '');
+    if (timeLabel.isEmpty) {
+      final dt = _bookingDate(row);
+      if (dt != null) {
+        final h = dt.hour;
+        final m = dt.minute.toString().padLeft(2, '0');
+        final hh12 = ((h % 12) == 0 ? 12 : (h % 12)).toString();
+        timeLabel = '$hh12:$m';
+      }
+    }
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: c.isDark ? Border.all(color: c.border) : null,
+        boxShadow: Shadows.card(c),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 60,
+            child: Column(children: [
+              Text(timeLabel.isEmpty ? '—' : timeLabel,
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: c.textPrimary)),
+              if (ampm.isNotEmpty)
+                Text(ampm,
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: c.textSecondary,
+                        fontWeight: FontWeight.w700)),
+            ]),
+          ),
+          Container(
+              width: 4,
+              height: 60,
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                  color: c.primary, borderRadius: BorderRadius.circular(2))),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: c.textPrimary)),
+                const SizedBox(height: 6),
+                Row(children: [
+                  if (duration.isNotEmpty) ...[
+                    Icon(Icons.access_time, size: 12, color: c.textSecondary),
+                    const SizedBox(width: 4),
+                    Text('$duration min',
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: c.textSecondary,
+                            fontWeight: FontWeight.w500)),
+                    const SizedBox(width: 10),
+                  ],
+                  if (trainer.isNotEmpty) ...[
+                    Icon(Icons.person_outline, size: 12, color: c.textSecondary),
+                    const SizedBox(width: 4),
+                    Flexible(
+                        child: Text(trainer,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: c.textSecondary,
+                                fontWeight: FontWeight.w500))),
+                  ],
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _liveBookingsBanner(AppColors c) {
     if (_bookingsLoading) {

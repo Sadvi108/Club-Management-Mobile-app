@@ -5,6 +5,7 @@ import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
+import '../widgets/list_search.dart';
 import '../widgets/app_icon_button.dart';
 
 class PaymentsScreen extends StatefulWidget {
@@ -28,6 +29,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   bool _showCollectionList = false;
   bool _loading = false;
   String _filter = 'all'; // all | term | charges | manual
+  final _receiptSearchCtrl = TextEditingController();
+  String _receiptQuery = '';
+  String? _receiptCenterFilter;
+  String? _receiptMethodFilter;
   dynamic _invoiceTypeFilter;
   final Set<int> _selectedInvoiceIdx = <int>{};
 
@@ -134,12 +139,44 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       default:
         base = _receipts ?? const <dynamic>[];
     }
-    if (_invoiceTypeFilter == null) return base;
+    final q = _receiptQuery.trim().toLowerCase();
     return base.where((r) {
       if (r is! Map) return true;
-      final t = r['invoiceTypeId'] ?? r['typeId'] ?? r['type'];
-      return t == _invoiceTypeFilter;
+      if (_invoiceTypeFilter != null) {
+        final t = r['invoiceTypeId'] ?? r['typeId'] ?? r['type'];
+        if (t != _invoiceTypeFilter) return false;
+      }
+      if (_receiptCenterFilter != null && _receiptCenterFilter!.isNotEmpty) {
+        final c = (r['tcName'] ?? r['centerName'] ?? '').toString();
+        if (c != _receiptCenterFilter) return false;
+      }
+      if (_receiptMethodFilter != null && _receiptMethodFilter!.isNotEmpty) {
+        final m = (r['paymentMethod'] ?? '').toString();
+        if (m != _receiptMethodFilter) return false;
+      }
+      if (q.isNotEmpty) {
+        const keys = [
+          'receiptNo', 'name', 'icNo', 'paymentMethod', 'tcName',
+          'centerName', 'description',
+        ];
+        final hit = keys.any((k) =>
+            r[k] != null && r[k].toString().toLowerCase().contains(q));
+        if (!hit) return false;
+      }
+      return true;
     }).toList();
+  }
+
+  List<String> _uniqStr(List<dynamic> rows, String key) {
+    final s = <String>{};
+    for (final r in rows) {
+      if (r is Map) {
+        final v = r[key]?.toString().trim();
+        if (v != null && v.isNotEmpty) s.add(v);
+      }
+    }
+    final list = s.toList()..sort();
+    return list;
   }
 
   Future<List<dynamic>?> _safeList(Future<dynamic> Function() fn) async {
@@ -271,7 +308,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         ? liveTotal.toStringAsFixed(2)
         : (session.dueAmount > 0
             ? session.dueAmount.toStringAsFixed(2)
-            : kStudent.nextPayment.amount.toString());
+            : '0.00');
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -376,15 +413,15 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         ? liveTotal.toStringAsFixed(2)
         : (session.dueAmount > 0
             ? session.dueAmount.toStringAsFixed(2)
-            : kStudent.nextPayment.amount.toString());
+            : '0.00');
     final liveLabel = invoices.isNotEmpty
         ? '${invoices.length} outstanding invoice(s)'
         : (session.invoiceCount > 0
             ? '${session.invoiceCount} outstanding invoice(s)'
-            : kStudent.nextPayment.label);
+            : 'No outstanding invoices');
     final liveDueDate = session.earliestDueDate.isNotEmpty
         ? session.earliestDueDate
-        : kStudent.nextPayment.dueDate;
+        : '—';
     return Container(
       color: c.background,
       child: CustomScrollView(slivers: [
@@ -479,11 +516,70 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             _filterChips(c),
             const SizedBox(height: 8),
             if ((_invoiceTypes ?? const []).isNotEmpty) _invoiceTypeDropdown(c),
+            if (((_receipts ?? const []).length) > 3) ...[
+              const SizedBox(height: 8),
+              ListSearchBar(
+                hint: 'Search receipt no, student, method, center…',
+                controller: _receiptSearchCtrl,
+                onSearch: (v) => setState(() => _receiptQuery = v),
+                resultCount: _filteredReceipts().length,
+                totalCount: (_receipts ?? const []).length,
+                filters: [
+                  if (_uniqStr(_receipts ?? const [], 'tcName').isNotEmpty)
+                    ListFilter(
+                      label: 'Center',
+                      options: _uniqStr(_receipts ?? const [], 'tcName'),
+                      selected: _receiptCenterFilter,
+                      onSelected: (v) =>
+                          setState(() => _receiptCenterFilter = v),
+                    ),
+                  if (_uniqStr(_receipts ?? const [], 'paymentMethod').isNotEmpty)
+                    ListFilter(
+                      label: 'Method',
+                      options:
+                          _uniqStr(_receipts ?? const [], 'paymentMethod'),
+                      selected: _receiptMethodFilter,
+                      onSelected: (v) =>
+                          setState(() => _receiptMethodFilter = v),
+                    ),
+                ],
+                onClearAll: () => setState(() {
+                  _receiptQuery = '';
+                  _receiptCenterFilter = null;
+                  _receiptMethodFilter = null;
+                }),
+              ),
+            ],
             const SizedBox(height: 8),
             ...() {
               final list = _filteredReceipts();
-              if (list.isEmpty && _filter == 'all') {
-                return kPayments.map<Widget>((p) => _histRow(c, p)).toList();
+              if (list.isEmpty) {
+                return <Widget>[
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(Radii.md),
+                      border: c.isDark ? Border.all(color: c.border) : null,
+                      boxShadow: Shadows.card(c),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.receipt_long_outlined,
+                          color: c.textMuted, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'No receipts yet — paid invoices will appear here.',
+                          style: TextStyle(
+                              color: c.textSecondary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ]),
+                  ),
+                ];
               }
               return list.take(30).map<Widget>((r) => _liveReceiptRow(c, r)).toList();
             }(),
@@ -623,10 +719,27 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
   Widget _liveReceiptRow(AppColors c, dynamic r) {
     final m = r is Map ? r : <dynamic, dynamic>{};
-    final label = (m['description'] ?? m['receiptNo'] ?? m['text'] ?? 'Receipt').toString();
-    final date = (m['date'] ?? m['paymentDate'] ?? '').toString();
-    final method = (m['method'] ?? m['paymentMode'] ?? '').toString();
-    final amount = (m['amount'] ?? m['value'] ?? 0).toString();
+    // API row shape: {id, tcName, receiptNo, receiptDate, receiptAmount,
+    // paymentMethod, icNo, name}.
+    final receiptNo = (m['receiptNo'] ?? m['receiptNumber'] ?? '').toString();
+    final tcName = (m['tcName'] ?? m['centerName'] ?? '').toString();
+    final label = receiptNo.isNotEmpty
+        ? 'Receipt #$receiptNo'
+        : (m['description'] ?? m['text'] ?? 'Receipt').toString();
+    final dateRaw = (m['receiptDate'] ?? m['date'] ?? m['paymentDate'] ?? '').toString();
+    final date = dateRaw.length >= 10 ? dateRaw.substring(0, 10) : dateRaw;
+    final method = (m['paymentMethod'] ?? m['method'] ?? m['paymentMode'] ?? '').toString();
+    final amountRaw = m['receiptAmount'] ?? m['amount'] ?? m['value'] ?? 0;
+    final amount = amountRaw is num
+        ? amountRaw.toStringAsFixed(2)
+        : amountRaw.toString();
+    final studentName = (m['name'] ?? '').toString();
+    final subtitle = [
+      if (date.isNotEmpty) date,
+      if (studentName.isNotEmpty) studentName,
+      if (method.isNotEmpty) method,
+      if (tcName.isNotEmpty) tcName,
+    ].join(' · ');
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -646,10 +759,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary)),
-            if (date.isNotEmpty || method.isNotEmpty)
+            if (subtitle.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Text('$date${method.isNotEmpty ? ' · $method' : ''}', style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                child: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: c.textSecondary)),
               ),
           ]),
         ),

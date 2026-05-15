@@ -30,29 +30,8 @@ class InstructorTabsShell extends StatelessWidget {
     return Scaffold(
       extendBody: true,
       body: child,
-      floatingActionButton: Container(
-        margin: const EdgeInsets.only(top: 30),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: c.background, width: 4),
-          boxShadow: Shadows.strong(c),
-        ),
-        child: FloatingActionButton(
-          heroTag: 'instructorQrFab',
-          onPressed: () => context.push('/instructor/qr-scan'),
-          tooltip: 'Scan',
-          backgroundColor: c.primary,
-          child: Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: c.gradient),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.qr_code_scanner,
-                size: 28, color: Colors.white),
-          ),
-        ),
+      floatingActionButton: _InstructorScannerFab(
+        onTap: () => context.push('/instructor/qr-scan'),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Container(
@@ -69,7 +48,7 @@ class InstructorTabsShell extends StatelessWidget {
                   ),
                 ],
         ),
-        child: BottomAppBar(
+        child: SafeArea(top: false, child: BottomAppBar(
           shape: const CircularNotchedRectangle(),
           notchMargin: 8,
           color: c.surface,
@@ -88,7 +67,7 @@ class InstructorTabsShell extends StatelessWidget {
                   'Settings', '/instructor/settings'),
             ],
           ),
-        ),
+        )),
       ),
     );
   }
@@ -123,6 +102,63 @@ class InstructorTabsShell extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                       color: active ? c.primary : c.textMuted)),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Rounded-square QR scanner button for the instructor portal — matches
+/// the D-Clix 2026 design: soft orange gradient body, white viewfinder
+/// icon, warm orange glow.
+class _InstructorScannerFab extends StatelessWidget {
+  final VoidCallback onTap;
+  const _InstructorScannerFab({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    return Container(
+      margin: const EdgeInsets.only(top: 30),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                colors: c.gradient,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              border: Border.all(color: c.background, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: c.primary.withOpacity(0.45),
+                  blurRadius: 22,
+                  offset: const Offset(0, 8),
+                  spreadRadius: -2,
+                ),
+                BoxShadow(
+                  color: c.primaryDark.withOpacity(0.22),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.qr_code_scanner,
+                color: Colors.white,
+                size: 26,
+              ),
+            ),
           ),
         ),
       ),

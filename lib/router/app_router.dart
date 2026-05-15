@@ -13,7 +13,9 @@ import '../screens/attendance_screen.dart';
 import '../screens/progress_screen.dart';
 import '../screens/events_screen.dart';
 import '../screens/qr_scan_screen.dart';
+import '../screens/debug_screen.dart';
 import '../screens/notification_detail_screen.dart';
+import '../screens/outstanding_invoices_screen.dart';
 import '../screens/instructor_tabs_shell.dart';
 import '../screens/instructor_home_screen.dart';
 import '../screens/instructor_collections_screen.dart';
@@ -34,6 +36,8 @@ final GoRouter appRouter = GoRouter(
   initialLocation: '/',
   redirect: (context, state) {
     final loc = state.matchedLocation;
+    // /debug is always reachable (helpful for diagnosing data issues).
+    if (loc == '/debug') return null;
     if (loc.startsWith('/instructor') && !UserSession.instance.isInstructor) {
       return '/login';
     }
@@ -47,10 +51,12 @@ final GoRouter appRouter = GoRouter(
           TabsShell(child: child, location: state.matchedLocation),
       routes: [
         GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
-        GoRoute(path: '/training', builder: (_, __) => const TrainingScreen()),
         GoRoute(path: '/schedule', builder: (_, __) => const ScheduleScreen()),
-        GoRoute(path: '/payments', builder: (_, __) => const PaymentsScreen()),
+        GoRoute(path: '/progress', builder: (_, __) => const ProgressScreen()),
         GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+        // Reachable from quick-access tiles + home Pay Now / Today's Class.
+        GoRoute(path: '/training', builder: (_, __) => const TrainingScreen()),
+        GoRoute(path: '/payments', builder: (_, __) => const PaymentsScreen()),
       ],
     ),
     ShellRoute(
@@ -119,8 +125,9 @@ final GoRouter appRouter = GoRouter(
         child: const QRScanScreen(),
       ),
     ),
+    GoRoute(path: '/invoices', builder: (_, __) => const OutstandingInvoicesScreen()),
+    GoRoute(path: '/debug',    builder: (_, __) => const DebugScreen()),
     GoRoute(path: '/attendance', builder: (_, __) => const AttendanceScreen()),
-    GoRoute(path: '/progress', builder: (_, __) => const ProgressScreen()),
     GoRoute(path: '/events', builder: (_, __) => const EventsScreen()),
     GoRoute(
       path: '/notification/:groupId',

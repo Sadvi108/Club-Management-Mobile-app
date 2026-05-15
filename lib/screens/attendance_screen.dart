@@ -31,11 +31,39 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Future<void> _loadAttendance() async {
     setState(() => _loading = true);
     try {
-      final r = await Api.reportsAttendance();
-      if (r is List) _liveAttendance = r;
-      if (r is Map && r['data'] is List) _liveAttendance = r['data'] as List;
-    } catch (e) {
-      debugPrint('reportsAttendance failed: $e');
+      // Server expects a ReportRequestViewModel body. Empty {} sometimes
+      // yields an empty list; try a full body first with a wide date
+      // window, then fall back to empty if that's also empty.
+      final now = DateTime.now();
+      final fromDate = DateTime(now.year - 1, 1, 1).toIso8601String();
+      final toDate   = DateTime(now.year, now.month + 1, 0).toIso8601String();
+      final candidates = <Map<String, dynamic>>[
+        {
+          'sCenterId': 0,
+          'tCenterId': 0,
+          'eCenterId': 0,
+          'tTimeId': 0,
+          'fromDate': fromDate,
+          'toDate': toDate,
+          'reportType': 0,
+          'sourceKeyId': 0,
+        },
+        const <String, dynamic>{},
+      ];
+      for (final body in candidates) {
+        try {
+          final r = await Api.reportsAttendance(body);
+          List? list;
+          if (r is List) list = r;
+          if (r is Map && r['data'] is List) list = r['data'] as List;
+          if (list != null) {
+            _liveAttendance = list;
+            if (list.isNotEmpty) break;
+          }
+        } catch (e) {
+          debugPrint('reportsAttendance body=$body failed: $e');
+        }
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -73,23 +101,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   /// Live attendance summary computed from /Reports/Attendance rows.
-  /// Falls back to mock values when no live data has loaded yet.
+  /// Returns zeros when no records exist for the account.
   Map<String, int> _liveStats() {
     final list = _liveAttendance;
     if (list == null || list.isEmpty) {
-      return {
-        'present': kAttendance.present,
-        'total': kAttendance.total,
-        'missed': kAttendance.total - kAttendance.present,
-        'percent': kAttendance.percentage,
-      };
+      return const {'present': 0, 'total': 0, 'missed': 0, 'percent': 0};
     }
     int present = 0;
     int total = 0;
     for (final row in list) {
       if (row is! Map) continue;
       total++;
-      final s = (row['status'] ?? row['value'] ?? row['attendanceStatus'] ?? '')
+      final s = (row['attendanceType'] ?? row['status'] ?? row['value'] ?? row['attendanceStatus'] ?? '')
           .toString()
           .toLowerCase();
       if (s.contains('present') || s == '1' || s == 'true' || s == 'yes' || s == 'p') {
@@ -103,6 +126,93 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       'missed': total - present,
       'percent': pct,
     };
+  }
+
+  /// Builds a 28-cell calendar grid for the current month using live
+  /// `/Reports/Attendance` rows. Days the API didn't return are rendered
+  /// as `AttendanceStatus.off`. If no live data is available we fall back
+  /// to the mock `kAttendance.thisMonth` array so the calendar isn't empty
+  /// before the first request resolves.
+  List<AttendanceDay> _liveCalendar() {
+    final list = _liveAttendance;
+    // Empty live list → render an empty grid (no fake mock days).
+    if (list == null || list.isEmpty) {
+      final today = DateTime.now();
+      return List.generate(28, (i) {
+        final dayNum = i + 1;
+        return AttendanceDay(
+          day: dayNum,
+          status: dayNum > today.day
+              ? AttendanceStatus.future
+              : AttendanceStatus.off,
+        );
+      });
+    }
+
+    // Map day-of-month → status from the live rows.
+    final byDay = <int, AttendanceStatus>{};
+    // API row shape: {id, attendanceTypeId, attendanceType, icNo, name,
+    //   recordedTime, sCenterName, trainingCenter}.
+    for (final row in list) {
+      if (row is! Map) continue;
+      final raw = (row['recordedTime'] ?? row['date'] ?? row['attendanceDate'] ?? row['day'] ?? '').toString();
+      if (raw.isEmpty) continue;
+      final d = DateTime.tryParse(raw);
+      if (d == null) continue;
+      final now = DateTime.now();
+      if (d.year != now.year || d.month != now.month) continue;
+      final s = (row['attendanceType'] ?? row['status'] ?? row['value'] ?? row['attendanceStatus'] ?? '')
+          .toString()
+          .toLowerCase();
+      AttendanceStatus status;
+      if (s.contains('present') || s == '1' || s == 'true' || s == 'yes' || s == 'p') {
+        status = AttendanceStatus.present;
+      } else if (s.contains('absent') || s.contains('missed') || s == '0' || s == 'a') {
+        status = AttendanceStatus.missed;
+      } else {
+        status = AttendanceStatus.off;
+      }
+      byDay[d.day] = status;
+    }
+
+    final today = DateTime.now();
+    return List.generate(28, (i) {
+      final dayNum = i + 1;
+      final status = byDay[dayNum] ??
+          (dayNum > today.day
+              ? AttendanceStatus.future
+              : AttendanceStatus.off);
+      return AttendanceDay(day: dayNum, status: status);
+    });
+  }
+
+  /// Live "missed class history" — filters _liveAttendance for absent
+  /// rows. Falls back to mock list when API hasn't returned yet.
+  List<MissedClass> _liveMissed() {
+    final list = _liveAttendance;
+    if (list == null || list.isEmpty) return const [];
+    final out = <MissedClass>[];
+    for (final row in list) {
+      if (row is! Map) continue;
+      final s = (row['attendanceType'] ?? row['status'] ?? row['value'] ?? row['attendanceStatus'] ?? '')
+          .toString()
+          .toLowerCase();
+      if (!(s.contains('absent') || s.contains('missed') || s == '0' || s == 'a')) continue;
+      final rawDate = (row['recordedTime'] ?? row['date'] ?? row['attendanceDate'] ?? '').toString();
+      out.add(MissedClass(
+        date: rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate,
+        className: (row['trainingCenter'] ?? row['sCenterName'] ?? row['className'] ?? row['classTitle'] ?? row['title'] ?? 'Class').toString(),
+        reason: (row['reason'] ?? row['note'] ?? 'Absent').toString(),
+      ));
+      if (out.length >= 8) break;
+    }
+    return out;
+  }
+
+  String _currentMonthLabel() {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final now = DateTime.now();
+    return '${months[now.month - 1]} ${now.year}';
   }
 
   @override
@@ -234,7 +344,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Feb 2026',
+                      Text(_currentMonthLabel(),
                           style: TextStyle(
                               color: c.textPrimary,
                               fontSize: 16,
@@ -257,12 +367,14 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                     fontWeight: FontWeight.w700))))
                         .toList()),
                 const SizedBox(height: 4),
-                ...weeks.map((w) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        children: kAttendance.thisMonth
-                            .sublist(w * 7, w * 7 + 7)
-                            .map((d) {
+                ...() {
+                  final calendar = _liveCalendar();
+                  return weeks.map((w) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: calendar
+                              .sublist(w * 7, (w * 7 + 7).clamp(0, calendar.length))
+                              .map((d) {
                           Color bg = Colors.transparent;
                           Color txt = c.textPrimary;
                           Border? border;
@@ -298,7 +410,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           );
                         }).toList(),
                       ),
-                    )),
+                    ));
+                }(),
               ]),
             ),
             const SizedBox(height: 16),
@@ -375,7 +488,32 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     fontSize: 16,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 10),
-            ...kAttendance.missed.map((m) => Container(
+            if (_liveMissed().isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(Radii.md),
+                  border: c.isDark ? Border.all(color: c.border) : null,
+                  boxShadow: Shadows.card(c),
+                ),
+                child: Row(children: [
+                  Icon(Icons.check_circle_outline,
+                      color: c.success, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'No missed classes — perfect attendance.',
+                      style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ]),
+              )
+            else
+            ..._liveMissed().map((m) => Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(

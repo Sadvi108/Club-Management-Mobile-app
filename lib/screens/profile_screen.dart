@@ -16,6 +16,305 @@ class _InfoRow {
   const _InfoRow(this.icon, this.label, this.value);
 }
 
+/// Production-style sibling picker — full-height sheet with a header,
+/// search box, and a list that marks the current student as "(Selected)".
+class _SiblingPicker extends StatefulWidget {
+  final List<Map<String, dynamic>> siblings;
+  final String currentName;
+  final ScrollController scrollController;
+  final void Function(dynamic sid, String name) onPick;
+  final dynamic rawResponse;
+  final String? fetchError;
+  final VoidCallback? onRetry;
+
+  const _SiblingPicker({
+    required this.siblings,
+    required this.currentName,
+    required this.scrollController,
+    required this.onPick,
+    this.rawResponse,
+    this.fetchError,
+    this.onRetry,
+  });
+
+  @override
+  State<_SiblingPicker> createState() => _SiblingPickerState();
+}
+
+class _SiblingPickerState extends State<_SiblingPicker> {
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    final filtered = widget.siblings.where((s) {
+      if (_query.isEmpty) return true;
+      final name = (s['name'] ?? s['fullName'] ?? '').toString().toLowerCase();
+      return name.contains(_query.toLowerCase());
+    }).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 12, 14),
+          child: Column(children: [
+            Center(child: Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: BoxDecoration(
+                color: c.border, borderRadius: BorderRadius.circular(2),
+              ),
+            )),
+            Row(children: [
+              Text('Select Sibling',
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800)),
+              const Spacer(),
+              InkWell(
+                onTap: () => Navigator.pop(context),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 32, height: 32,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F172A),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.close,
+                      color: Colors.white, size: 18),
+                ),
+              ),
+            ]),
+          ]),
+        ),
+        // Search box
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: c.border),
+            ),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                prefixIcon: Icon(Icons.search, color: c.textMuted, size: 22),
+                hintText: 'Search',
+                hintStyle: TextStyle(color: c.textMuted, fontSize: 14),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ),
+        // List
+        Expanded(
+          child: filtered.isEmpty
+              ? _buildEmpty(c)
+              : ListView.separated(
+                  controller: widget.scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => Divider(
+                      height: 1, color: c.border.withOpacity(0.6),
+                      indent: 16, endIndent: 16),
+                  itemBuilder: (_, i) {
+                    final s = filtered[i];
+                    // /Listing/MySiblings rows: {id, value (login), text (name)}.
+                    final sid = s['id'] ?? s['studentId'] ?? s['code'] ?? s['studentID'];
+                    final rawName = (s['text'] ?? s['name'] ?? s['fullName'] ?? s['studentName'] ?? '?').toString();
+                    final regNo = (s['value'] ?? s['registrationNo'] ?? s['regNo'] ?? s['code'] ?? '').toString();
+                    final isCurrent = rawName.toUpperCase() == widget.currentName;
+                    return InkWell(
+                      onTap: isCurrent ? null : () => widget.onPick(sid, rawName),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        child: Row(children: [
+                          // Initial avatar
+                          Container(
+                            width: 38, height: 38,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: isCurrent
+                                    ? c.gradient
+                                    : [c.surfaceAlt, c.surfaceAlt],
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              rawName.isEmpty
+                                  ? '?'
+                                  : rawName.substring(0, 1).toUpperCase(),
+                              style: TextStyle(
+                                color: isCurrent ? Colors.white : c.primary,
+                                fontWeight: FontWeight.w900,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                RichText(
+                                  text: TextSpan(
+                                    style: TextStyle(
+                                        color: c.textPrimary,
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.3),
+                                    children: [
+                                      TextSpan(text: rawName.toUpperCase()),
+                                      if (isCurrent)
+                                        TextSpan(
+                                          text: '  ( Selected )',
+                                          style: TextStyle(
+                                              color: c.primary,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 12),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                if (regNo.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(regNo,
+                                      style: TextStyle(
+                                          color: c.textSecondary,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600)),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (!isCurrent)
+                            Icon(Icons.chevron_right,
+                                color: c.textMuted, size: 22),
+                        ]),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildEmpty(AppColors c) {
+    final hasError = widget.fetchError != null;
+    final isFiltered = widget.siblings.isNotEmpty && _query.isNotEmpty;
+    String preview;
+    try {
+      preview = widget.rawResponse?.toString() ?? 'null';
+    } catch (_) {
+      preview = 'unprintable';
+    }
+    if (preview.length > 800) {
+      preview = '${preview.substring(0, 800)}\n…(${preview.length - 800} more chars)';
+    }
+    return SingleChildScrollView(
+      controller: widget.scrollController,
+      padding: const EdgeInsets.all(24),
+      child: Column(children: [
+        const SizedBox(height: 20),
+        Icon(
+          hasError ? Icons.cloud_off_outlined : Icons.family_restroom,
+          size: 56,
+          color: hasError ? c.danger : c.textMuted,
+        ),
+        const SizedBox(height: 14),
+        Text(
+          isFiltered
+              ? 'No matches for "$_query"'
+              : (hasError ? 'Could not load siblings' : 'No siblings linked'),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          isFiltered
+              ? 'Clear the search to see everyone again.'
+              : (hasError
+                  ? widget.fetchError!
+                  : 'This account isn\'t linked to any sibling profiles in /Listing/MySiblings. If you expected results, tap "Show raw response" below to see what the API returned.'),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              color: c.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              height: 1.4),
+        ),
+        const SizedBox(height: 18),
+        if (widget.onRetry != null)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Retry'),
+            onPressed: widget.onRetry,
+          ),
+        const SizedBox(height: 14),
+        // Inline raw-response viewer
+        if (!isFiltered) ...[
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+              title: Text(
+                'Show raw API response',
+                style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700),
+              ),
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: c.surfaceAlt,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: c.border),
+                  ),
+                  child: SelectableText(
+                    preview,
+                    style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                        height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -108,66 +407,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<List<dynamic>?> _safeList(Future<dynamic> Function() fn) async {
     try {
       final r = await fn();
-      if (r is List) return r;
-      if (r is Map && r['data'] is List) return r['data'] as List;
+      // Use the robust findList — handles nested wrappers + indexed-by-id Maps.
+      return UserSession.findList(r);
     } catch (e) {
       debugPrint('safeList failed: $e');
     }
     return null;
   }
 
+  /// Raw siblings response — kept for the in-modal diagnostic so the user
+  /// can see exactly what came back when the list shows up empty.
+  dynamic _lastSiblingsRaw;
+
   Future<void> _openSwitchStudent() async {
-    final c = context.appColors;
-    final list = await _safeList(Api.listingMySiblings);
+    // Capture both the parsed list and the raw response so the picker
+    // can offer a "what came back?" diagnostic if it's empty.
+    dynamic raw;
+    List<dynamic>? list;
+    String? error;
+    try {
+      raw = await Api.listingMySiblings();
+      list = UserSession.findList(raw);
+    } catch (e) {
+      error = e.toString();
+      debugPrint('listingMySiblings failed: $e');
+    }
+    _lastSiblingsRaw = raw;
+
     if (!mounted) return;
+    final currentName = UserSession.instance.displayName.toUpperCase();
+    final siblings = (list ?? const [])
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        maxChildSize: 0.95,
+        minChildSize: 0.5,
+        expand: false,
+        builder: (_, scrollCtrl) => _SiblingPicker(
+          siblings: siblings,
+          currentName: currentName,
+          scrollController: scrollCtrl,
+          rawResponse: raw,
+          fetchError: error,
+          onRetry: () async {
+            Navigator.pop(ctx);
+            _openSwitchStudent();
+          },
+          onPick: (sid, name) async {
+            Navigator.pop(ctx);
+            if (sid == null) return;
+            final ok = await UserSession.instance.switchStudent(sid);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(ok
+                  ? 'Switched to $name'
+                  : 'Switch failed: ${UserSession.instance.error ?? "unknown"}'),
+            ));
+          },
         ),
-        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 14),
-          Text('Switch Student', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
-          if (list == null || list.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Text('No siblings found.', style: TextStyle(fontSize: 13, color: c.textSecondary)),
-            )
-          else
-            ...list.whereType<Map>().map((s) {
-              final sid = s['id'] ?? s['studentId'] ?? s['code'];
-              final name = (s['name'] ?? s['fullName'] ?? '?').toString();
-              return InkWell(
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  if (sid == null) return;
-                  final ok = await UserSession.instance.switchStudent(sid);
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(ok
-                        ? 'Switched to $name'
-                        : 'Switch failed: ${UserSession.instance.error ?? "unknown"}'),
-                  ));
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Row(children: [
-                    Container(width: 36, height: 36, decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle), child: Icon(Icons.person, color: c.primary, size: 18)),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary))),
-                    Icon(Icons.chevron_right, color: c.textMuted),
-                  ]),
-                ),
-              );
-            }),
-        ]),
       ),
     );
   }
@@ -544,23 +847,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<_InfoRow> _extraInfoRows(AppColors c, UserSession session) {
     final extra = session.studentAddtnlInfo;
     if (extra == null) return [];
+    // Server returns lowercase keys: standardid, height, classname,
+    // tshirtSize, schoolname, dob, bloodtype, healthstatus, foodtype.
+    // (Some deployments also include parent/address fields — kept as
+    // fallbacks for cross-account compatibility.)
     const fieldMap = <String, List<dynamic>>{
-      'icNo':         [Icons.credit_card_outlined,  'IC Number'],
+      'dob':          [Icons.cake_outlined,          'Date of Birth'],
+      'schoolname':   [Icons.school_outlined,        'School'],
+      'school':       [Icons.school_outlined,        'School'],
+      'classname':    [Icons.class_outlined,         'Class'],
+      'standardid':   [Icons.format_list_numbered,   'Standard'],
+      'height':       [Icons.height,                 'Height'],
+      'tshirtSize':   [Icons.checkroom_outlined,     'T-shirt Size'],
+      'bloodtype':    [Icons.bloodtype_outlined,     'Blood Type'],
+      'healthstatus': [Icons.health_and_safety_outlined, 'Health Status'],
+      'foodtype':     [Icons.restaurant_outlined,    'Food Preference'],
+      // Cross-account fallbacks (legacy/instructor accounts).
+      'icNo':         [Icons.credit_card_outlined,   'IC Number'],
       'passportNo':   [Icons.book_outlined,          'Passport'],
       'parentName':   [Icons.family_restroom,        'Parent Name'],
       'parentPhone':  [Icons.phone_in_talk_outlined, 'Parent Phone'],
       'address':      [Icons.home_outlined,          'Address'],
-      'dob':          [Icons.cake_outlined,          'Date of Birth'],
       'gender':       [Icons.person_outline,         'Gender'],
       'nationality':  [Icons.flag_outlined,          'Nationality'],
-      'school':       [Icons.school_outlined,        'School'],
     };
     final rows = <_InfoRow>[];
+    final seenLabels = <String>{};
     for (final entry in fieldMap.entries) {
-      final v = (extra[entry.key] ?? '').toString().trim();
-      if (v.isNotEmpty) {
-        rows.add(_InfoRow(entry.value[0] as IconData, entry.value[1] as String, v));
+      final raw = extra[entry.key];
+      if (raw == null) continue;
+      var v = raw.toString().trim();
+      if (v.isEmpty || v == '0' || v == '0.0') continue;
+      // Truncate ISO date stamps to yyyy-MM-dd.
+      if (entry.key == 'dob' && v.length >= 10 && v.contains('T')) {
+        v = v.substring(0, 10);
       }
+      final label = entry.value[1] as String;
+      if (seenLabels.contains(label)) continue;
+      seenLabels.add(label);
+      rows.add(_InfoRow(entry.value[0] as IconData, label, v));
     }
     return rows;
   }
@@ -593,12 +918,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final c = context.appColors;
     final theme = context.watch<ThemeProvider>();
     final session = context.watch<UserSession>();
-    final liveName = session.displayName.isNotEmpty ? session.displayName : kStudent.name;
-    final liveId = session.registrationNo.isNotEmpty ? session.registrationNo : kStudent.id;
-    final livePhoto = session.studentPhoto.isNotEmpty ? session.studentPhoto : kStudent.photo;
-    final liveMembership = session.clubName.isNotEmpty ? session.clubName : kStudent.membership;
-    final liveBelt = session.currentGrade.isNotEmpty ? session.currentGrade : kStudent.belt;
-    final liveLevel = session.tCenterName.isNotEmpty ? session.tCenterName : kStudent.level;
+    final liveName = session.displayName.isNotEmpty ? session.displayName : 'Student';
+    final liveId = session.registrationNo.isNotEmpty ? session.registrationNo : '—';
+    final livePhoto = session.studentPhoto.isNotEmpty ? session.studentPhoto : '';
+    final liveMembership = session.clubName.isNotEmpty ? session.clubName : '';
+    final liveBelt = session.currentGrade.isNotEmpty ? session.currentGrade : '';
+    final liveLevel = session.tCenterName.isNotEmpty ? session.tCenterName : '';
     return Container(
       color: c.background,
       child: SingleChildScrollView(
@@ -628,7 +953,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.6), width: 2)),
-                  child: CircleAvatar(radius: 45, backgroundImage: CachedNetworkImageProvider(livePhoto)),
+                  child: CircleAvatar(
+                    radius: 45,
+                    backgroundColor: Colors.white.withOpacity(0.22),
+                    backgroundImage: livePhoto.isNotEmpty
+                        ? CachedNetworkImageProvider(livePhoto)
+                        : null,
+                    child: livePhoto.isNotEmpty
+                        ? null
+                        : Text(
+                            liveName.isNotEmpty ? liveName[0].toUpperCase() : '?',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 38,
+                                fontWeight: FontWeight.w900),
+                          ),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(liveName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),

@@ -145,21 +145,32 @@ class Api {
   static Future<dynamic> outstandingCollectionCountList(Object typeId) =>
       ApiService.get('/Outstanding/CollectionCountList/${_enc(typeId)}');
 
+  /// GET per swag.json — server treats the typeId path param as the
+  /// whole payload, no body required.
   static Future<dynamic> outstandingUpdateCollectionCount(Object typeId) =>
-      ApiService.post('/Outstanding/UpdateCollectionCount/${_enc(typeId)}',
-          const <String, dynamic>{});
+      ApiService.get('/Outstanding/UpdateCollectionCount/${_enc(typeId)}');
 
   // ---------------------------------------------------------------------------
   // Payment
   // ---------------------------------------------------------------------------
-  static Future<dynamic> paymentInitiate(Map<String, dynamic> body) =>
-      ApiService.post('/Payment/Initiate', body);
+  // Initiate + Finalizing are GET in the swagger; the body's filter fields
+  // can be appended as query params if needed. Most callers send empty.
+  static Future<dynamic> paymentInitiate([Map<String, dynamic>? body]) =>
+      ApiService.get('/Payment/Initiate${_qs(body)}');
 
-  static Future<dynamic> paymentFinalizing(Map<String, dynamic> body) =>
-      ApiService.post('/Payment/Finalizing', body);
+  static Future<dynamic> paymentFinalizing([Map<String, dynamic>? body]) =>
+      ApiService.get('/Payment/Finalizing${_qs(body)}');
 
-  static Future<dynamic> paymentCallback(Map<String, dynamic> body) =>
-      ApiService.post('/Payment/Callback', body);
+  /// Build a `?k=v&k2=v2` query string from a map. Returns empty when
+  /// the map is null/empty.
+  static String _qs(Map<String, dynamic>? body) {
+    if (body == null || body.isEmpty) return '';
+    final pairs = body.entries
+        .where((e) => e.value != null)
+        .map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value.toString())}')
+        .join('&');
+    return pairs.isEmpty ? '' : '?$pairs';
+  }
 
   static Future<dynamic> paymentCompleted(Object status) =>
       ApiService.get('/Payment/Completed/${_enc(status)}');
@@ -197,9 +208,10 @@ class Api {
   static Future<dynamic> profileSend2ClubHelpDesk(Map<String, dynamic> body) =>
       ApiService.post('/Profile/Send2ClubHelpDesk', body);
 
+  /// GET per swag.json — body fields go on the query string.
   static Future<dynamic> profileUpdateNotification2Read(
-          Map<String, dynamic> body) =>
-      ApiService.post('/Profile/UpdateNotification2Read', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.get('/Profile/UpdateNotification2Read${_qs(body)}');
 
   static Future<dynamic> profileUpdateNotificationAction(
           Map<String, dynamic> body) =>
@@ -232,49 +244,68 @@ class Api {
   static Future<dynamic> reportsTrainingCenters() =>
       ApiService.get('/Reports/TrainingCenters');
 
-  // NOTE: Swagger marks all of the below as POST with ReportRequestViewModel
+  // Swagger marks all of the below as POST with ReportRequestViewModel
   // body (sCenterId / tCenterId / eCenterId / tTimeId / fromDate / toDate /
-  // reportType / sourceKeyId — all optional). Empty body returns the default
-  // (recent) dataset. Pass filters when needed.
+  // reportType / sourceKeyId). The server is strict: `reportType` must be
+  // a STRING (not int) and date fields must be ISO-8601. Pass an empty
+  // map to get the default dataset — [_reportBody] fills in safe defaults.
+  static Map<String, dynamic> _reportBody([Map<String, dynamic>? caller]) {
+    final now = DateTime.now();
+    final from = DateTime(now.year - 2, 1, 1).toIso8601String();
+    final to   = DateTime(now.year + 2, 12, 31).toIso8601String();
+    final defaults = <String, dynamic>{
+      'sCenterId': 0,
+      'tCenterId': 0,
+      'eCenterId': 0,
+      'tTimeId': 0,
+      'fromDate': from,
+      'toDate': to,
+      'reportType': '',  // STRING — server rejects int
+      'sourceKeyId': 0,
+    };
+    if (caller == null || caller.isEmpty) return defaults;
+    return {...defaults, ...caller};
+  }
+
   static Future<dynamic> reportsAttendance(
-          [Map<String, dynamic> body = const {}]) =>
-      ApiService.post('/Reports/Attendance', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.post('/Reports/Attendance', _reportBody(body));
 
   static Future<dynamic> reportsStudentDetails(
-          [Map<String, dynamic> body = const {}]) =>
-      ApiService.post('/Reports/StudentDetails', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.post('/Reports/StudentDetails', _reportBody(body));
 
   static Future<dynamic> reportsGradingSchedule(
-          [Map<String, dynamic> body = const {}]) =>
-      ApiService.post('/Reports/GradingSchedule', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.post('/Reports/GradingSchedule', _reportBody(body));
 
   static Future<dynamic> reportsReceipts(
-          [Map<String, dynamic> body = const {}]) =>
-      ApiService.post('/Reports/Receipts', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.post('/Reports/Receipts', _reportBody(body));
 
   static Future<dynamic> reportsPurchaseRequests(
-          [Map<String, dynamic> body = const {}]) =>
-      ApiService.post('/Reports/PurchaseRequests', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.post('/Reports/PurchaseRequests', _reportBody(body));
 
   static Future<dynamic> reportsPaymentSlips(
-          [Map<String, dynamic> body = const {}]) =>
-      ApiService.post('/Reports/PaymentSlips', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.post('/Reports/PaymentSlips', _reportBody(body));
 
   static Future<dynamic> reportsTournamentSummary(
-          [Map<String, dynamic> body = const {}]) =>
-      ApiService.post('/Reports/TournamentSummary', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.post('/Reports/TournamentSummary', _reportBody(body));
 
   static Future<dynamic> reportsReimbursement(
-          [Map<String, dynamic> body = const {}]) =>
-      ApiService.post('/Reports/Reimbursement', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.post('/Reports/Reimbursement', _reportBody(body));
 
   static Future<dynamic> reportsContribution(
-          [Map<String, dynamic> body = const {}]) =>
-      ApiService.post('/Reports/Contribution', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.post('/Reports/Contribution', _reportBody(body));
 
   static Future<dynamic> reportsActivity(
-          [Map<String, dynamic> body = const {}]) =>
-      ApiService.post('/Reports/Activity', body);
+          [Map<String, dynamic>? body]) =>
+      ApiService.post('/Reports/Activity', _reportBody(body));
 
   // ---------------------------------------------------------------------------
   // Utilities

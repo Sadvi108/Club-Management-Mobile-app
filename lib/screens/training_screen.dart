@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../data/mock_data.dart';
 import '../services/api.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_icon_button.dart';
@@ -131,10 +134,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
               const SizedBox(height: 20),
               Text('Enrolled Programs', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 14),
-              ...kPrograms.map((p) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _programCard(context, c, p),
-                  )),
+              _buildLivePrograms(c),
               // Add new program CTA
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -301,6 +301,156 @@ class _TrainingScreenState extends State<TrainingScreen> {
           ]),
         ),
       );
+
+  /// Renders one enrolled-program card derived from `session.myInfo`.
+  /// Empty state shows when no relevant fields are returned.
+  Widget _buildLivePrograms(AppColors c) {
+    final session = context.watch<UserSession>();
+    final info = session.myInfo ?? const <String, dynamic>{};
+    final sport   = (info['sport']?.toString().trim().isNotEmpty == true)
+        ? info['sport'].toString()
+        : (session.tCenterName.isNotEmpty ? session.tCenterName : '');
+    final trainer = session.instructorName;
+    final level   = session.currentGrade;
+    final pctStr  = session.attendancePercentage;
+    final progress = num.tryParse(pctStr.replaceAll(RegExp(r'[^\d.]'), ''))?.toInt() ?? 0;
+
+    if (sport.isEmpty && trainer.isEmpty && level.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(Radii.lg),
+          border: Border.all(color: c.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.fitness_center_outlined, color: c.textMuted, size: 20),
+              const SizedBox(width: 10),
+              Text('No active programs yet',
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800)),
+            ]),
+            const SizedBox(height: 8),
+            Text(
+              'Enrol via the academy or contact the help desk to get started.',
+              style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  height: 1.4),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.support_agent, size: 16),
+              label: const Text('Help Desk'),
+              onPressed: () => context.go('/profile'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final color = c.primary;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(Radii.xl),
+          boxShadow: Shadows.card(c),
+          border: c.isDark ? Border.all(color: c.border) : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Icon(Icons.fitness_center, color: color, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(sport.isNotEmpty ? sport : 'Training',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800)),
+                    if (trainer.isNotEmpty)
+                      Text(trainer,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: c.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              if (level.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(level,
+                      style: TextStyle(
+                          color: color,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800)),
+                ),
+            ]),
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: Stack(children: [
+                Container(height: 6, color: c.borderLight),
+                FractionallySizedBox(
+                  widthFactor: (progress / 100).clamp(0.0, 1.0),
+                  child: Container(
+                    height: 6,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: c.gradient),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 6),
+            Row(children: [
+              Text('Attendance',
+                  style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Text('$progress%',
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800)),
+            ]),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _programCard(BuildContext context, AppColors c, program) {
     return Container(

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
+import 'list_search.dart';
 
 /// Reusable notification bell with a live unread badge.
 ///
@@ -106,17 +107,51 @@ class NotificationBell extends StatelessWidget {
   }
 }
 
-class _NotificationsSheet extends StatelessWidget {
+class _NotificationsSheet extends StatefulWidget {
   const _NotificationsSheet();
+
+  @override
+  State<_NotificationsSheet> createState() => _NotificationsSheetState();
+}
+
+class _NotificationsSheetState extends State<_NotificationsSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+  bool _unreadOnly = false;
+  String? _typeFilter;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
     final session = context.watch<UserSession>();
-    final items = (session.notifications ?? const [])
+    final allItems = (session.notifications ?? const [])
         .whereType<Map>()
         .map((m) => Map<String, dynamic>.from(m))
         .toList();
+    final typeOptions = <String>{
+      for (final r in allItems)
+        if ((r['text'] ?? '').toString().trim().isNotEmpty)
+          r['text'].toString().trim(),
+    }.toList()
+      ..sort();
+    final q = _query.trim().toLowerCase();
+    final items = allItems.where((n) {
+      if (_unreadOnly && n['isRead'] == true) return false;
+      if (_typeFilter != null &&
+          _typeFilter!.isNotEmpty &&
+          n['text']?.toString() != _typeFilter) return false;
+      if (q.isNotEmpty) {
+        final hay = '${n['text'] ?? ''} ${n['value'] ?? ''}'.toLowerCase();
+        if (!hay.contains(q)) return false;
+      }
+      return true;
+    }).toList();
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
@@ -172,7 +207,7 @@ class _NotificationsSheet extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${session.unreadNotifications} unread · ${items.length} total',
+                        '${session.unreadNotifications} unread · ${allItems.length} total',
                         style: TextStyle(
                           color: c.textSecondary,
                           fontSize: 11.5,
@@ -187,9 +222,40 @@ class _NotificationsSheet extends StatelessWidget {
                   tooltip: 'Refresh',
                   onPressed: () async {
                     await UserSession.instance.refresh();
+                    if (mounted) setState(() {});
                   },
                 ),
               ]),
+              if (allItems.length > 4) ...[
+                const SizedBox(height: 12),
+                ListSearchBar(
+                  hint: 'Search notifications…',
+                  controller: _searchCtrl,
+                  onSearch: (v) => setState(() => _query = v),
+                  filters: [
+                    ListFilter.toggle(
+                      label: 'Unread only',
+                      value: _unreadOnly,
+                      onChanged: (v) => setState(() => _unreadOnly = v),
+                    ),
+                    if (typeOptions.isNotEmpty)
+                      ListFilter(
+                        label: 'Type',
+                        options: typeOptions,
+                        selected: _typeFilter,
+                        onSelected: (v) =>
+                            setState(() => _typeFilter = v),
+                      ),
+                  ],
+                  resultCount: items.length,
+                  totalCount: allItems.length,
+                  onClearAll: () => setState(() {
+                    _query = '';
+                    _unreadOnly = false;
+                    _typeFilter = null;
+                  }),
+                ),
+              ],
             ]),
           ),
           Expanded(

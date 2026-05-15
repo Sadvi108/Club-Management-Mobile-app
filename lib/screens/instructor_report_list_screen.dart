@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
+import '../widgets/list_search.dart';
 
 typedef ReportFetcher = Future<dynamic> Function();
 
@@ -27,6 +28,100 @@ class _InstructorReportListScreenState
   dynamic _data;
   bool _loading = true;
   String? _error;
+
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+  String? _centerFilter;
+  String? _statusFilter;
+  bool _activeOnly = false;
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Searchable string fields for the free-text query.
+  static const _searchKeys = [
+    'name', 'studentName', 'icNo', 'text', 'value', 'code',
+    'instructorName', 'tcName', 'centerName', 'description',
+    'receiptNo', 'invoiceId', 'invoiceDescription',
+  ];
+
+  /// Keys that look like a "training/exam center" column.
+  static const _centerKeys = [
+    'tCenterName', 'tcName', 'centerName', 'eCenterName',
+    'sCenterName', 'trainingCenter',
+  ];
+
+  /// Keys that look like a status enum column.
+  static const _statusKeys = [
+    'paymentStatus', 'examStatus', 'attendanceType', 'transactionType',
+    'status',
+  ];
+
+  /// Collect unique values for the given key set across all rows.
+  List<String> _collect(Iterable<Map<String, dynamic>> rows, List<String> keys) {
+    final set = <String>{};
+    for (final r in rows) {
+      for (final k in keys) {
+        final v = r[k];
+        if (v == null) continue;
+        final s = v.toString().trim();
+        if (s.isEmpty || s == 'null') continue;
+        set.add(s);
+      }
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  /// Apply free-text query + filter chips to the raw row set.
+  List<Map<String, dynamic>> _applyFilters(
+      List<Map<String, dynamic>> rows) {
+    final q = _query.trim().toLowerCase();
+    return rows.where((r) {
+      if (q.isNotEmpty) {
+        final hit = _searchKeys.any((k) {
+          final v = r[k];
+          return v != null && v.toString().toLowerCase().contains(q);
+        });
+        if (!hit) return false;
+      }
+      if (_centerFilter != null && _centerFilter!.isNotEmpty) {
+        final hit = _centerKeys.any((k) =>
+            r[k] != null && r[k].toString() == _centerFilter);
+        if (!hit) return false;
+      }
+      if (_statusFilter != null && _statusFilter!.isNotEmpty) {
+        final hit = _statusKeys.any((k) =>
+            r[k] != null && r[k].toString() == _statusFilter);
+        if (!hit) return false;
+      }
+      if (_activeOnly) {
+        // "Active" heuristic: row has isActive=true, or status/value contains
+        // "active" / "present" / "approved" / "paid", and NOT "inactive" /
+        // "absent" / "pending" / "rejected".
+        final hay = [
+          for (final k in _statusKeys) r[k]?.toString().toLowerCase() ?? '',
+          (r['isActive'] ?? '').toString().toLowerCase(),
+        ].join(' ');
+        final bad = hay.contains('inactive') ||
+            hay.contains('absent') ||
+            hay.contains('pending') ||
+            hay.contains('rejected') ||
+            hay.contains('cancelled');
+        if (bad) return false;
+        final good = hay.contains('active') ||
+            hay.contains('present') ||
+            hay.contains('approved') ||
+            hay.contains('paid') ||
+            (r['isActive'] == true);
+        if (!good) return false;
+      }
+      return true;
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -70,7 +165,12 @@ class _InstructorReportListScreenState
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    final rows = _rows();
+    final allRows = _rows();
+    final centerOptions = _collect(allRows, _centerKeys);
+    final statusOptions = _collect(allRows, _statusKeys);
+    final visible = _applyFilters(allRows);
+    final hasFilterableData =
+        allRows.length > 4 || centerOptions.isNotEmpty || statusOptions.isNotEmpty;
     return Scaffold(
       backgroundColor: c.background,
       body: SafeArea(
@@ -85,7 +185,49 @@ class _InstructorReportListScreenState
                 padding:
                     const EdgeInsets.fromLTRB(Gaps.lg, Gaps.sm, Gaps.lg, 24),
                 children: [
-                  if (rows.isNotEmpty && _error == null) _liveBanner(c),
+                  if (allRows.isNotEmpty && _error == null) _liveBanner(c),
+                  if (hasFilterableData && !_loading && _error == null) ...[
+                    const SizedBox(height: Gaps.sm),
+                    ListSearchBar(
+                      hint: 'Search ${widget.title.toLowerCase()}…',
+                      controller: _searchCtrl,
+                      onSearch: (v) => setState(() => _query = v),
+                      resultCount: visible.length,
+                      totalCount: allRows.length,
+                      filters: [
+                        if (centerOptions.isNotEmpty)
+                          ListFilter(
+                            label: 'Center',
+                            options: centerOptions,
+                            selected: _centerFilter,
+                            onSelected: (v) =>
+                                setState(() => _centerFilter = v),
+                          ),
+                        if (statusOptions.isNotEmpty)
+                          ListFilter(
+                            label: 'Status',
+                            options: statusOptions,
+                            selected: _statusFilter,
+                            onSelected: (v) =>
+                                setState(() => _statusFilter = v),
+                          ),
+                        if (statusOptions.isNotEmpty ||
+                            allRows.any((r) => r.containsKey('isActive')))
+                          ListFilter.toggle(
+                            label: 'Active only',
+                            value: _activeOnly,
+                            onChanged: (v) =>
+                                setState(() => _activeOnly = v),
+                          ),
+                      ],
+                      onClearAll: () => setState(() {
+                        _query = '';
+                        _centerFilter = null;
+                        _statusFilter = null;
+                        _activeOnly = false;
+                      }),
+                    ),
+                  ],
                   const SizedBox(height: Gaps.sm),
                   if (_loading)
                     Padding(
@@ -108,7 +250,7 @@ class _InstructorReportListScreenState
                             color: c.danger, fontWeight: FontWeight.w600),
                       ),
                     )
-                  else if (rows.isEmpty)
+                  else if (visible.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(Gaps.md),
                       decoration: BoxDecoration(
@@ -117,14 +259,16 @@ class _InstructorReportListScreenState
                         border: Border.all(color: c.border),
                       ),
                       child: Text(
-                        'No records.',
+                        allRows.isEmpty
+                            ? 'No records.'
+                            : 'No matches. Adjust filters or clear search.',
                         style: TextStyle(
                             color: c.textSecondary,
                             fontWeight: FontWeight.w600),
                       ),
                     )
                   else
-                    for (final row in rows) _rowCard(c, row),
+                    for (final row in visible) _rowCard(c, row),
                 ],
               ),
             ),
