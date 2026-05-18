@@ -210,16 +210,41 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     }
   }
 
+  /// Robust field readers for /Outstanding/Fetch rows — the API uses
+  /// varying key names across invoice types, so probe a wide set.
+  String _invoiceLabel(Map m, int idx) {
+    for (final k in const [
+      'invoiceName', 'description', 'particulars', 'name', 'invoiceTitle',
+      'item', 'feeType', 'invoiceNo', 'invoiceNumber', 'text'
+    ]) {
+      final v = (m[k] ?? '').toString().trim();
+      if (v.isNotEmpty && v != 'null') return v;
+    }
+    return 'Invoice #${idx + 1}';
+  }
+
+  num _invoiceAmount(Map m) {
+    for (final k in const [
+      'dueAmount', 'dueAmt', 'amountDue', 'amount', 'outstandingAmount',
+      'outstandingAmt', 'balance', 'totalAmount', 'totalDue',
+      'invoiceAmount', 'amtDue', 'value'
+    ]) {
+      final v = m[k];
+      if (v is num) return v;
+      if (v is String) {
+        final n = num.tryParse(v.replaceAll(RegExp(r'[^\d.\-]'), ''));
+        if (n != null) return n;
+      }
+    }
+    return 0;
+  }
+
   num _liveOutstandingTotal() {
     final inv = _outstanding;
     if (inv == null) return 0;
     num total = 0;
     for (final i in inv) {
-      if (i is Map) {
-        final v = i['amount'] ?? i['outstandingAmount'] ?? i['balance'] ?? 0;
-        if (v is num) total += v;
-        if (v is String) total += num.tryParse(v) ?? 0;
-      }
+      if (i is Map) total += _invoiceAmount(i);
     }
     return total;
   }
@@ -279,9 +304,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final ids = <dynamic>[];
     for (final inv in invoices) {
       ids.add(inv['id'] ?? inv['invoiceId'] ?? inv['invoiceID']);
-      final v = inv['amount'] ?? inv['outstandingAmount'] ?? inv['balance'] ?? 0;
-      if (v is num) total += v;
-      if (v is String) total += num.tryParse(v) ?? 0;
+      total += _invoiceAmount(inv);
     }
     String? gatewayUrl;
     String? orderId;
@@ -687,8 +710,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             final idx = e.key;
             final inv = e.value;
             final m = inv is Map ? inv : <dynamic, dynamic>{};
-            final label = (m['invoiceNo'] ?? m['description'] ?? m['text'] ?? 'Invoice').toString();
-            final amount = (m['amount'] ?? m['outstandingAmount'] ?? m['balance'] ?? 0).toString();
+            final label = _invoiceLabel(m, idx);
+            final amount = _invoiceAmount(m).toStringAsFixed(2);
             final selected = _selectedInvoiceIdx.contains(idx);
             return InkWell(
               onTap: () => setState(() {
