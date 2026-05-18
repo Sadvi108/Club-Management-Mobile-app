@@ -284,6 +284,7 @@ class _SimpleListScreen extends StatefulWidget {
 
 class _SimpleListScreenState extends State<_SimpleListScreen> {
   dynamic _data;
+  dynamic _rawResponse;
   bool _loading = true;
   String? _error;
 
@@ -300,9 +301,8 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
     });
     try {
       final resp = await widget.fetcher();
-      final data =
-          resp is Map && resp.containsKey('data') ? resp['data'] : resp;
-      setState(() => _data = data);
+      _rawResponse = resp;
+      setState(() => _data = findRecordList(resp));
     } catch (e) {
       debugPrint('${widget.title} failed: $e');
       setState(() => _error = e.toString());
