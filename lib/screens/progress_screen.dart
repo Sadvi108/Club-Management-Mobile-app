@@ -33,6 +33,8 @@ class ProgressScreen extends StatefulWidget {
 class _ProgressScreenState extends State<ProgressScreen> {
   bool _loading = false;
   Map<String, dynamic>? _live; // merged map of skill/fitness fields
+  List<dynamic> _attendance = const [];
+  List<dynamic> _grading = const [];
 
   @override
   void initState() {
@@ -44,17 +46,18 @@ class _ProgressScreenState extends State<ProgressScreen> {
     setState(() => _loading = true);
     final out = <String, dynamic>{};
     try {
-      // Pull a few endpoints in parallel; ignore individual failures.
+      // Real, per-student sources: attendance records + grading history.
       final results = await Future.wait([
+        _safe(() => Api.reportsAttendance(const {})),
+        _safe(() => Api.reportsGradingSchedule(const {})),
         _safe(Api.reportsActivity),
-        _safe(Api.reportsContribution),
-        _safe(Api.reportsGradingSchedule),
       ]);
-      for (final r in results) {
-        if (r is Map) out.addAll(Map<String, dynamic>.from(r));
-        if (r is List && r.isNotEmpty && r.first is Map) {
-          out.addAll(Map<String, dynamic>.from(r.first as Map));
-        }
+      _attendance = results[0] is List ? results[0] as List : const [];
+      _grading = results[1] is List ? results[1] as List : const [];
+      final activity = results[2];
+      if (activity is Map) out.addAll(Map<String, dynamic>.from(activity));
+      if (activity is List && activity.isNotEmpty && activity.first is Map) {
+        out.addAll(Map<String, dynamic>.from(activity.first as Map));
       }
     } catch (e) {
       debugPrint('progress load failed: $e');
@@ -66,6 +69,55 @@ class _ProgressScreenState extends State<ProgressScreen> {
         });
       }
     }
+  }
+
+  /// Attendance rows scoped to the active student (guardian accounts).
+  List<Map> get _scopedAttendance => UserSession.instance
+      .filterByActiveStudent(_attendance)
+      .whereType<Map>()
+      .toList();
+
+  List<Map> get _scopedGrading => UserSession.instance
+      .filterByActiveStudent(_grading)
+      .whereType<Map>()
+      .toList();
+
+  bool _isPresent(Map r) {
+    final s = (r['attendanceType'] ?? r['status'] ?? r['value'] ?? '')
+        .toString()
+        .toLowerCase();
+    return s.contains('present') || s == '1' || s == 'p' || s == 'yes';
+  }
+
+  /// {attendancePct, classes, classesThisMonth, gradesPassed, gradesTotal}.
+  Map<String, int> _realStats() {
+    final att = _scopedAttendance;
+    final present = att.where(_isPresent).toList();
+    final pct =
+        att.isEmpty ? 0 : ((present.length / att.length) * 100).round();
+    final now = DateTime.now();
+    int thisMonth = 0;
+    for (final r in present) {
+      final d = DateTime.tryParse(
+          (r['recordedTime'] ?? r['date'] ?? '').toString());
+      if (d != null && d.year == now.year && d.month == now.month) {
+        thisMonth++;
+      }
+    }
+    final grading = _scopedGrading;
+    final passed = grading.where((g) {
+      final s = (g['examStatus'] ?? g['remarks'] ?? '')
+          .toString()
+          .toLowerCase();
+      return s.contains('pass');
+    }).length;
+    return {
+      'attendancePct': pct,
+      'classes': present.length,
+      'classesThisMonth': thisMonth,
+      'gradesPassed': passed,
+      'gradesTotal': grading.length,
+    };
   }
 
   Future<dynamic> _safe(Future<dynamic> Function() fn) async {
@@ -113,19 +165,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final w = MediaQuery.of(context).size.width;
     final compact = w < 380;
 
-    // Live numbers (with falls-back used until /Reports/Activity returns).
-    final fitness = _num(['fitness', 'fitnessScore', 'overallScore'], 82).toInt();
-    final deltaThisMonth = _num(['monthlyDelta', 'thisMonth', 'pointsThisMonth'], 12).toInt();
+    final stats = _realStats();
+    final fitness = stats['attendancePct']!;
+    final deltaThisMonth = stats['classesThisMonth']!;
     final nextBelt = _str(['nextBelt', 'nextGrade'],
-        session.currentGrade.isNotEmpty ? 'next' : 'Purple Belt');
-
-    final skills = [
-      _Skill('Speed',      _num(['speed', 'skillSpeed'], 78).toInt(),      const Color(0xFFF59E0B)),
-      _Skill('Power',      _num(['power', 'skillPower'], 72).toInt(),      const Color(0xFFEF4444)),
-      _Skill('Technique',  _num(['technique', 'skillTechnique'], 85).toInt(), const Color(0xFFF97316)),
-      _Skill('Agility',    _num(['agility', 'skillAgility'], 80).toInt(),    const Color(0xFF10B981)),
-      _Skill('Endurance',  _num(['endurance', 'skillEndurance'], 75).toInt(), const Color(0xFF0EA5E9)),
-    ];
+        session.currentGrade.isNotEmpty ? session.currentGrade : '');
+    final gradingRows = _scopedGrading;
 
     return Scaffold(
       backgroundColor: c.background,
@@ -140,9 +185,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
               _buildHeader(c, deltaThisMonth, context),
               const SizedBox(height: 18),
               _buildOverallCard(c, fitness, deltaThisMonth, nextBelt, compact: compact),
+              const SizedBox(height: 14),
+              _buildMetricRow(c, stats),
               const SizedBox(height: 22),
               Text(
-                'Skill breakdown',
+                'Grading history',
                 style: TextStyle(
                     color: c.textPrimary,
                     fontSize: 20,
@@ -150,17 +197,42 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     letterSpacing: -0.3),
               ),
               const SizedBox(height: 12),
-              ...skills.map((s) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _buildSkillCard(c, s),
-                  )),
-              const SizedBox(height: 14),
               if (_loading)
                 Center(
                     child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 24),
                   child: CircularProgressIndicator(color: c.primary),
-                )),
+                ))
+              else if (gradingRows.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: c.surface,
+                    borderRadius: BorderRadius.circular(Radii.lg),
+                    border: c.isDark ? Border.all(color: c.border) : null,
+                    boxShadow: Shadows.card(c),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.school_outlined,
+                        size: 20, color: c.textMuted),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'No grading records yet. They appear here after your first belt evaluation.',
+                        style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            height: 1.4),
+                      ),
+                    ),
+                  ]),
+                )
+              else
+                ...gradingRows.map((g) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _buildGradingCard(c, g),
+                    )),
             ],
           )),
         ),
@@ -283,8 +355,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 const SizedBox(height: 6),
                 Text(
                   delta > 0
-                      ? 'Up $delta points this month — keep that streak going for the $nextBelt evaluation.'
-                      : 'Every session counts — pull up to the $nextBelt mark by training consistently.',
+                      ? 'Attended $delta ${delta == 1 ? "class" : "classes"} this month. ${nextBelt.isNotEmpty ? "Keep it up for the $nextBelt evaluation." : "Keep the consistency going."}'
+                      : 'No classes logged this month yet. Attend a session to lift your attendance score.',
                   style: TextStyle(
                       color: c.textSecondary,
                       fontSize: 12,
@@ -299,57 +371,134 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
-  // ─── Skill row card ────────────────────────────────────────────────────
-  Widget _buildSkillCard(AppColors c, _Skill s) {
+  // ─── Real-metric summary row (3 tiles from live data) ──────────────────
+  Widget _buildMetricRow(AppColors c, Map<String, int> stats) {
+    Widget tile(IconData icon, String value, String label) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(Radii.lg),
+              border: c.isDark ? Border.all(color: c.border) : null,
+              boxShadow: Shadows.card(c),
+            ),
+            child: Column(children: [
+              Icon(icon, color: c.primary, size: 20),
+              const SizedBox(height: 6),
+              Text(value,
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800)),
+              const SizedBox(height: 2),
+              Text(label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        );
+    return Row(children: [
+      tile(Icons.event_available, '${stats['classes']}', 'Classes\nattended'),
+      const SizedBox(width: 10),
+      tile(Icons.calendar_month, '${stats['classesThisMonth']}',
+          'This\nmonth'),
+      const SizedBox(width: 10),
+      tile(Icons.workspace_premium,
+          '${stats['gradesPassed']}/${stats['gradesTotal']}',
+          'Gradings\npassed'),
+    ]);
+  }
+
+  // ─── Grading history card (one real /Reports/GradingSchedule row) ──────
+  Widget _buildGradingCard(AppColors c, Map g) {
+    final current = (g['currentGrade'] ?? '').toString();
+    final next = (g['nextGrade'] ?? '').toString();
+    final examDateRaw = (g['examDate'] ?? '').toString();
+    final examDate =
+        examDateRaw.length >= 10 ? examDateRaw.substring(0, 10) : examDateRaw;
+    final status = (g['examStatus'] ?? g['remarks'] ?? '').toString().trim();
+    final payStatus = (g['paymentStatus'] ?? '').toString().trim();
+    final passed = status.toLowerCase().contains('pass');
+    final statusColor = passed
+        ? c.success
+        : (status.isEmpty ? c.textMuted : c.danger);
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: BorderRadius.circular(Radii.lg),
         border: c.isDark ? Border.all(color: c.border) : null,
         boxShadow: Shadows.card(c),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Expanded(
-              child: Text(
-                s.name,
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700),
-              ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
-            Text(
-              '${s.value}',
-              style: TextStyle(
-                  color: s.color, fontSize: 14, fontWeight: FontWeight.w800),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: Stack(children: [
-              Container(height: 8, color: c.borderLight),
-              FractionallySizedBox(
-                widthFactor: (s.value / 100).clamp(0.0, 1.0),
-                child: Container(height: 8, color: s.color),
-              ),
-            ]),
+            alignment: Alignment.center,
+            child: Icon(
+                passed ? Icons.check_circle : Icons.school_outlined,
+                color: statusColor, size: 19),
           ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  next.isNotEmpty && next != current
+                      ? '$current → $next'
+                      : (current.isNotEmpty ? current : 'Grading'),
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800),
+                ),
+                if (examDate.isNotEmpty)
+                  Text('Exam: $examDate',
+                      style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          if (status.isNotEmpty)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(status,
+                  style: TextStyle(
+                      color: statusColor,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800)),
+            ),
+        ]),
+        if (payStatus.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Row(children: [
+            Icon(Icons.payments_outlined, size: 13, color: c.textMuted),
+            const SizedBox(width: 5),
+            Text('Payment: $payStatus',
+                style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600)),
+          ]),
         ],
-      ),
+      ]),
     );
   }
-}
-
-class _Skill {
-  final String name;
-  final int value;
-  final Color color;
-  const _Skill(this.name, this.value, this.color);
 }
 
 /// Custom-painted fitness ring (no extra dep needed). Renders a gradient

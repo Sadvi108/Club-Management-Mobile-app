@@ -20,6 +20,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
   List<dynamic>? _centers;
   List<dynamic>? _instructors;
   List<dynamic>? _times;
+  List<dynamic>? _attendance;
   Object? _selectedCenterId;
   bool _loading = false;
   bool _timesLoading = false;
@@ -28,6 +29,53 @@ class _TrainingScreenState extends State<TrainingScreen> {
   void initState() {
     super.initState();
     _loadInitial();
+  }
+
+  /// Live training summary computed from /Reports/Attendance rows.
+  /// Returns {streak, classes, percent} — all real, all per-account.
+  Map<String, int> _trainingStats() {
+    final rows = UserSession.instance
+        .filterByActiveStudent(_attendance)
+        .whereType<Map>()
+        .toList();
+    if (rows.isEmpty) {
+      return const {'streak': 0, 'classes': 0, 'percent': 0};
+    }
+    bool isPresent(Map r) {
+      final s = (r['attendanceType'] ?? r['status'] ?? r['value'] ?? '')
+          .toString()
+          .toLowerCase();
+      return s.contains('present') || s == '1' || s == 'p' || s == 'yes';
+    }
+
+    final present = rows.where(isPresent).toList();
+    final classes = present.length;
+    final percent =
+        rows.isEmpty ? 0 : ((classes / rows.length) * 100).round();
+
+    // Streak: count consecutive calendar days (ending at the most recent
+    // present record) that have a present row.
+    final days = <DateTime>{};
+    for (final r in present) {
+      final raw = (r['recordedTime'] ?? r['date'] ?? '').toString();
+      final d = DateTime.tryParse(raw);
+      if (d != null) days.add(DateTime(d.year, d.month, d.day));
+    }
+    int streak = 0;
+    if (days.isNotEmpty) {
+      final sorted = days.toList()..sort((a, b) => b.compareTo(a));
+      streak = 1;
+      var cursor = sorted.first;
+      for (var i = 1; i < sorted.length; i++) {
+        if (sorted[i] == cursor.subtract(const Duration(days: 1))) {
+          streak++;
+          cursor = sorted[i];
+        } else {
+          break;
+        }
+      }
+    }
+    return {'streak': streak, 'classes': classes, 'percent': percent};
   }
 
   Future<List<dynamic>?> _safeList(Future<dynamic> Function() fn) async {
@@ -47,6 +95,8 @@ class _TrainingScreenState extends State<TrainingScreen> {
     await Future.wait([
       _safeList(Api.listingTrainingCenters).then((v) => _centers = v),
       _safeList(Api.listingInstructors).then((v) => _instructors = v),
+      _safeList(() => Api.reportsAttendance(const {}))
+          .then((v) => _attendance = v),
     ]);
     if (mounted) setState(() => _loading = false);
   }
@@ -68,6 +118,8 @@ class _TrainingScreenState extends State<TrainingScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
+    context.watch<UserSession>(); // re-scope on student switch
+    final stats = _trainingStats();
     return Container(
       color: c.background,
       child: CustomScrollView(
@@ -75,13 +127,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
           SliverToBoxAdapter(
             child: AppHeader(
               title: 'My Training',
-              subtitle: '3 active programs',
-              trailing: AppIconButton(
-                icon: Icons.tune,
-                onPressed: () => showFilterSheet(context),
-                backgroundColor: c.surfaceAlt,
-                foregroundColor: c.primary,
-              ),
+              subtitle: '${stats['classes']} classes attended',
             ),
           ),
           SliverPadding(
@@ -104,21 +150,32 @@ class _TrainingScreenState extends State<TrainingScreen> {
                       Text('WEEKLY STREAK', style: TextStyle(color: Color(0xFFFFF7ED), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
                     ]),
                     const SizedBox(height: 6),
-                    RichText(text: const TextSpan(
+                    RichText(text: TextSpan(
                       children: [
-                        TextSpan(text: '12 ', style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w800, letterSpacing: -1)),
-                        TextSpan(text: 'days', style: TextStyle(color: Color(0xCCFFFFFF), fontSize: 16, fontWeight: FontWeight.w500)),
+                        TextSpan(text: '${stats['streak']} ', style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w800, letterSpacing: -1)),
+                        const TextSpan(text: 'days', style: TextStyle(color: Color(0xCCFFFFFF), fontSize: 16, fontWeight: FontWeight.w500)),
                       ],
                     )),
                     const SizedBox(height: 4),
-                    const Text('You\'re on fire! Don\'t break the chain.', style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 12)),
+                    Text(
+                      _loading
+                          ? 'Loading your training record…'
+                          : (stats['streak']! > 0
+                              ? "You're on fire! Don't break the chain."
+                              : 'Attend a class to start your streak.'),
+                      style: const TextStyle(color: Color(0xE6FFFFFF), fontSize: 12),
+                    ),
                     const SizedBox(height: 16),
                     Row(children: [
-                      _heroStat('24', 'Classes'),
+                      _heroStat('${stats['classes']}', 'Classes'),
                       const SizedBox(width: 12),
-                      _heroStat('18h', 'Trained'),
+                      _heroStat('${stats['percent']}%', 'Attendance'),
                       const SizedBox(width: 12),
-                      _heroStat('3', 'Sports'),
+                      _heroStat(
+                          UserSession.instance.currentGrade.isNotEmpty
+                              ? UserSession.instance.currentGrade
+                              : '—',
+                          'Grade'),
                     ]),
                   ],
                 ),

@@ -34,13 +34,11 @@ class _FilterSheetState extends State<_FilterSheet> {
   List<dynamic>? _reportsTrainingCenters;
   List<dynamic>? _reportsStudentCenters;
   List<dynamic>? _genericDropdown;
-  List<dynamic>? _students;
   bool _loading = true;
 
   dynamic _scId;
   dynamic _tcId;
   dynamic _examId;
-  dynamic _studentId;
   dynamic _genericId;
 
   @override
@@ -79,19 +77,6 @@ class _FilterSheetState extends State<_FilterSheet> {
       _genericDropdown = results[5];
       _loading = false;
     });
-  }
-
-  Future<void> _loadStudents(dynamic tcId) async {
-    if (tcId == null) return;
-    try {
-      final r = await Api.listingStudentListByTcId(tcId);
-      List<dynamic>? list;
-      if (r is List) list = r;
-      if (r is Map && r['data'] is List) list = r['data'] as List;
-      if (mounted) setState(() => _students = list);
-    } catch (e) {
-      debugPrint('listingStudentListByTcId failed: $e');
-    }
   }
 
   Future<void> _loadTrainingByScId(dynamic scId) async {
@@ -225,20 +210,12 @@ class _FilterSheetState extends State<_FilterSheet> {
                   label: 'Training Center',
                   items: _trainingCenters ?? _reportsTrainingCenters,
                   value: _tcId,
-                  onChanged: (v) {
-                    setState(() => _tcId = v);
-                    _loadStudents(v);
-                  }),
+                  onChanged: (v) => setState(() => _tcId = v)),
               _dropdown(
                   label: 'Exam Center',
                   items: _examCenters,
                   value: _examId,
                   onChanged: (v) => setState(() => _examId = v)),
-              _dropdown(
-                  label: 'Student',
-                  items: _students,
-                  value: _studentId,
-                  onChanged: (v) => setState(() => _studentId = v)),
               _dropdown(
                   label: 'Report Type',
                   items: _genericDropdown,
@@ -250,7 +227,6 @@ class _FilterSheetState extends State<_FilterSheet> {
                   'studentCenterId': _scId,
                   'trainingCenterId': _tcId,
                   'examCenterId': _examId,
-                  'studentId': _studentId,
                   'reportTypeId': _genericId,
                 }),
                 borderRadius: BorderRadius.circular(Radii.md),

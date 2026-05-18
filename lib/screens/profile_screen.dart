@@ -961,6 +961,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Prominent two-up switcher: Switch Student + Switch Club. Each shows
+  /// the current selection so the user always knows the active context.
+  Widget _switcherRow(AppColors c, UserSession session) {
+    Widget card(IconData icon, String label, String value, VoidCallback tap) {
+      return Expanded(
+        child: InkWell(
+          onTap: tap,
+          borderRadius: BorderRadius.circular(Radii.lg),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(Radii.lg),
+              border: c.isDark ? Border.all(color: c.border) : null,
+              boxShadow: Shadows.card(c),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(
+                        color: c.primary.withOpacity(0.12),
+                        shape: BoxShape.circle),
+                    child: Icon(icon, color: c.primary, size: 17),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.unfold_more, color: c.textMuted, size: 16),
+                ]),
+                const SizedBox(height: 10),
+                Text(label.toUpperCase(),
+                    style: TextStyle(
+                        color: c.textMuted,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1)),
+                const SizedBox(height: 2),
+                Text(value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final club = session.clubDisplayName;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Gaps.xl),
+      child: Row(children: [
+        card(Icons.swap_horiz, 'Active student', session.displayName,
+            _openSwitchStudent),
+        const SizedBox(width: 12),
+        card(Icons.business, 'Club', club.isNotEmpty ? club : 'Switch club',
+            _openSwitchClub),
+      ]),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
@@ -1077,6 +1142,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
 
+            // Prominent switcher row — Switch Student / Switch Club.
+            // Kept near the top so guardians don't have to scroll.
+            _switcherRow(c, session),
+            const SizedBox(height: 12),
+
             // Personal info card
             _personalInfoCard(c, session),
             const SizedBox(height: 12),
@@ -1119,8 +1189,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
 
             const SizedBox(height: 12),
-            _actionTile(c, Icons.swap_horiz, 'Switch Student', _openSwitchStudent),
-            _actionTile(c, Icons.business, 'Switch Club', _openSwitchClub),
             _actionTile(c, Icons.support_agent, 'Help Desk', _openHelpDesk),
             _actionTile(c, Icons.badge_outlined, 'Student Details', _openStudentDetails),
             _actionTile(c, Icons.shopping_bag_outlined, 'My Purchases', _openMyPurchases),

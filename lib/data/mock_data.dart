@@ -18,19 +18,15 @@ const kStudent = Student(
   nextPayment: NextPayment(amount: 480, dueDate: '28 Feb 2026', label: 'Monthly Membership'),
 );
 
+// Quick-access tiles on the home screen. One tile per destination — no
+// duplicate routes, no dead-ends. Each maps to a real registered route.
 const kQuickCards = <QuickCard>[
   QuickCard('attendance', 'Attendance', Icons.check_circle_outline, Color(0xFF10B981), '/attendance'),
-  QuickCard('classes', "Today's Classes", Icons.flash_on, Color(0xFFF59E0B), '/schedule'),
-  QuickCard('trainer', 'My Trainer', Icons.person, Color(0xFF8B5CF6), '/training'),
   QuickCard('timetable', 'Timetable', Icons.calendar_month, Color(0xFF0EA5E9), '/schedule'),
-  QuickCard('fees', 'Fees Due', Icons.account_balance_wallet, Color(0xFFEF4444), '/payments'),
-  QuickCard('payments', 'Payment History', Icons.receipt_long, Color(0xFF14B8A6), '/payments'),
+  QuickCard('trainer', 'My Trainer', Icons.person, Color(0xFF8B5CF6), '/training'),
+  QuickCard('payments', 'Payments', Icons.receipt_long, Color(0xFF14B8A6), '/payments'),
   QuickCard('progress', 'Progress', Icons.trending_up, Color(0xFF6366F1), '/progress'),
-  QuickCard('belt', 'Belt / Rank', Icons.workspace_premium, Color(0xFFEAB308), '/progress'),
   QuickCard('events', 'Events', Icons.emoji_events, Color(0xFFF97316), '/events'),
-  QuickCard('competition', 'Competition', Icons.military_tech, Color(0xFFDB2777), '/events'),
-  QuickCard('chat', 'Chat Academy', Icons.chat_bubble, Color(0xFF22C55E), '/profile'),
-  QuickCard('more', 'More', Icons.apps, Color(0xFF64748B), '/profile'),
 ];
 
 const kPrograms = <Program>[

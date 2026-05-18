@@ -380,7 +380,10 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
     final amount = _readAmount(inv);
     final overdue = _isOverdue(dueDate);
     final initials = _initialFromTitle(title);
-    return Container(
+    return InkWell(
+      onTap: () => _showInvoiceDetail(c, inv, index),
+      borderRadius: BorderRadius.circular(Radii.lg),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: c.surface,
@@ -453,19 +456,174 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                'RM ${amount.toStringAsFixed(2)}',
-                style: TextStyle(
-                  color: overdue ? c.danger : c.primary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+              Row(children: [
+                Text(
+                  'RM ${amount.toStringAsFixed(2)}',
+                  style: TextStyle(
+                    color: overdue ? c.danger : c.primary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-              ),
+                const Spacer(),
+                Text('View details',
+                    style: TextStyle(
+                        color: c.textMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700)),
+                Icon(Icons.chevron_right, size: 16, color: c.textMuted),
+              ]),
             ]),
           ),
         ]),
       ),
+      ),
     );
+  }
+
+  /// Bottom-sheet detail view for one invoice — shows every meaningful
+  /// field from the live /Outstanding/Fetch row.
+  void _showInvoiceDetail(AppColors c, Map<String, dynamic> inv, int index) {
+    final title = _pick(inv,
+        ['invoiceName', 'description', 'particulars', 'name', 'invoiceTitle', 'item', 'feeType']);
+    final invoiceNo = _pick(inv,
+        ['invoiceNo', 'invoiceNumber', 'invNo', 'docNo', 'refNo', 'id']);
+    final dueDate = _pick(inv,
+        ['dueDate', 'invoiceDate', 'date', 'paymentDue', 'expiryDate', 'due_date']);
+    final student = _pick(inv, ['studentName', 'name', 'memberName']);
+    final amount = _readAmount(inv);
+    final overdue = _isOverdue(dueDate);
+
+    // Any remaining non-empty fields not already shown above.
+    const shown = {
+      'invoiceName', 'description', 'particulars', 'name', 'invoiceTitle',
+      'item', 'feeType', 'invoiceNo', 'invoiceNumber', 'invNo', 'docNo',
+      'refNo', 'id', 'dueDate', 'invoiceDate', 'date', 'paymentDue',
+      'expiryDate', 'due_date', 'studentName', 'memberName',
+    };
+    final extras = <MapEntry<String, String>>[];
+    inv.forEach((k, v) {
+      if (shown.contains(k)) return;
+      final s = (v ?? '').toString().trim();
+      if (s.isEmpty || s == 'null' || s == '0' || s == '0.0') return;
+      extras.add(MapEntry(_humanizeKey(k), s));
+    });
+
+    Widget row(String label, String value) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(
+              width: 120,
+              child: Text(label,
+                  style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(value,
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700)),
+            ),
+          ]),
+        );
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
+        ),
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                  child: Container(
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(
+                          color: c.border,
+                          borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              Text(title.isEmpty ? 'Invoice #${index + 1}' : title,
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Row(children: [
+                Text('RM ${amount.toStringAsFixed(2)}',
+                    style: TextStyle(
+                        color: overdue ? c.danger : c.primary,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900)),
+                const SizedBox(width: 10),
+                if (overdue)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: c.danger.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text('OVERDUE',
+                        style: TextStyle(
+                            color: c.danger,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900)),
+                  ),
+              ]),
+              const SizedBox(height: 14),
+              Divider(color: c.border, height: 1),
+              const SizedBox(height: 6),
+              if (invoiceNo.isNotEmpty) row('Invoice No.', invoiceNo),
+              if (dueDate.isNotEmpty) row('Due date', dueDate),
+              if (student.isNotEmpty) row('Student', student),
+              ...extras.map((e) => row(e.key, e.value)),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  ctx.go('/payments');
+                },
+                borderRadius: BorderRadius.circular(Radii.md),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: c.gradient),
+                    borderRadius: BorderRadius.circular(Radii.md),
+                    boxShadow: Shadows.strong(c),
+                  ),
+                  child: const Text('Pay this invoice',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// "studentName" → "Student name", "amountDue" → "Amount due".
+  String _humanizeKey(String k) {
+    final spaced = k.replaceAllMapped(
+        RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
+    if (spaced.isEmpty) return spaced;
+    return spaced[0].toUpperCase() + spaced.substring(1).toLowerCase();
   }
 
   Widget _miniMeta(AppColors c, IconData icon, String text) {

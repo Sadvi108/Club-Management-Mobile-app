@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../data/mock_data.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
@@ -105,23 +106,38 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final clubId = session.authData?['clubId'] ?? session.authData?['clubID'] ?? 0;
     final paymentId = m['paymentId'] ?? m['id'] ?? 0;
     final invoiceId = m['invoiceId'] ?? m['invoiceID'] ?? 0;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+        const SnackBar(content: Text('Preparing receipt…')));
     try {
       final resp = await Api.utilitiesReceiptAsPDF(
           clubId: clubId, paymentId: paymentId, invoiceId: invoiceId);
-      String msg;
+      // Endpoint returns a PDF URL — pull it out of whatever shape comes back.
+      String url = '';
       if (resp is String) {
-        msg = 'PDF: $resp';
-      } else if (resp is Map && resp['data'] is String) {
-        msg = 'PDF: ${resp['data']}';
-      } else {
-        msg = 'PDF response received';
+        url = resp;
+      } else if (resp is Map) {
+        url = (resp['data'] ?? resp['url'] ?? resp['pdfUrl'] ?? '')
+            .toString();
       }
+      url = url.trim();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      if (url.isEmpty || !(url.startsWith('http'))) {
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Receipt not available for this payment.')));
+        return;
+      }
+      final ok = await launchUrl(Uri.parse(url),
+          mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Could not open the receipt.')));
+      }
     } catch (e) {
       debugPrint('ReceiptAsPDF failed: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PDF failed: $e')));
+      messenger.showSnackBar(
+          SnackBar(content: Text('Receipt failed: $e')));
     }
   }
 
@@ -208,14 +224,42 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     return total;
   }
 
-  // ignore: unused_element
-  Future<void> _payInvoices(List<Map<String, dynamic>> invoices) async {
-    try {
-      final body = <String, dynamic>{'invoices': invoices};
-      await Api.outstandingPayInvoices(body);
+  /// Route the payment by the chosen method:
+  ///  • card / FPX-eWallet → online gateway (/Payment/Initiate)
+  ///  • bank transfer       → manual record (/Outstanding/PayInvoices)
+  Future<void> _confirmPayment(String method) async {
+    final invoices = (_outstanding ?? const <dynamic>[])
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    if (invoices.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment submitted')),
+        const SnackBar(content: Text('No outstanding invoices to pay.')),
+      );
+      return;
+    }
+    if (method == 'bank') {
+      await _recordManualPayment(invoices);
+    } else {
+      await _initiateGatewayPayment(invoices);
+    }
+  }
+
+  /// Manual / bank-transfer payment — records the intent via
+  /// /Outstanding/PayInvoices so the club can verify the transfer.
+  Future<void> _recordManualPayment(
+      List<Map<String, dynamic>> invoices) async {
+    try {
+      await Api.outstandingPayInvoices(<String, dynamic>{
+        'invoices': invoices,
+        'paymentMethod': 'bank-transfer',
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text(
+                'Recorded. Transfer to the club account, then upload your slip for verification.')),
       );
       _selectedInvoiceIdx.clear();
       await _loadAll();
@@ -223,7 +267,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       debugPrint('PayInvoices failed: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Payment failed: $e')),
+        SnackBar(content: Text('Could not record payment: $e')),
       );
     }
   }
@@ -261,20 +305,34 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     }
     if (!mounted) return;
     final c = context.appColors;
+    if (gatewayUrl == null || gatewayUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Online payment unavailable — server returned no gateway link.')));
+      return;
+    }
+    // Open the real payment gateway in the browser / external app.
+    final launched = await launchUrl(Uri.parse(gatewayUrl),
+        mode: LaunchMode.externalApplication);
+    if (!mounted) return;
+    if (!launched) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not open the payment gateway.')));
+      return;
+    }
+    // After the user returns from the gateway, let them confirm so the
+    // app can finalize the order against the server.
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Pay via Gateway'),
+        title: const Text('Complete payment'),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Total: RM ${total.toStringAsFixed(2)}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: c.textPrimary)),
           const SizedBox(height: 8),
           if (orderId != null) Text('Order: $orderId', style: TextStyle(fontSize: 12, color: c.textSecondary)),
-          if (gatewayUrl != null) ...[
-            const SizedBox(height: 8),
-            Text('Gateway URL:', style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w700)),
-            SelectableText(gatewayUrl, style: TextStyle(fontSize: 11, color: c.primary)),
-          ] else
-            Text('No gateway URL returned by server.', style: TextStyle(fontSize: 12, color: c.textMuted)),
+          const SizedBox(height: 8),
+          Text('Finish the payment in the gateway tab, then tap below to confirm.',
+              style: TextStyle(fontSize: 12, color: c.textSecondary, height: 1.4)),
         ]),
         actions: [
           TextButton(
@@ -284,18 +342,18 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 await Api.paymentFinalizing(<String, dynamic>{'orderId': orderId});
                 await Api.paymentCompleted('success');
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment finalized')));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment confirmed')));
                 _selectedInvoiceIdx.clear();
                 await _loadAll();
               } catch (e) {
                 debugPrint('finalize failed: $e');
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Finalize failed: $e')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Confirm failed: $e')));
               }
             },
-            child: const Text("I've paid"),
+            child: const Text("I've completed payment"),
           ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Later')),
         ],
       ),
     );
@@ -364,18 +422,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             InkWell(
               onTap: () {
                 Navigator.of(ctx).pop();
-                final method = kPayMethods.firstWhere((m) => m.id == selectedMethod).label;
-                Future.delayed(const Duration(milliseconds: 200), () {
-                  if (!mounted) return;
-                  showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text('Payment Successful'),
-                      content: Text('RM $modalAmount paid via $method'),
-                      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
-                    ),
-                  );
-                });
+                _confirmPayment(selectedMethod);
               },
               borderRadius: BorderRadius.circular(Radii.md),
               child: Container(
@@ -431,12 +478,6 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         SliverToBoxAdapter(
           child: AppHeader(
             title: 'Fees & Payments',
-            trailing: AppIconButton(
-              icon: Icons.download,
-              onPressed: () {},
-              backgroundColor: c.surfaceAlt,
-              foregroundColor: c.primary,
-            ),
           ),
         ),
         SliverPadding(

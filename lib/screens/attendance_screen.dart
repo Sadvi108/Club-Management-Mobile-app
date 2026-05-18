@@ -239,13 +239,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             showBack: true,
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               AppIconButton(
-                icon: Icons.tune,
-                onPressed: () => showFilterSheet(context),
-                backgroundColor: c.surfaceAlt,
-                foregroundColor: c.primary,
-              ),
-              const SizedBox(width: 6),
-              AppIconButton(
                 icon: Icons.qr_code_2,
                 onPressed: () => context.push('/qr-scan'),
                 backgroundColor: c.surfaceAlt,
