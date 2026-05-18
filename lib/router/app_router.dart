@@ -25,11 +25,56 @@ import '../screens/instructor_report_list_screen.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
 
+/// Fade-through page: the outgoing screen fades out as the incoming one
+/// fades in and lifts slightly. Calmer than the default platform slide,
+/// and consistent across Android / iOS / web.
+CustomTransitionPage<void> _fadeThrough(LocalKey key, Widget child) {
+  return CustomTransitionPage<void>(
+    key: key,
+    transitionDuration: const Duration(milliseconds: 320),
+    reverseTransitionDuration: const Duration(milliseconds: 240),
+    child: child,
+    transitionsBuilder: (_, animation, __, child) {
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutQuart,
+      );
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween(
+            begin: const Offset(0, 0.035),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
+/// Quick cross-fade for bottom-nav tab switches. No slide: lateral motion
+/// reads wrong when the tab bar itself doesn't move.
+CustomTransitionPage<void> _tabFade(LocalKey key, Widget child) {
+  return CustomTransitionPage<void>(
+    key: key,
+    transitionDuration: const Duration(milliseconds: 220),
+    reverseTransitionDuration: const Duration(milliseconds: 180),
+    child: child,
+    transitionsBuilder: (_, animation, __, child) => FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+      child: child,
+    ),
+  );
+}
+
 GoRoute _reportRoute(String path, String title, ReportFetcher fetcher) =>
     GoRoute(
       path: path,
-      builder: (_, __) =>
-          InstructorReportListScreen(title: title, fetcher: fetcher),
+      pageBuilder: (_, state) => _fadeThrough(
+        state.pageKey,
+        InstructorReportListScreen(title: title, fetcher: fetcher),
+      ),
     );
 
 final GoRouter appRouter = GoRouter(
@@ -50,13 +95,30 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state, child) =>
           TabsShell(child: child, location: state.matchedLocation),
       routes: [
-        GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
-        GoRoute(path: '/schedule', builder: (_, __) => const ScheduleScreen()),
-        GoRoute(path: '/progress', builder: (_, __) => const ProgressScreen()),
-        GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+        GoRoute(
+            path: '/home',
+            pageBuilder: (_, s) => _tabFade(s.pageKey, const HomeScreen())),
+        GoRoute(
+            path: '/schedule',
+            pageBuilder: (_, s) =>
+                _tabFade(s.pageKey, const ScheduleScreen())),
+        GoRoute(
+            path: '/progress',
+            pageBuilder: (_, s) =>
+                _tabFade(s.pageKey, const ProgressScreen())),
+        GoRoute(
+            path: '/profile',
+            pageBuilder: (_, s) =>
+                _tabFade(s.pageKey, const ProfileScreen())),
         // Reachable from quick-access tiles + home Pay Now / Today's Class.
-        GoRoute(path: '/training', builder: (_, __) => const TrainingScreen()),
-        GoRoute(path: '/payments', builder: (_, __) => const PaymentsScreen()),
+        GoRoute(
+            path: '/training',
+            pageBuilder: (_, s) =>
+                _tabFade(s.pageKey, const TrainingScreen())),
+        GoRoute(
+            path: '/payments',
+            pageBuilder: (_, s) =>
+                _tabFade(s.pageKey, const PaymentsScreen())),
       ],
     ),
     ShellRoute(
@@ -67,16 +129,20 @@ final GoRouter appRouter = GoRouter(
       routes: [
         GoRoute(
             path: '/instructor/home',
-            builder: (_, __) => const InstructorHomeScreen()),
+            pageBuilder: (_, s) =>
+                _tabFade(s.pageKey, const InstructorHomeScreen())),
         GoRoute(
             path: '/instructor/collections',
-            builder: (_, __) => const InstructorCollectionsScreen()),
+            pageBuilder: (_, s) =>
+                _tabFade(s.pageKey, const InstructorCollectionsScreen())),
         GoRoute(
             path: '/instructor/reports',
-            builder: (_, __) => const InstructorReportsScreen()),
+            pageBuilder: (_, s) =>
+                _tabFade(s.pageKey, const InstructorReportsScreen())),
         GoRoute(
             path: '/instructor/settings',
-            builder: (_, __) => const InstructorSettingsScreen()),
+            pageBuilder: (_, s) =>
+                _tabFade(s.pageKey, const InstructorSettingsScreen())),
       ],
     ),
     // Drill-down report routes (outside the shell so they appear full-screen
@@ -125,14 +191,25 @@ final GoRouter appRouter = GoRouter(
         child: const QRScanScreen(),
       ),
     ),
-    GoRoute(path: '/invoices', builder: (_, __) => const OutstandingInvoicesScreen()),
-    GoRoute(path: '/debug',    builder: (_, __) => const DebugScreen()),
-    GoRoute(path: '/attendance', builder: (_, __) => const AttendanceScreen()),
-    GoRoute(path: '/events', builder: (_, __) => const EventsScreen()),
+    GoRoute(
+        path: '/invoices',
+        pageBuilder: (_, s) =>
+            _fadeThrough(s.pageKey, const OutstandingInvoicesScreen())),
+    GoRoute(path: '/debug', builder: (_, __) => const DebugScreen()),
+    GoRoute(
+        path: '/attendance',
+        pageBuilder: (_, s) =>
+            _fadeThrough(s.pageKey, const AttendanceScreen())),
+    GoRoute(
+        path: '/events',
+        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const EventsScreen())),
     GoRoute(
       path: '/notification/:groupId',
-      builder: (_, state) => NotificationDetailScreen(
-        groupId: state.pathParameters['groupId'] ?? '',
+      pageBuilder: (_, state) => _fadeThrough(
+        state.pageKey,
+        NotificationDetailScreen(
+          groupId: state.pathParameters['groupId'] ?? '',
+        ),
       ),
     ),
     GoRoute(

@@ -4,6 +4,7 @@ import '../data/mock_data.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
+import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
 import '../widgets/list_search.dart';
 import '../widgets/app_icon_button.dart';
@@ -139,6 +140,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       default:
         base = _receipts ?? const <dynamic>[];
     }
+    // Guardian accounts: narrow to the picked child first.
+    base = UserSession.instance.filterByActiveStudent(base);
     final q = _receiptQuery.trim().toLowerCase();
     return base.where((r) {
       if (r is! Map) return true;
@@ -581,7 +584,17 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                   ),
                 ];
               }
-              return list.take(30).map<Widget>((r) => _liveReceiptRow(c, r)).toList();
+              return list
+                  .take(30)
+                  .toList()
+                  .asMap()
+                  .entries
+                  .map<Widget>((e) => FadeSlideIn.at(
+                        e.key.clamp(0, 8),
+                        offsetY: 14,
+                        child: _liveReceiptRow(c, e.value),
+                      ))
+                  .toList();
             }(),
           ]),
         ),

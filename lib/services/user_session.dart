@@ -31,6 +31,31 @@ class UserSession extends ChangeNotifier {
   /// `/ClassBooking/GetBookings` — full booking history.
   List<dynamic>? allBookings;
 
+  /// Cached `/Listing/MySiblings` rows ({id, value, text}).
+  List<dynamic>? siblings;
+
+  /// Active student filter for guardian accounts. `/Outstanding/Fetch`,
+  /// `/Reports/Receipts`, `/Reports/Attendance` etc. return rows for ALL
+  /// children under a parent login; selecting a sibling narrows every
+  /// list to that child by matching the row's `studentName` / `name`.
+  /// `null` = show the aggregate (all children).
+  ///
+  /// This is a client-side filter: `/Account/ChangeStudent` is not usable
+  /// (returns 400 for guardian credentials), so switching is done by
+  /// scoping the already-loaded multi-student data instead of re-auth.
+  String? activeStudentName;
+  Object? activeStudentId;
+
+  /// Set (or clear, with null) the active student filter. Pure client-side,
+  /// no network — instantly re-scopes every list via [notifyListeners].
+  void setActiveStudent({String? name, Object? id}) {
+    activeStudentName = (name != null && name.trim().isNotEmpty)
+        ? name.trim()
+        : null;
+    activeStudentId = id;
+    notifyListeners();
+  }
+
   /// Last raw response from /Outstanding/Fetch (kept for in-app debugging).
   dynamic outstandingRaw;
   /// Error message if the last /Outstanding/Fetch call threw.
@@ -93,6 +118,10 @@ class UserSession extends ChangeNotifier {
   ///      "name" but does NOT look like a club / centre / instructor /
   ///      parent / sibling / login name.
   String get displayName {
+    // A picked sibling overrides the token's bound student name.
+    if (activeStudentName != null && activeStudentName!.isNotEmpty) {
+      return activeStudentName!;
+    }
     final pick = _pick([myInfo, authData],
         ['name', 'fullName', 'studentName', 'displayName',
          'Name', 'FullName', 'StudentName', 'userName', 'firstName',
@@ -215,16 +244,29 @@ class UserSession extends ChangeNotifier {
     return '';
   }
 
-  /// All outstanding rows for the current token's scope.
-  ///
-  /// `/Outstanding/Fetch` returns every invoice the logged-in account can
-  /// see — for a parent/guardian account that's all children's invoices
-  /// merged. Production behaviour is to show the aggregate; per-student
-  /// scoping happens server-side via `/Account/ChangeStudent` (the token
-  /// gets re-issued for the chosen student, so the next /Outstanding/Fetch
-  /// returns only that student's rows). Therefore: no client-side filter.
+  /// Outstanding rows scoped to [activeStudentName] when a sibling is
+  /// selected, otherwise the full multi-student list.
   List<dynamic> get outstandingForCurrentStudent =>
-      outstandingList ?? const [];
+      filterByActiveStudent(outstandingList);
+
+  /// Narrow any multi-student row list to [activeStudentName]. Matches the
+  /// row's `studentName` or `name` field (case-insensitive). When no active
+  /// student is set, or no row matches, returns the list unchanged.
+  List<dynamic> filterByActiveStudent(List<dynamic>? rows) {
+    final list = rows ?? const [];
+    final target = activeStudentName;
+    if (target == null || list.isEmpty) return list;
+    final t = target.toUpperCase();
+    final scoped = list.where((r) {
+      if (r is! Map) return false;
+      final n = (r['studentName'] ?? r['name'] ?? r['receiverName'] ?? '')
+          .toString()
+          .trim()
+          .toUpperCase();
+      return n == t;
+    }).toList();
+    return scoped.isNotEmpty ? scoped : list;
+  }
 
   /// Total amount due. Tries, in order:
   ///   1. Sum of [outstandingForCurrentStudent] amounts
@@ -933,55 +975,25 @@ class UserSession extends ChangeNotifier {
   // Real-time student / branch switching
   // ---------------------------------------------------------------------------
 
-  /// Switch the active student profile in-place. Calls
-  /// `POST /Account/ChangeStudent`, swaps the bearer token via
-  /// [ApiService.setToken], then re-runs [_loadAll] so every screen
-  /// re-renders with the new student's data.
-  Future<bool> switchStudent(Object studentId) async {
-    if (!isLoggedIn) return false;
-    pauseNotificationPolling();
-    loading = true;
-    notifyListeners();
-    try {
-      final oldToken = (authData?['accessToken'] ?? '').toString();
-      final resp = await ApiService.post('/Account/ChangeStudent', {
-        'studentId': studentId,
-        'accessToken': oldToken,
-      });
-      Map<String, dynamic>? newData;
-      if (resp is Map && resp['data'] is Map) {
-        newData = Map<String, dynamic>.from(resp['data'] as Map);
-      } else if (resp is Map) {
-        newData = Map<String, dynamic>.from(resp);
-      }
-      if (newData == null) throw Exception('ChangeStudent returned no data');
-
-      final newToken = (newData['accessToken'] ?? oldToken).toString();
-      if (newToken.isNotEmpty) ApiService.setToken(newToken);
-      authData = newData;
-      await _persistAuth();
-
-      // Clear stale per-student data before re-fetching.
-      myInfo = null;
-      homeStats = null;
-      clubStats = null;
-      notifications = null;
-      studentAddtnlInfo = null;
-      outstandingList = null;
-
-      await _loadAll();
-      _previousUnread = unreadNotifications;
-      return true;
-    } catch (e) {
-      error = e.toString();
-      debugPrint('switchStudent failed: $e');
-      return false;
-    } finally {
-      loading = false;
-      resumeNotificationPolling();
-      notifyListeners();
-    }
+  /// Switch the active student.
+  ///
+  /// `/Account/ChangeStudent` is unusable here — it returns `400 Bad
+  /// Request` for guardian credentials regardless of body shape, so a
+  /// server-side re-scope isn't possible. Instead the guardian login
+  /// already pulls every child's rows (Outstanding / Receipts /
+  /// Attendance / Grading all carry a `studentName`), so switching is a
+  /// pure client-side filter: set [activeStudentName] and every list
+  /// getter re-scopes instantly. Pass `name: null` to show all children.
+  ///
+  /// Always succeeds (no network), returns true so existing callers and
+  /// their success UI keep working.
+  Future<bool> switchStudent(Object studentId, {String? studentName}) async {
+    setActiveStudent(name: studentName, id: studentId);
+    return true;
   }
+
+  /// Clear the student filter — show the aggregate across all children.
+  void showAllStudents() => setActiveStudent(name: null, id: null);
 
   /// Switch the active branch / club (works for both student & instructor).
   /// Calls `POST /Account/ChangeClub`, swaps the bearer token, refreshes data.

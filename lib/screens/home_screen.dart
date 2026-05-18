@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../data/mock_data.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
+import '../widgets/anim.dart';
 import '../widgets/api_diagnostic_sheet.dart';
 import '../widgets/notification_bell.dart';
 import '../widgets/pressable.dart';
@@ -306,19 +307,33 @@ class HomeScreen extends StatelessWidget {
             ),
 
             const SizedBox(height: 18),
-            _invoicesPreview(c, session, context),
-            const SizedBox(height: 20),
-            _sectionHead(c, "Today's Class", 'See all', () => context.go('/schedule')),
-            _buildTodayClassCard(c, context, todayBooking),
-
-            const SizedBox(height: 20),
-            _sectionHead(c, 'Quick Access', 'See all', () => _openQuickAccessSheet(context)),
-            _buildQuickAccessGrid(c, context),
-            const SizedBox(height: 22),
-            _sectionHead(c, 'My Training', 'See all', () => context.go('/schedule')),
-            _buildMyTrainingCarousel(c, session, context),
-            const SizedBox(height: 22),
-            _yourInfoCard(c, session),
+            FadeSlideIn.at(0, child: _invoicesPreview(c, session, context)),
+            FadeSlideIn.at(1,
+                child: Column(children: [
+                  const SizedBox(height: 20),
+                  _sectionHead(c, "Today's Class", 'See all',
+                      () => context.go('/schedule')),
+                  _buildTodayClassCard(c, context, todayBooking),
+                ])),
+            FadeSlideIn.at(2,
+                child: Column(children: [
+                  const SizedBox(height: 20),
+                  _sectionHead(c, 'Quick Access', 'See all',
+                      () => _openQuickAccessSheet(context)),
+                  _buildQuickAccessGrid(c, context),
+                ])),
+            FadeSlideIn.at(3,
+                child: Column(children: [
+                  const SizedBox(height: 22),
+                  _sectionHead(c, 'My Training', 'See all',
+                      () => context.go('/schedule')),
+                  _buildMyTrainingCarousel(c, session, context),
+                ])),
+            FadeSlideIn.at(4,
+                child: Column(children: [
+                  const SizedBox(height: 22),
+                  _yourInfoCard(c, session),
+                ])),
           ],
         )),
       ),
@@ -875,7 +890,7 @@ class HomeScreen extends StatelessWidget {
   /// if my homeStats parser misses the aggregate fields. Tap "View All"
   /// to open the full polished invoices screen.
   Widget _invoicesPreview(AppColors c, UserSession session, BuildContext ctx) {
-    final raw = session.outstandingList ?? const [];
+    final raw = session.outstandingForCurrentStudent;
     final rows = raw.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
     final total = _sumInvoices(rows);
     final preview = rows.take(3).toList();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
 import '../widgets/list_search.dart';
 
@@ -230,11 +231,9 @@ class _InstructorReportListScreenState
                   ],
                   const SizedBox(height: Gaps.sm),
                   if (_loading)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 60),
-                      child: Center(
-                        child: CircularProgressIndicator(color: c.primary),
-                      ),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: ShimmerList(count: 7, rowHeight: 72),
                     )
                   else if (_error != null)
                     Container(
@@ -268,7 +267,12 @@ class _InstructorReportListScreenState
                       ),
                     )
                   else
-                    for (final row in visible) _rowCard(c, row),
+                    for (final entry in visible.asMap().entries)
+                      FadeSlideIn.at(
+                        entry.key.clamp(0, 8),
+                        offsetY: 14,
+                        child: _rowCard(c, entry.value),
+                      ),
                 ],
               ),
             ),

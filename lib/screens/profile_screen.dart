@@ -56,9 +56,14 @@ class _SiblingPickerState extends State<_SiblingPicker> {
     final c = context.appColors;
     final filtered = widget.siblings.where((s) {
       if (_query.isEmpty) return true;
-      final name = (s['name'] ?? s['fullName'] ?? '').toString().toLowerCase();
-      return name.contains(_query.toLowerCase());
+      final name = (s['text'] ?? s['name'] ?? s['fullName'] ?? '')
+          .toString()
+          .toLowerCase();
+      final reg = (s['value'] ?? '').toString().toLowerCase();
+      final q = _query.toLowerCase();
+      return name.contains(q) || reg.contains(q);
     }).toList();
+    final activeName = UserSession.instance.activeStudentName;
 
     return Container(
       decoration: BoxDecoration(
@@ -123,6 +128,39 @@ class _SiblingPickerState extends State<_SiblingPicker> {
             ),
           ),
         ),
+        // "All students" aggregate option — always visible, clears the filter.
+        if (_query.isEmpty)
+          InkWell(
+            onTap: () => widget.onPick(null, 'All Students'),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: activeName == null
+                    ? c.primary.withOpacity(0.10)
+                    : c.surfaceAlt,
+                borderRadius: BorderRadius.circular(Radii.md),
+                border: Border.all(
+                    color: activeName == null ? c.primary : c.border),
+              ),
+              child: Row(children: [
+                Icon(Icons.groups_outlined,
+                    size: 20,
+                    color: activeName == null ? c.primary : c.textSecondary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('All Students',
+                      style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800)),
+                ),
+                if (activeName == null)
+                  Icon(Icons.check_circle, size: 18, color: c.primary),
+              ]),
+            ),
+          ),
         // List
         Expanded(
           child: filtered.isEmpty
@@ -140,9 +178,12 @@ class _SiblingPickerState extends State<_SiblingPicker> {
                     final sid = s['id'] ?? s['studentId'] ?? s['code'] ?? s['studentID'];
                     final rawName = (s['text'] ?? s['name'] ?? s['fullName'] ?? s['studentName'] ?? '?').toString();
                     final regNo = (s['value'] ?? s['registrationNo'] ?? s['regNo'] ?? s['code'] ?? '').toString();
-                    final isCurrent = rawName.toUpperCase() == widget.currentName;
+                    final isCurrent = activeName != null &&
+                        rawName.toUpperCase() == activeName.toUpperCase();
                     return InkWell(
-                      onTap: isCurrent ? null : () => widget.onPick(sid, rawName),
+                      onTap: isCurrent
+                          ? null
+                          : () => widget.onPick(sid, rawName),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 14),
@@ -461,13 +502,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           },
           onPick: (sid, name) async {
             Navigator.pop(ctx);
-            if (sid == null) return;
-            final ok = await UserSession.instance.switchStudent(sid);
+            // sid == null is the "All Students" sentinel.
+            if (sid == null) {
+              UserSession.instance.showAllStudents();
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('Showing all students'),
+              ));
+              return;
+            }
+            await UserSession.instance
+                .switchStudent(sid, studentName: name);
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(ok
-                  ? 'Switched to $name'
-                  : 'Switch failed: ${UserSession.instance.error ?? "unknown"}'),
+              content: Text('Switched to $name'),
             ));
           },
         ),

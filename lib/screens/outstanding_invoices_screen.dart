@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
+import '../widgets/anim.dart';
 import '../widgets/api_diagnostic_sheet.dart';
 import '../widgets/app_header.dart';
 import '../widgets/list_search.dart';
@@ -113,7 +114,7 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
   Widget build(BuildContext context) {
     final c = context.appColors;
     final session = context.watch<UserSession>();
-    final raw = session.outstandingList ?? const [];
+    final raw = session.outstandingForCurrentStudent;
     final invoices = raw.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
     final visible = _applyFilters(invoices);
     final total = _sum(visible);
@@ -259,12 +260,16 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
                   letterSpacing: 1.2)),
         ]),
         const SizedBox(height: 10),
-        Text('RM ${total.toStringAsFixed(2)}',
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 38,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -1)),
+        AnimatedCount(
+          total,
+          prefix: 'RM ',
+          decimals: 2,
+          style: const TextStyle(
+              color: Colors.white,
+              fontSize: 38,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1),
+        ),
         const SizedBox(height: 4),
         Text(
           count == 0 ? 'No unpaid invoices' : '$count unpaid invoice${count == 1 ? "" : "s"}',
@@ -355,7 +360,15 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
   }
 
   List<Widget> _invoiceCards(AppColors c, List<Map<String, dynamic>> invoices) {
-    return invoices.asMap().entries.map((e) => _invoiceCard(c, e.key, e.value)).toList();
+    return invoices
+        .asMap()
+        .entries
+        .map((e) => FadeSlideIn.at(
+              e.key.clamp(0, 8),
+              offsetY: 16,
+              child: _invoiceCard(c, e.key, e.value),
+            ))
+        .toList();
   }
 
   Widget _invoiceCard(AppColors c, int index, Map<String, dynamic> inv) {

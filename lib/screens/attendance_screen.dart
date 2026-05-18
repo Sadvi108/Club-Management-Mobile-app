@@ -22,6 +22,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   bool _loading = false;
   bool _marking = false;
 
+  /// Attendance rows narrowed to the active student (guardian accounts).
+  /// Returns the full list when no sibling filter is set.
+  List<dynamic> get _scopedAttendance =>
+      UserSession.instance.filterByActiveStudent(_liveAttendance);
+
   @override
   void initState() {
     super.initState();
@@ -103,8 +108,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   /// Live attendance summary computed from /Reports/Attendance rows.
   /// Returns zeros when no records exist for the account.
   Map<String, int> _liveStats() {
-    final list = _liveAttendance;
-    if (list == null || list.isEmpty) {
+    final list = _scopedAttendance;
+    if (list.isEmpty) {
       return const {'present': 0, 'total': 0, 'missed': 0, 'percent': 0};
     }
     int present = 0;
@@ -134,9 +139,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   /// to the mock `kAttendance.thisMonth` array so the calendar isn't empty
   /// before the first request resolves.
   List<AttendanceDay> _liveCalendar() {
-    final list = _liveAttendance;
+    final list = _scopedAttendance;
     // Empty live list → render an empty grid (no fake mock days).
-    if (list == null || list.isEmpty) {
+    if (list.isEmpty) {
       final today = DateTime.now();
       return List.generate(28, (i) {
         final dayNum = i + 1;
@@ -189,8 +194,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   /// Live "missed class history" — filters _liveAttendance for absent
   /// rows. Falls back to mock list when API hasn't returned yet.
   List<MissedClass> _liveMissed() {
-    final list = _liveAttendance;
-    if (list == null || list.isEmpty) return const [];
+    final list = _scopedAttendance;
+    if (list.isEmpty) return const [];
     final out = <MissedClass>[];
     for (final row in list) {
       if (row is! Map) continue;

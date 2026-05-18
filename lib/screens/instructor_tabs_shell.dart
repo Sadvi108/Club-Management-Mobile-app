@@ -80,25 +80,26 @@ class InstructorTabsShell extends StatelessWidget {
       child: InkWell(
         onTap: () => ctx.go(route),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 24,
                 height: 3,
-                margin: const EdgeInsets.only(bottom: 6),
+                margin: const EdgeInsets.only(bottom: 4),
                 decoration: BoxDecoration(
                   color: active ? c.primary : Colors.transparent,
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
               Icon(active ? filled : outline,
-                  size: 22, color: active ? c.primary : c.textMuted),
+                  size: 21, color: active ? c.primary : c.textMuted),
               const SizedBox(height: 2),
               Text(label,
                   style: TextStyle(
                       fontSize: 10,
+                      height: 1.1,
                       fontWeight: FontWeight.w600,
                       color: active ? c.primary : c.textMuted)),
             ],

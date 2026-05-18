@@ -63,9 +63,13 @@ class _EventsScreenState extends State<EventsScreen> {
         return true;
       }).toList();
 
-      // Past grades → certificate cards.
+      // Past grades → certificate cards, scoped to the active student.
       final now = DateTime.now();
-      _certs = grading.where((m) {
+      final scopedGrading = UserSession.instance
+          .filterByActiveStudent(grading)
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m));
+      _certs = scopedGrading.where((m) {
         final d = _parseDate(_pick(m, ['date', 'gradingDate', 'examDate'], ''));
         return d != null && d.isBefore(now);
       }).toList();
