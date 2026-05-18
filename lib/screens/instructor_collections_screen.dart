@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api.dart';
 import '../theme/app_theme.dart';
+import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
 
 class InstructorCollectionsScreen extends StatefulWidget {
@@ -360,8 +361,10 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
                               fontWeight: FontWeight.w600)),
                     )
                   else
-                    for (final row in list)
-                      _rowCard(c, row is Map ? row : {'value': row}),
+                    ...list.asMap().entries.map((e) => _rowCard(
+                        c,
+                        e.value is Map ? e.value as Map : {'value': e.value},
+                        e.key)),
                 ],
               ),
             ),
@@ -371,45 +374,89 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
     );
   }
 
-  Widget _rowCard(AppColors c, Map row) {
-    final entries = row.entries.take(4).toList();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(Gaps.md),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.md),
-        border: Border.all(color: c.border),
-        boxShadow: Shadows.card(c),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final e in entries)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 110,
-                    child: Text(e.key.toString(),
-                        style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                  Expanded(
-                    child: Text(e.value?.toString() ?? '',
-                        style: TextStyle(
-                            color: c.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ],
+  Widget _rowCard(AppColors c, Map row, int index) {
+    final title = pickField(row, [
+      'studentName', 'name', 'payerName', 'memberName', 'description',
+    ]);
+    final amount = pickAmount(row, [
+      'amount', 'dueAmount', 'paidAmount', 'value', 'total', 'totalAmount',
+    ]);
+    final dateRaw = pickField(row, [
+      'date', 'paymentDate', 'recordedTime', 'createdDate', 'slipDate',
+    ]);
+    final date = dateRaw.length >= 10 ? dateRaw.substring(0, 10) : dateRaw;
+    final status = pickField(row, ['status', 'paymentStatus', 'remarks']);
+    final ok = status.toLowerCase().contains('paid') ||
+        status.toLowerCase().contains('approve') ||
+        status.toLowerCase().contains('success');
+    final statusColor = status.isEmpty
+        ? c.textMuted
+        : (ok ? c.success : c.danger);
+
+    return FadeSlideIn.at(
+      index,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(Radii.lg),
+          border: c.isDark ? Border.all(color: c.border) : null,
+          boxShadow: Shadows.card(c),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text(
+                  title.isEmpty ? 'Record #${index + 1}' : title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800),
+                ),
               ),
-            ),
-        ],
+              if (amount > 0)
+                Text('RM ${amount.toStringAsFixed(2)}',
+                    style: TextStyle(
+                        color: c.primary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900)),
+            ]),
+            if (date.isNotEmpty || status.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(children: [
+                if (date.isNotEmpty) ...[
+                  Icon(Icons.event, size: 13, color: c.textMuted),
+                  const SizedBox(width: 5),
+                  Text(date,
+                      style: TextStyle(
+                          color: c.textSecondary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600)),
+                ],
+                const Spacer(),
+                if (status.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(status,
+                        style: TextStyle(
+                            color: statusColor,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800)),
+                  ),
+              ]),
+            ],
+          ],
+        ),
       ),
     );
   }
