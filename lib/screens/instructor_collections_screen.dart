@@ -331,10 +331,9 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
                 padding: const EdgeInsets.fromLTRB(Gaps.lg, Gaps.sm, Gaps.lg, 24),
                 children: [
                   if (_loading)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 60),
-                      child: Center(
-                          child: CircularProgressIndicator(color: c.primary)),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: ShimmerList(count: 6, rowHeight: 78),
                     )
                   else if (_error != null)
                     Container(
