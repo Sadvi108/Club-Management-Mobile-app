@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
 class UserSession extends ChangeNotifier {
@@ -493,6 +495,78 @@ class UserSession extends ChangeNotifier {
     return clubName;
   }
 
+  // ---------------------------------------------------------------------------
+  // Session persistence (survives app kill / cold start)
+  // ---------------------------------------------------------------------------
+  static const _kAuthKey = 'cm_auth_data_v1';
+
+  /// Save the current [authData] to disk so the next cold start can
+  /// restore the session without forcing a re-login.
+  Future<void> _persistAuth() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (authData == null) {
+        await prefs.remove(_kAuthKey);
+      } else {
+        await prefs.setString(_kAuthKey, jsonEncode(authData));
+      }
+    } catch (e) {
+      debugPrint('persistAuth failed: $e');
+    }
+  }
+
+  /// Attempt to restore a saved session on app startup.
+  ///
+  /// Returns true when a stored token was found and the session was
+  /// rehydrated (token re-applied + [_loadAll] run). The token may still
+  /// be server-side expired — callers should treat a subsequent 401 as a
+  /// signal to route back to /login.
+  Future<bool> restoreSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kAuthKey);
+      if (raw == null || raw.isEmpty) return false;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return false;
+      final data = Map<String, dynamic>.from(decoded);
+      final token = (data['accessToken'] ?? '').toString();
+      if (token.isEmpty) return false;
+
+      ApiService.setToken(token);
+      authData = data;
+      loading = true;
+      notifyListeners();
+      await _loadAll();
+      // If the token was rejected, _loadAll surfaces errors but authData
+      // stays set — guard with a lightweight validity check.
+      if (myInfo == null && homeStatsError != null &&
+          homeStatsError!.contains('401')) {
+        await _clearPersistedAuth();
+        authData = null;
+        ApiService.clearToken();
+        return false;
+      }
+      _previousUnread = unreadNotifications;
+      startNotificationPolling();
+      _checkStoreVersion();
+      _registerPushToken();
+      return true;
+    } catch (e) {
+      debugPrint('restoreSession failed: $e');
+      return false;
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _clearPersistedAuth() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kAuthKey);
+    } catch (_) {}
+  }
+
   Future<bool> login({
     required String username,
     required String password,
@@ -531,6 +605,7 @@ class UserSession extends ChangeNotifier {
       ApiService.setToken(token);
       authData = data;
       debugPrint('🔐 AuthData keys: ${data.keys.toList()}');
+      await _persistAuth();
       await _loadAll();
       _previousUnread = unreadNotifications;
       startNotificationPolling();
@@ -884,6 +959,7 @@ class UserSession extends ChangeNotifier {
       final newToken = (newData['accessToken'] ?? oldToken).toString();
       if (newToken.isNotEmpty) ApiService.setToken(newToken);
       authData = newData;
+      await _persistAuth();
 
       // Clear stale per-student data before re-fetching.
       myInfo = null;
@@ -933,6 +1009,7 @@ class UserSession extends ChangeNotifier {
       final newToken = (newData['accessToken'] ?? oldToken).toString();
       if (newToken.isNotEmpty) ApiService.setToken(newToken);
       authData = newData;
+      await _persistAuth();
 
       myInfo = null;
       homeStats = null;
@@ -976,6 +1053,7 @@ class UserSession extends ChangeNotifier {
 
   void logout() {
     stopNotificationPolling();
+    _clearPersistedAuth();
     authData = null;
     myInfo = null;
     homeStats = null;

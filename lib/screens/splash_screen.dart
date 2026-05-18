@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -14,9 +15,27 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
-    Future.delayed(const Duration(milliseconds: 2400), () {
-      if (mounted) context.go('/login');
-    });
+    _bootstrap();
+  }
+
+  /// Try to restore a saved session, then route accordingly.
+  /// Animation runs for at least 1.6s so the splash never flickers.
+  Future<void> _bootstrap() async {
+    final minSplash = Future<void>.delayed(const Duration(milliseconds: 1600));
+    bool restored = false;
+    try {
+      restored = await UserSession.instance.restoreSession();
+    } catch (_) {
+      restored = false;
+    }
+    await minSplash;
+    if (!mounted) return;
+    if (restored) {
+      context.go(
+          UserSession.instance.isInstructor ? '/instructor/home' : '/home');
+    } else {
+      context.go('/login');
+    }
   }
 
   @override
