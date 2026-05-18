@@ -297,6 +297,43 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     }
   }
 
+  /// Online gateway couldn't be reached (endpoint down or returned a
+  /// non-JSON error page). Offer the bank-transfer fallback instead of
+  /// dumping a raw exception on screen.
+  Future<void> _onlineUnavailable(
+      List<Map<String, dynamic>> invoices) async {
+    final c = context.appColors;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.surface,
+        title: Text('Online payment unavailable',
+            style: TextStyle(color: c.textPrimary, fontSize: 16)),
+        content: Text(
+          'The online payment gateway is not responding right now. '
+          'You can record a bank-transfer payment instead — the club '
+          'will verify it once you upload your slip.',
+          style: TextStyle(
+              color: c.textSecondary, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel',
+                style: TextStyle(color: c.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _recordManualPayment(invoices);
+            },
+            child: const Text('Pay by bank transfer'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _initiateGatewayPayment(List<Map<String, dynamic>> invoices) async {
     final session = UserSession.instance;
     final sid = session.authData?['studentId'] ?? session.authData?['id'];
@@ -323,15 +360,13 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     } catch (e) {
       debugPrint('paymentInitiate failed: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Initiate failed: $e')));
+      _onlineUnavailable(invoices);
       return;
     }
     if (!mounted) return;
     final c = context.appColors;
     if (gatewayUrl == null || gatewayUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content:
-              Text('Online payment unavailable — server returned no gateway link.')));
+      _onlineUnavailable(invoices);
       return;
     }
     // Open the real payment gateway in the browser / external app.

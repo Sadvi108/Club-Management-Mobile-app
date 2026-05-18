@@ -10,6 +10,7 @@ import '../widgets/api_diagnostic_sheet.dart';
 import '../widgets/notification_bell.dart';
 import '../widgets/pressable.dart';
 import '../widgets/responsive_body.dart';
+import '../widgets/student_switcher.dart';
 import '../widgets/white_card_hero.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -58,7 +59,14 @@ class HomeScreen extends StatelessWidget {
             if (session.hasNewerVersion)
               Container(
                 width: double.infinity,
-                padding: EdgeInsets.fromLTRB(Gaps.xl, MediaQuery.of(context).padding.top + 8, Gaps.xl, 10),
+                padding: EdgeInsets.fromLTRB(
+                    Gaps.xl,
+                    (MediaQuery.of(context).padding.top > 0
+                            ? MediaQuery.of(context).padding.top
+                            : 44) +
+                        10,
+                    Gaps.xl,
+                    10),
                 color: c.primary,
                 child: Row(children: [
                   const Icon(Icons.system_update, color: Colors.white, size: 18),
@@ -77,46 +85,78 @@ class HomeScreen extends StatelessWidget {
               ),
             // ─── White-card hero (D-Clix 2026 design) ──────────────────────
             WhiteCardHero(
+              // padding.top is 0 on web/preview (no reported notch inset),
+              // so fall back to a fixed clearance that keeps the header
+              // content below a hardware notch / status bar.
               padding: EdgeInsets.fromLTRB(
-                  Gaps.xl, MediaQuery.of(context).padding.top + 8, Gaps.xl, 24),
+                  Gaps.xl,
+                  (MediaQuery.of(context).padding.top > 0
+                          ? MediaQuery.of(context).padding.top
+                          : 44) +
+                      14,
+                  Gaps.xl,
+                  24),
               child: Column(children: [
                 Row(children: [
-                  // 52×52 avatar with brand gradient ring
-                  Container(
-                    width: 52, height: 52,
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: c.gradient,
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: c.primary.withOpacity(0.35),
-                          blurRadius: 14,
-                          offset: const Offset(0, 6),
+                  // 52×52 avatar — tap to switch student
+                  GestureDetector(
+                    onTap: () => showStudentSwitcher(context),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 52, height: 52,
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: c.gradient,
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: c.primary.withOpacity(0.35),
+                                blurRadius: 14,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: CircleAvatar(
+                            radius: 24,
+                            backgroundColor: _peach100,
+                            backgroundImage: livePhoto.isNotEmpty
+                                ? CachedNetworkImageProvider(livePhoto)
+                                : null,
+                            child: livePhoto.isNotEmpty
+                                ? null
+                                : Text(
+                                    liveName.isNotEmpty
+                                        ? liveName[0].toUpperCase()
+                                        : '?',
+                                    style: TextStyle(
+                                        color: c.primaryDark,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900),
+                                  ),
+                          ),
+                        ),
+                        // Dropdown affordance — signals the avatar opens
+                        // the student switcher.
+                        Positioned(
+                          right: -2, bottom: -2,
+                          child: Container(
+                            width: 20, height: 20,
+                            decoration: BoxDecoration(
+                              color: c.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: c.background, width: 2),
+                            ),
+                            child: const Icon(Icons.unfold_more,
+                                size: 11, color: Colors.white),
+                          ),
                         ),
                       ],
-                    ),
-                    child: CircleAvatar(
-                      radius: 24,
-                      backgroundColor: _peach100,
-                      backgroundImage: livePhoto.isNotEmpty
-                          ? CachedNetworkImageProvider(livePhoto)
-                          : null,
-                      child: livePhoto.isNotEmpty
-                          ? null
-                          : Text(
-                              liveName.isNotEmpty
-                                  ? liveName[0].toUpperCase()
-                                  : '?',
-                              style: TextStyle(
-                                  color: c.primaryDark,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900),
-                            ),
                     ),
                   ),
                   const SizedBox(width: 12),

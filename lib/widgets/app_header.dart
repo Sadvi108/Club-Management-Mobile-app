@@ -23,10 +23,15 @@ class AppHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
+    // On web/preview the OS reports no notch inset (padding.top == 0),
+    // so SafeArea adds nothing and the header collides with a hardware
+    // notch. Add a fixed clearance only when no real inset is reported.
+    final extraTop =
+        MediaQuery.of(context).padding.top > 0 ? 0.0 : 44.0;
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(Gaps.lg, 10, Gaps.lg, 10),
+        padding: EdgeInsets.fromLTRB(Gaps.lg, extraTop + 10, Gaps.lg, 10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [

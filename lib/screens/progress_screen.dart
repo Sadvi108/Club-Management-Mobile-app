@@ -172,6 +172,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
         session.currentGrade.isNotEmpty ? session.currentGrade : '');
     final gradingRows = _scopedGrading;
 
+    // Clear a hardware notch when the OS reports no inset (web/preview).
+    final topPad =
+        (MediaQuery.of(context).padding.top > 0 ? 0.0 : 44.0) + 14;
     return Scaffold(
       backgroundColor: c.background,
       body: SafeArea(
@@ -180,7 +183,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
           color: c.primary,
           onRefresh: _loadProgress,
           child: ResponsiveBody(child: ListView(
-            padding: const EdgeInsets.fromLTRB(Gaps.xl, 14, Gaps.xl, 140),
+            padding: EdgeInsets.fromLTRB(Gaps.xl, topPad, Gaps.xl, 140),
             children: [
               _buildHeader(c, deltaThisMonth, context),
               const SizedBox(height: 18),

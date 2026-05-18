@@ -34,7 +34,12 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
         child: SafeArea(
           bottom: false,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(Gaps.lg, Gaps.lg, Gaps.lg, 100),
+            padding: EdgeInsets.fromLTRB(
+                Gaps.lg,
+                (MediaQuery.of(context).padding.top > 0 ? 0.0 : 44.0) +
+                    Gaps.lg,
+                Gaps.lg,
+                100),
             children: [
               _headerRow(c, name, clubName, session),
               const SizedBox(height: Gaps.lg),
