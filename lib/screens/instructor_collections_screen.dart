@@ -68,6 +68,7 @@ class _InstructorCollectionsScreenState
         _readCount(['fpx', 'online', 'onlineCount', 'onlinePayments']);
     final slip =
         _readCount(['dbt', 'paymentSlip', 'paymentSlipCount', 'slipCount']);
+    final narrow = MediaQuery.of(context).size.width < 360;
     return Scaffold(
       backgroundColor: c.background,
       body: SafeArea(
@@ -95,32 +96,36 @@ class _InstructorCollectionsScreenState
                     crossAxisCount: 2,
                     mainAxisSpacing: 12,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 1.25,
+                    childAspectRatio: narrow ? 1.0 : 1.2,
                     children: [
                       _tile(
                           c,
                           Icons.payments_outlined,
                           'Cash Payments',
                           _loading ? null : cash,
-                          () => _openList(context, 1, 'Cash Payments')),
+                          () => _openList(context, 1, 'Cash Payments'),
+                          0),
                       _tile(
                           c,
                           Icons.credit_card,
                           'Online Payments',
                           _loading ? null : online,
-                          () => _openList(context, 2, 'Online Payments')),
+                          () => _openList(context, 2, 'Online Payments'),
+                          1),
                       _tile(
                           c,
                           Icons.receipt_long,
                           'Payment Slips',
                           _loading ? null : slip,
-                          () => _openPaymentSlips(context)),
+                          () => _openPaymentSlips(context),
+                          2),
                       _tile(
                           c,
                           Icons.tune,
                           'Update Collection',
                           null,
-                          () => _openUpdateSheet(context)),
+                          () => _openUpdateSheet(context),
+                          3),
                     ],
                   ),
                 ],
@@ -133,48 +138,71 @@ class _InstructorCollectionsScreenState
   }
 
   Widget _tile(AppColors c, IconData icon, String label, int? count,
-      VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(Gaps.md),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.border),
-          boxShadow: Shadows.card(c),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: c.surfaceAlt,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Icon(icon, color: c.primary, size: 20),
-            ),
-            const Spacer(),
-            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Expanded(
-                child: Text(
-                  count != null ? '$label ($count)' : label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: c.textPrimary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13),
+      VoidCallback onTap, int index) {
+    return FadeSlideIn.at(
+      index,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(Radii.lg),
+            border: c.isDark ? Border.all(color: c.border) : null,
+            boxShadow: Shadows.card(c),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: c.primary.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, color: c.primary, size: 20),
                 ),
+                const Spacer(),
+                if (count != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: c.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text('$count',
+                        style: TextStyle(
+                            color: c.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900)),
+                  ),
+              ]),
+              const Spacer(),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14),
               ),
-              Icon(Icons.chevron_right, size: 18, color: c.textMuted),
-            ]),
-          ],
+              const SizedBox(height: 2),
+              Row(children: [
+                Text('View',
+                    style: TextStyle(
+                        color: c.textMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700)),
+                Icon(Icons.chevron_right, size: 15, color: c.textMuted),
+              ]),
+            ],
+          ),
         ),
       ),
     );
