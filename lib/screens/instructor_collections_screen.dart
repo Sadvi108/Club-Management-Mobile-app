@@ -74,7 +74,41 @@ class _InstructorCollectionsScreenState
       body: SafeArea(
         bottom: false,
         child: Column(children: [
-          const AppHeader(title: 'Collections'),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(
+                Gaps.lg,
+                (MediaQuery.of(context).padding.top > 0
+                        ? MediaQuery.of(context).padding.top
+                        : 44) +
+                    16,
+                Gaps.lg,
+                20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: c.gradient,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('COLLECTIONS',
+                    style: TextStyle(
+                        color: Color(0xCCFFFFFF),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2)),
+                const SizedBox(height: 2),
+                const Text('Payments overview',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800)),
+              ],
+            ),
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
