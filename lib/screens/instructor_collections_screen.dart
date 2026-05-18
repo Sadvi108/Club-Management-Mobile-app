@@ -287,6 +287,7 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
   dynamic _data;
   dynamic _rawResponse;
   bool _loading = true;
+  bool _showRaw = false;
   String? _error;
 
   @override
@@ -348,17 +349,69 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
                               color: c.danger, fontWeight: FontWeight.w600)),
                     )
                   else if (list.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(Gaps.md),
-                      decoration: BoxDecoration(
-                        color: c.surface,
-                        borderRadius: BorderRadius.circular(Radii.md),
-                        border: Border.all(color: c.border),
-                      ),
-                      child: Text('No records.',
-                          style: TextStyle(
-                              color: c.textSecondary,
-                              fontWeight: FontWeight.w600)),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 32, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: c.surface,
+                            borderRadius: BorderRadius.circular(Radii.lg),
+                            border: c.isDark
+                                ? Border.all(color: c.border)
+                                : null,
+                            boxShadow: Shadows.card(c),
+                          ),
+                          child: Column(children: [
+                            Icon(Icons.inbox_outlined,
+                                size: 40, color: c.textMuted),
+                            const SizedBox(height: 10),
+                            Text('No records found',
+                                style: TextStyle(
+                                    color: c.textPrimary,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 4),
+                            Text(
+                                'There are no ${widget.title.toLowerCase()} for this period.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    color: c.textSecondary,
+                                    fontSize: 12)),
+                          ]),
+                        ),
+                        const SizedBox(height: 10),
+                        TextButton(
+                          onPressed: () =>
+                              setState(() => _showRaw = !_showRaw),
+                          child: Text(
+                              _showRaw
+                                  ? 'Hide raw response'
+                                  : 'Show raw response',
+                              style: TextStyle(
+                                  color: c.textMuted, fontSize: 12)),
+                        ),
+                        if (_showRaw)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: c.surfaceAlt,
+                              borderRadius:
+                                  BorderRadius.circular(Radii.md),
+                              border: Border.all(color: c.border),
+                            ),
+                            child: SelectableText(
+                              _rawResponse?.toString() ??
+                                  'No response captured',
+                              style: TextStyle(
+                                  color: c.textSecondary,
+                                  fontSize: 11,
+                                  fontFamily: 'monospace'),
+                            ),
+                          ),
+                      ],
                     )
                   else
                     ...list.asMap().entries.map((e) => _rowCard(
