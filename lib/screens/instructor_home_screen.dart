@@ -203,7 +203,7 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
             icon: Icons.attach_money,
             iconBg: const Color(0xFFDCFCE7),
             iconColor: const Color(0xFF16A34A),
-            onTap: () => context.go('/instructor/reports/outstanding'),
+            onTap: () => context.push('/instructor/reports/outstanding'),
           ),
           const SizedBox(height: 6),
           _notifRow(
@@ -212,7 +212,7 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
             icon: Icons.credit_card,
             iconBg: const Color(0xFFFFECEC),
             iconColor: const Color(0xFFDC2626),
-            onTap: () => context.go('/instructor/reports/outstanding'),
+            onTap: () => context.push('/instructor/reports/outstanding'),
           ),
         ],
       ),
@@ -273,11 +273,12 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
     const purple = Color(0xFFA855F7);
     const orange = Color(0xFFFB923C);
     final tiles = <_ActionTile>[
-      _ActionTile(Icons.alarm, 'Training Time', amber, () => context.push('/training')),
+      _ActionTile(Icons.alarm, 'Training Time', amber,
+          () => context.push('/instructor/reports/training-time')),
       _ActionTile(Icons.directions_run, 'Activities', teal,
           () => context.push('/instructor/reports/activity')),
       _ActionTile(Icons.assignment_turned_in_outlined, 'Update Attendance', green,
-          () => context.push('/attendance')),
+          () => context.push('/instructor/qr-scan')),
       _ActionTile(Icons.receipt_long, 'Receipt', lime,
           () => context.push('/instructor/reports/receipt')),
       _ActionTile(Icons.school, 'Grading Schedule', indigo,
