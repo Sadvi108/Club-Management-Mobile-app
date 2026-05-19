@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
 
+import '../services/api.dart';
 import '../services/response_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
-import '../widgets/list_search.dart';
+import 'instructor_reports/report_spec.dart';
 
-typedef ReportFetcher = Future<dynamic> Function();
+/// Centre option for a dropdown — id + display label.
+class _Centre {
+  final int id;
+  final String label;
+  const _Centre(this.id, this.label);
+}
 
-/// Generic list-of-records screen used by every instructor "drill-down"
-/// report route. Calls [fetcher] and renders the resulting JSON as cards.
+/// Generic instructor report drill-down. Renders the filter bar described
+/// by [spec], fetches via [spec.fetch], applies client-side status
+/// filtering, and renders styled record cards.
 class InstructorReportListScreen extends StatefulWidget {
-  final String title;
-  final ReportFetcher fetcher;
-
-  const InstructorReportListScreen({
-    super.key,
-    required this.title,
-    required this.fetcher,
-  });
+  final ReportSpec spec;
+  const InstructorReportListScreen({super.key, required this.spec});
 
   @override
   State<InstructorReportListScreen> createState() =>
@@ -27,110 +28,80 @@ class InstructorReportListScreen extends StatefulWidget {
 
 class _InstructorReportListScreenState
     extends State<InstructorReportListScreen> {
-  dynamic _data;
+  final _query = ReportQuery();
+  final _nameCtrl = TextEditingController();
+  final _icCtrl = TextEditingController();
+
+  List<dynamic> _data = const [];
   dynamic _rawResponse;
-  bool _loading = true;
+  bool _loading = false;
   bool _showRaw = false;
   String? _error;
 
-  final _searchCtrl = TextEditingController();
-  String _query = '';
-  String? _centerFilter;
-  String? _statusFilter;
-  bool _activeOnly = false;
+  List<_Centre> _trainingCentres = const [];
+  List<_Centre> _examCentres = const [];
 
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
-
-  /// Searchable string fields for the free-text query.
-  static const _searchKeys = [
-    'name', 'studentName', 'icNo', 'text', 'value', 'code',
-    'instructorName', 'tcName', 'centerName', 'description',
-    'receiptNo', 'invoiceId', 'invoiceDescription',
-  ];
-
-  /// Keys that look like a "training/exam center" column.
-  static const _centerKeys = [
-    'tCenterName', 'tcName', 'centerName', 'eCenterName',
-    'sCenterName', 'trainingCenter',
-  ];
-
-  /// Keys that look like a status enum column.
-  static const _statusKeys = [
-    'paymentStatus', 'examStatus', 'attendanceType', 'transactionType',
-    'status',
-  ];
-
-  /// Collect unique values for the given key set across all rows.
-  List<String> _collect(Iterable<Map<String, dynamic>> rows, List<String> keys) {
-    final set = <String>{};
-    for (final r in rows) {
-      for (final k in keys) {
-        final v = r[k];
-        if (v == null) continue;
-        final s = v.toString().trim();
-        if (s.isEmpty || s == 'null') continue;
-        set.add(s);
-      }
-    }
-    final list = set.toList()..sort();
-    return list;
-  }
-
-  /// Apply free-text query + filter chips to the raw row set.
-  List<Map<String, dynamic>> _applyFilters(
-      List<Map<String, dynamic>> rows) {
-    final q = _query.trim().toLowerCase();
-    return rows.where((r) {
-      if (q.isNotEmpty) {
-        final hit = _searchKeys.any((k) {
-          final v = r[k];
-          return v != null && v.toString().toLowerCase().contains(q);
-        });
-        if (!hit) return false;
-      }
-      if (_centerFilter != null && _centerFilter!.isNotEmpty) {
-        final hit = _centerKeys.any((k) =>
-            r[k] != null && r[k].toString() == _centerFilter);
-        if (!hit) return false;
-      }
-      if (_statusFilter != null && _statusFilter!.isNotEmpty) {
-        final hit = _statusKeys.any((k) =>
-            r[k] != null && r[k].toString() == _statusFilter);
-        if (!hit) return false;
-      }
-      if (_activeOnly) {
-        // "Active" heuristic: row has isActive=true, or status/value contains
-        // "active" / "present" / "approved" / "paid", and NOT "inactive" /
-        // "absent" / "pending" / "rejected".
-        final hay = [
-          for (final k in _statusKeys) r[k]?.toString().toLowerCase() ?? '',
-          (r['isActive'] ?? '').toString().toLowerCase(),
-        ].join(' ');
-        final bad = hay.contains('inactive') ||
-            hay.contains('absent') ||
-            hay.contains('pending') ||
-            hay.contains('rejected') ||
-            hay.contains('cancelled');
-        if (bad) return false;
-        final good = hay.contains('active') ||
-            hay.contains('present') ||
-            hay.contains('approved') ||
-            hay.contains('paid') ||
-            (r['isActive'] == true);
-        if (!good) return false;
-      }
-      return true;
-    }).toList();
-  }
+  ReportSpec get _spec => widget.spec;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _icCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _bootstrap() async {
+    // Load dropdown option sources the spec needs, then the first fetch.
+    final futures = <Future<void>>[];
+    if (_spec.filters.contains(RFilter.trainingCenter)) {
+      futures.add(_loadCentres(true));
+    }
+    if (_spec.filters.contains(RFilter.examCenter)) {
+      futures.add(_loadCentres(false));
+    }
+    if (futures.isNotEmpty) await Future.wait(futures);
+    if (!mounted) return;
+    // Training-time mode needs a centre chosen first — don't auto-fetch.
+    if (!_spec.trainingTimeMode) _load();
+  }
+
+  Future<void> _loadCentres(bool training) async {
+    try {
+      final resp = training
+          ? await ApiCentres.training()
+          : await ApiCentres.exam();
+      final rows = findRecordList(resp).whereType<Map>();
+      final list = <_Centre>[const _Centre(0, 'All centres')];
+      for (final r in rows) {
+        final id = (r['id'] ?? r['centerId'] ?? r['tCenterId'] ??
+                r['eCenterId'] ?? r['value'] ?? 0);
+        final idInt = id is int
+            ? id
+            : int.tryParse(id.toString()) ?? 0;
+        final label = pickField(r, [
+          'name', 'centerName', 'tCenterName', 'eCenterName', 'text',
+        ]);
+        if (idInt != 0 && label.isNotEmpty) {
+          list.add(_Centre(idInt, label));
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        if (training) {
+          _trainingCentres = list;
+        } else {
+          _examCentres = list;
+        }
+      });
+    } catch (e) {
+      debugPrint('centre load failed: $e');
+    }
   }
 
   Future<void> _load() async {
@@ -139,42 +110,47 @@ class _InstructorReportListScreenState
       _error = null;
     });
     try {
-      final resp = await widget.fetcher();
+      _query.name = _nameCtrl.text.trim();
+      _query.ic = _icCtrl.text.trim();
+      final resp = await _spec.fetch(_query);
       _rawResponse = resp;
       setState(() => _data = findRecordList(resp));
     } catch (e) {
-      debugPrint('${widget.title} failed: $e');
+      debugPrint('${_spec.title} failed: $e');
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  List<Map<String, dynamic>> _rows() {
-    final d = _data;
-    if (d is! List) return const [];
-    return d
+  /// Rows after client-side status filtering.
+  List<Map<String, dynamic>> _visibleRows() {
+    final rows = _data
         .map((e) => e is Map
             ? Map<String, dynamic>.from(e)
             : <String, dynamic>{'value': e})
         .toList();
+    final status = _query.status;
+    if (status == null || status.isEmpty || _spec.rowStatus == null) {
+      return rows;
+    }
+    final want = status.toLowerCase();
+    return rows.where((r) {
+      final s = _spec.rowStatus!(r).toLowerCase();
+      return s.contains(want) || want.contains(s) && s.isNotEmpty;
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    final allRows = _rows();
-    final centerOptions = _collect(allRows, _centerKeys);
-    final statusOptions = _collect(allRows, _statusKeys);
-    final visible = _applyFilters(allRows);
-    final hasFilterableData =
-        allRows.length > 4 || centerOptions.isNotEmpty || statusOptions.isNotEmpty;
+    final rows = _loading ? const <Map<String, dynamic>>[] : _visibleRows();
     return Scaffold(
       backgroundColor: c.background,
       body: SafeArea(
         bottom: false,
         child: Column(children: [
-          AppHeader(title: widget.title, showBack: true),
+          AppHeader(title: _spec.title, showBack: true),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
@@ -183,49 +159,7 @@ class _InstructorReportListScreenState
                 padding:
                     const EdgeInsets.fromLTRB(Gaps.lg, Gaps.sm, Gaps.lg, 24),
                 children: [
-                  if (allRows.isNotEmpty && _error == null) _liveBanner(c),
-                  if (hasFilterableData && !_loading && _error == null) ...[
-                    const SizedBox(height: Gaps.sm),
-                    ListSearchBar(
-                      hint: 'Search ${widget.title.toLowerCase()}…',
-                      controller: _searchCtrl,
-                      onSearch: (v) => setState(() => _query = v),
-                      resultCount: visible.length,
-                      totalCount: allRows.length,
-                      filters: [
-                        if (centerOptions.isNotEmpty)
-                          ListFilter(
-                            label: 'Center',
-                            options: centerOptions,
-                            selected: _centerFilter,
-                            onSelected: (v) =>
-                                setState(() => _centerFilter = v),
-                          ),
-                        if (statusOptions.isNotEmpty)
-                          ListFilter(
-                            label: 'Status',
-                            options: statusOptions,
-                            selected: _statusFilter,
-                            onSelected: (v) =>
-                                setState(() => _statusFilter = v),
-                          ),
-                        if (statusOptions.isNotEmpty ||
-                            allRows.any((r) => r.containsKey('isActive')))
-                          ListFilter.toggle(
-                            label: 'Active only',
-                            value: _activeOnly,
-                            onChanged: (v) =>
-                                setState(() => _activeOnly = v),
-                          ),
-                      ],
-                      onClearAll: () => setState(() {
-                        _query = '';
-                        _centerFilter = null;
-                        _statusFilter = null;
-                        _activeOnly = false;
-                      }),
-                    ),
-                  ],
+                  if (_spec.filters.isNotEmpty) _filterBar(c),
                   const SizedBox(height: Gaps.sm),
                   if (_loading)
                     const Padding(
@@ -233,96 +167,20 @@ class _InstructorReportListScreenState
                       child: ShimmerList(count: 7, rowHeight: 72),
                     )
                   else if (_error != null)
-                    Container(
-                      padding: const EdgeInsets.all(Gaps.md),
-                      decoration: BoxDecoration(
-                        color: c.surface,
-                        borderRadius: BorderRadius.circular(Radii.md),
-                        border: Border.all(color: c.border),
-                      ),
-                      child: Text(
-                        'Couldn\'t load: $_error',
-                        style: TextStyle(
-                            color: c.danger, fontWeight: FontWeight.w600),
-                      ),
-                    )
-                  else if (visible.isEmpty)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 32, horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: c.surface,
-                            borderRadius: BorderRadius.circular(Radii.lg),
-                            border: c.isDark
-                                ? Border.all(color: c.border)
-                                : null,
-                            boxShadow: Shadows.card(c),
-                          ),
-                          child: Column(children: [
-                            Icon(Icons.inbox_outlined,
-                                size: 40, color: c.textMuted),
-                            const SizedBox(height: 10),
-                            Text(
-                                allRows.isEmpty
-                                    ? 'No records found'
-                                    : 'No matches',
-                                style: TextStyle(
-                                    color: c.textPrimary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 4),
-                            Text(
-                                allRows.isEmpty
-                                    ? 'There is no ${widget.title.toLowerCase()} data to show.'
-                                    : 'Adjust filters or clear the search.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    color: c.textSecondary, fontSize: 12)),
-                          ]),
-                        ),
-                        if (allRows.isEmpty) ...[
-                          const SizedBox(height: 10),
-                          TextButton(
-                            onPressed: () =>
-                                setState(() => _showRaw = !_showRaw),
-                            child: Text(
-                                _showRaw
-                                    ? 'Hide raw response'
-                                    : 'Show raw response',
-                                style: TextStyle(
-                                    color: c.textMuted, fontSize: 12)),
-                          ),
-                          if (_showRaw)
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: c.surfaceAlt,
-                                borderRadius:
-                                    BorderRadius.circular(Radii.md),
-                                border: Border.all(color: c.border),
-                              ),
-                              child: SelectableText(
-                                _rawResponse?.toString() ??
-                                    'No response captured',
-                                style: TextStyle(
-                                    color: c.textSecondary,
-                                    fontSize: 11,
-                                    fontFamily: 'monospace'),
-                              ),
-                            ),
-                        ],
-                      ],
-                    )
+                    _errorCard(c)
+                  else if (_spec.trainingTimeMode && _query.tCenterId == 0)
+                    _promptCard(c, 'Select a training center above to see its '
+                        'weekly time table.')
+                  else if (rows.isEmpty)
+                    _emptyCard(c)
                   else
-                    for (final entry in visible.asMap().entries)
+                    for (final entry in rows.asMap().entries)
                       FadeSlideIn.at(
                         entry.key.clamp(0, 8),
                         offsetY: 14,
-                        child: _rowCard(c, entry.value),
+                        child: _spec.trainingTimeMode
+                            ? _trainingTimeCard(c, entry.value)
+                            : _rowCard(c, entry.value),
                       ),
                 ],
               ),
@@ -333,34 +191,322 @@ class _InstructorReportListScreenState
     );
   }
 
-  Widget _liveBanner(AppColors c) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: Gaps.md, vertical: Gaps.sm),
+  // ─── Filter bar ────────────────────────────────────────────────────────
+  Widget _filterBar(AppColors c) {
+    final children = <Widget>[];
+    for (final f in _spec.filters) {
+      switch (f) {
+        case RFilter.trainingCenter:
+          children.add(_centreDropdown(c, 'Training center',
+              _trainingCentres, _query.tCenterId,
+              (v) => setState(() => _query.tCenterId = v)));
+          break;
+        case RFilter.examCenter:
+          children.add(_centreDropdown(c, 'Exam center',
+              _examCentres, _query.eCenterId,
+              (v) => setState(() => _query.eCenterId = v)));
+          break;
+        case RFilter.dateRange:
+          children.add(_dateRow(c));
+          break;
+        case RFilter.status:
+          children.add(_statusDropdown(c));
+          break;
+        case RFilter.nameText:
+          children.add(_textField(c, 'Name', _nameCtrl));
+          break;
+        case RFilter.icText:
+          children.add(_textField(c, 'IC No.', _icCtrl));
+          break;
+      }
+    }
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: c.isDark ? Border.all(color: c.border) : null,
+        boxShadow: Shadows.card(c),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final w in children)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: w,
+            ),
+          InkWell(
+            onTap: _load,
+            borderRadius: BorderRadius.circular(Radii.md),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: c.gradient),
+                borderRadius: BorderRadius.circular(Radii.md),
+                boxShadow: Shadows.strong(c),
+              ),
+              child: const Text('Apply filters',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _fieldLabel(AppColors c, String t) => Padding(
+        padding: const EdgeInsets.only(bottom: 5),
+        child: Text(t,
+            style: TextStyle(
+                color: c.textSecondary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700)),
+      );
+
+  Widget _shell(AppColors c, Widget child) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: c.surfaceAlt,
           borderRadius: BorderRadius.circular(Radii.md),
           border: Border.all(color: c.border),
         ),
-        child: Row(children: [
-          Icon(Icons.cloud_done_outlined, size: 16, color: c.primary),
-          const SizedBox(width: 8),
-          Text('LIVE',
-              style: TextStyle(
-                  color: c.primary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1)),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text('Showing latest data',
-                style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
+        child: child,
+      );
+
+  Widget _centreDropdown(AppColors c, String label, List<_Centre> centres,
+      int value, ValueChanged<int> onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _fieldLabel(c, label),
+        _shell(
+          c,
+          DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              isExpanded: true,
+              value: centres.any((e) => e.id == value) ? value : 0,
+              hint: Text(centres.isEmpty ? 'Loading…' : 'All centres',
+                  style: TextStyle(color: c.textMuted, fontSize: 13)),
+              items: centres
+                  .map((e) => DropdownMenuItem<int>(
+                        value: e.id,
+                        child: Text(e.label,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: c.textPrimary, fontSize: 13)),
+                      ))
+                  .toList(),
+              onChanged: (v) => onChanged(v ?? 0),
+            ),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statusDropdown(AppColors c) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _fieldLabel(c, _spec.statusLabel),
+        _shell(
+          c,
+          DropdownButtonHideUnderline(
+            child: DropdownButton<String?>(
+              isExpanded: true,
+              value: _query.status,
+              hint: Text('Any',
+                  style: TextStyle(color: c.textMuted, fontSize: 13)),
+              items: [
+                DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('Any',
+                      style: TextStyle(color: c.textPrimary, fontSize: 13)),
+                ),
+                for (final o in _spec.statusOptions)
+                  DropdownMenuItem<String?>(
+                    value: o,
+                    child: Text(o,
+                        style:
+                            TextStyle(color: c.textPrimary, fontSize: 13)),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _query.status = v),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _dateRow(AppColors c) {
+    return Row(children: [
+      Expanded(child: _dateField(c, 'From', _query.fromDate, (d) {
+        setState(() => _query.fromDate = d);
+      })),
+      const SizedBox(width: 10),
+      Expanded(child: _dateField(c, 'To', _query.toDate, (d) {
+        setState(() => _query.toDate = d);
+      })),
+    ]);
+  }
+
+  Widget _dateField(
+      AppColors c, String label, DateTime? value, ValueChanged<DateTime> onPick) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _fieldLabel(c, label),
+        InkWell(
+          onTap: () async {
+            final now = DateTime.now();
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: value ?? now,
+              firstDate: DateTime(now.year - 5),
+              lastDate: DateTime(now.year + 2),
+            );
+            if (picked != null) onPick(picked);
+          },
+          borderRadius: BorderRadius.circular(Radii.md),
+          child: _shell(
+            c,
+            SizedBox(
+              height: 44,
+              child: Row(children: [
+                Icon(Icons.event, size: 15, color: c.textMuted),
+                const SizedBox(width: 8),
+                Text(
+                  value == null
+                      ? 'Any'
+                      : value.toIso8601String().substring(0, 10),
+                  style: TextStyle(
+                      color: value == null ? c.textMuted : c.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600),
+                ),
+              ]),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _textField(AppColors c, String label, TextEditingController ctrl) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _fieldLabel(c, label),
+        _shell(
+          c,
+          TextField(
+            controller: ctrl,
+            style: TextStyle(color: c.textPrimary, fontSize: 13),
+            decoration: InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              hintText: 'Any',
+              hintStyle: TextStyle(color: c.textMuted, fontSize: 13),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── State cards ───────────────────────────────────────────────────────
+  Widget _errorCard(AppColors c) => Container(
+        padding: const EdgeInsets.all(Gaps.md),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(Radii.md),
+          border: Border.all(color: c.border),
+        ),
+        child: Text("Couldn't load: $_error",
+            style: TextStyle(color: c.danger, fontWeight: FontWeight.w600)),
+      );
+
+  Widget _promptCard(AppColors c, String msg) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(Radii.lg),
+          border: c.isDark ? Border.all(color: c.border) : null,
+          boxShadow: Shadows.card(c),
+        ),
+        child: Column(children: [
+          Icon(Icons.tune, size: 36, color: c.textMuted),
+          const SizedBox(height: 10),
+          Text(msg,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: c.textSecondary,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.4)),
         ]),
       );
 
+  Widget _emptyCard(AppColors c) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(Radii.lg),
+              border: c.isDark ? Border.all(color: c.border) : null,
+              boxShadow: Shadows.card(c),
+            ),
+            child: Column(children: [
+              Icon(Icons.inbox_outlined, size: 40, color: c.textMuted),
+              const SizedBox(height: 10),
+              Text('No records found',
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('Adjust the filters above and tap Apply.',
+                  textAlign: TextAlign.center,
+                  style:
+                      TextStyle(color: c.textSecondary, fontSize: 12)),
+            ]),
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: () => setState(() => _showRaw = !_showRaw),
+            child: Text(_showRaw ? 'Hide raw response' : 'Show raw response',
+                style: TextStyle(color: c.textMuted, fontSize: 12)),
+          ),
+          if (_showRaw)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: c.surfaceAlt,
+                borderRadius: BorderRadius.circular(Radii.md),
+                border: Border.all(color: c.border),
+              ),
+              child: SelectableText(
+                _rawResponse?.toString() ?? 'No response captured',
+                style: TextStyle(
+                    color: c.textSecondary,
+                    fontSize: 11,
+                    fontFamily: 'monospace'),
+              ),
+            ),
+        ],
+      );
+
+  // ─── Record cards ──────────────────────────────────────────────────────
   Widget _rowCard(AppColors c, Map<String, dynamic> row) {
     final title = pickField(row, [
       'name', 'studentName', 'instructorName', 'tcName', 'centerName',
@@ -376,28 +522,26 @@ class _InstructorReportListScreenState
     final date = dateRaw.length >= 10 ? dateRaw.substring(0, 10) : dateRaw;
     final status = pickField(row, [
       'paymentStatus', 'examStatus', 'attendanceType', 'transactionType',
-      'status',
+      'actionStatus', 'status',
     ]);
-    final ok = () {
-      final s = status.toLowerCase();
-      return s.contains('paid') ||
-          s.contains('present') ||
-          s.contains('approve') ||
-          s.contains('active') ||
-          s.contains('success') ||
-          s.contains('pass');
-    }();
+    final s = status.toLowerCase();
+    final ok = s.contains('paid') ||
+        s.contains('present') ||
+        s.contains('approve') ||
+        s.contains('active') ||
+        s.contains('success') ||
+        s.contains('pass') ||
+        s.contains('reimbursed');
     final statusColor =
         status.isEmpty ? c.textMuted : (ok ? c.success : c.danger);
 
-    // Up to three extra fields not already surfaced above.
     const shown = {
       'name', 'studentName', 'instructorName', 'tcName', 'centerName',
       'description', 'invoiceDescription', 'text', 'title', 'amount',
       'dueAmount', 'paidAmount', 'totalAmount', 'value', 'total', 'date',
       'paymentDate', 'examDate', 'recordedTime', 'createdDate', 'dueDate',
       'paymentStatus', 'examStatus', 'attendanceType', 'transactionType',
-      'status',
+      'actionStatus', 'status',
     };
     final extras = <MapEntry<String, String>>[];
     for (final e in row.entries) {
@@ -422,15 +566,13 @@ class _InstructorReportListScreenState
         children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(
-              child: Text(
-                title.isEmpty ? 'Record' : title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800),
-              ),
+              child: Text(title.isEmpty ? 'Record' : title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800)),
             ),
             if (amount > 0) ...[
               const SizedBox(width: 8),
@@ -502,11 +644,80 @@ class _InstructorReportListScreenState
     );
   }
 
-  /// "studentName" -> "Student name".
+  /// Training-time rows: emphasise day + time window.
+  Widget _trainingTimeCard(AppColors c, Map<String, dynamic> row) {
+    final day = pickField(row, ['day', 'dayName', 'weekday', 'trainingDay']);
+    final from = pickField(row, ['fromTime', 'startTime', 'timeFrom', 'start']);
+    final to = pickField(row, ['toTime', 'endTime', 'timeTo', 'end']);
+    final label = pickField(row, [
+      'name', 'text', 'description', 'tTimeName', 'sessionName',
+    ]);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: c.isDark ? Border.all(color: c.border) : null,
+        boxShadow: Shadows.card(c),
+      ),
+      child: Row(children: [
+        Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: c.primary.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            (day.isEmpty ? '?' : day.substring(0, day.length.clamp(0, 3)))
+                .toUpperCase(),
+            style: TextStyle(
+                color: c.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w900),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(day.isEmpty ? (label.isEmpty ? 'Session' : label) : day,
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800)),
+              if (from.isNotEmpty || to.isNotEmpty)
+                Text(
+                  [from, to].where((x) => x.isNotEmpty).join(' – '),
+                  style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
+                ),
+              if (day.isNotEmpty && label.isNotEmpty)
+                Text(label,
+                    style: TextStyle(
+                        color: c.textMuted, fontSize: 11.5)),
+            ],
+          ),
+        ),
+      ]),
+    );
+  }
+
   String _humanizeKey(String k) {
     final spaced = k.replaceAllMapped(
         RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
     if (spaced.isEmpty) return spaced;
     return spaced[0].toUpperCase() + spaced.substring(1).toLowerCase();
   }
+}
+
+/// Centre option sources for the filter dropdowns.
+class ApiCentres {
+  static Future<dynamic> training() => Api.listingTrainingCenters();
+  static Future<dynamic> exam() => Api.reportsExamCenters();
 }
