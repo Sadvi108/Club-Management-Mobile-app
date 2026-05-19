@@ -22,8 +22,12 @@ import '../screens/instructor_collections_screen.dart';
 import '../screens/instructor_reports_screen.dart';
 import '../screens/instructor_settings_screen.dart';
 import '../screens/instructor_report_list_screen.dart';
+import '../screens/instructor_reports/report_spec.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
+
+/// Bare report fetcher: a no-argument call returning the raw response.
+typedef ReportFetcher = Future<dynamic> Function();
 
 /// Fade-through page: the outgoing screen fades out as the incoming one
 /// fades in and lifts slightly. Calmer than the default platform slide,
@@ -68,14 +72,18 @@ CustomTransitionPage<void> _tabFade(LocalKey key, Widget child) {
   );
 }
 
-GoRoute _reportRoute(String path, String title, ReportFetcher fetcher) =>
-    GoRoute(
-      path: path,
-      pageBuilder: (_, state) => _fadeThrough(
-        state.pageKey,
-        InstructorReportListScreen(title: title, fetcher: fetcher),
-      ),
-    );
+GoRoute _reportRoute(String path, String title, ReportFetcher fetcher) {
+  final slug = path.split('/').last;
+  final spec = kReportSpecs[slug] ??
+      ReportSpec(title: title, fetch: (_) => fetcher());
+  return GoRoute(
+    path: path,
+    pageBuilder: (_, state) => _fadeThrough(
+      state.pageKey,
+      InstructorReportListScreen(spec: spec),
+    ),
+  );
+}
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
@@ -183,6 +191,8 @@ final GoRouter appRouter = GoRouter(
         Api.reportsPaymentSlips),
     _reportRoute('/instructor/reports/reimbursement', 'Reimbursement',
         Api.reportsReimbursement),
+    _reportRoute('/instructor/reports/contribution', 'Contribution',
+        Api.reportsContribution),
     GoRoute(
       path: '/instructor/qr-scan',
       pageBuilder: (_, state) => MaterialPage(
