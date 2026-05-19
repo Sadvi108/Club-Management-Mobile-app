@@ -307,49 +307,151 @@ class _InstructorReportListScreenState
       );
 
   Widget _rowCard(AppColors c, Map<String, dynamic> row) {
-    final entries = row.entries.take(4).toList();
+    final title = pickField(row, [
+      'name', 'studentName', 'instructorName', 'tcName', 'centerName',
+      'description', 'invoiceDescription', 'text', 'title',
+    ]);
+    final amount = pickAmount(row, [
+      'amount', 'dueAmount', 'paidAmount', 'totalAmount', 'value', 'total',
+    ]);
+    final dateRaw = pickField(row, [
+      'date', 'paymentDate', 'examDate', 'recordedTime', 'createdDate',
+      'dueDate',
+    ]);
+    final date = dateRaw.length >= 10 ? dateRaw.substring(0, 10) : dateRaw;
+    final status = pickField(row, [
+      'paymentStatus', 'examStatus', 'attendanceType', 'transactionType',
+      'status',
+    ]);
+    final ok = () {
+      final s = status.toLowerCase();
+      return s.contains('paid') ||
+          s.contains('present') ||
+          s.contains('approve') ||
+          s.contains('active') ||
+          s.contains('success') ||
+          s.contains('pass');
+    }();
+    final statusColor =
+        status.isEmpty ? c.textMuted : (ok ? c.success : c.danger);
+
+    // Up to three extra fields not already surfaced above.
+    const shown = {
+      'name', 'studentName', 'instructorName', 'tcName', 'centerName',
+      'description', 'invoiceDescription', 'text', 'title', 'amount',
+      'dueAmount', 'paidAmount', 'totalAmount', 'value', 'total', 'date',
+      'paymentDate', 'examDate', 'recordedTime', 'createdDate', 'dueDate',
+      'paymentStatus', 'examStatus', 'attendanceType', 'transactionType',
+      'status',
+    };
+    final extras = <MapEntry<String, String>>[];
+    for (final e in row.entries) {
+      if (shown.contains(e.key)) continue;
+      final v = (e.value ?? '').toString().trim();
+      if (v.isEmpty || v == 'null') continue;
+      extras.add(MapEntry(_humanizeKey(e.key), v));
+      if (extras.length == 3) break;
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(Gaps.md),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.md),
-        border: Border.all(color: c.border),
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: c.isDark ? Border.all(color: c.border) : null,
         boxShadow: Shadows.card(c),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final e in entries)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 120,
-                    child: Text(
-                      e.key.toString(),
-                      style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      e.value?.toString() ?? '',
-                      style: TextStyle(
-                          color: c.textPrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ],
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: Text(
+                title.isEmpty ? 'Record' : title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: c.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800),
               ),
             ),
+            if (amount > 0) ...[
+              const SizedBox(width: 8),
+              Text('RM ${amount.toStringAsFixed(2)}',
+                  style: TextStyle(
+                      color: c.primary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900)),
+            ],
+          ]),
+          if (extras.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            for (final ex in extras)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 120,
+                      child: Text(ex.key,
+                          style: TextStyle(
+                              color: c.textSecondary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    Expanded(
+                      child: Text(ex.value,
+                          style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          if (date.isNotEmpty || status.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(children: [
+              if (date.isNotEmpty) ...[
+                Icon(Icons.event, size: 13, color: c.textMuted),
+                const SizedBox(width: 5),
+                Text(date,
+                    style: TextStyle(
+                        color: c.textSecondary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600)),
+              ],
+              const Spacer(),
+              if (status.isNotEmpty)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(status,
+                      style: TextStyle(
+                          color: statusColor,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800)),
+                ),
+            ]),
+          ],
         ],
       ),
     );
+  }
+
+  /// "studentName" -> "Student name".
+  String _humanizeKey(String k) {
+    final spaced = k.replaceAllMapped(
+        RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
+    if (spaced.isEmpty) return spaced;
+    return spaced[0].toUpperCase() + spaced.substring(1).toLowerCase();
   }
 }
