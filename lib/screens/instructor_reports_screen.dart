@@ -26,6 +26,7 @@ class InstructorReportsScreen extends StatelessWidget {
     _ReportItem(Icons.directions_run,       'Activities',          '/instructor/reports/activity'),
     _ReportItem(Icons.payments_outlined,    'Reimbursement',       '/instructor/reports/reimbursement'),
     _ReportItem(Icons.shopping_cart_outlined,'Purchase Request',   '/instructor/reports/purchase-request'),
+    _ReportItem(Icons.volunteer_activism,   'Contribution',       '/instructor/reports/contribution'),
   ];
 
   @override
