@@ -54,8 +54,18 @@ Map<String, dynamic> reportBody(ReportQuery q) {
   final m = <String, dynamic>{};
   if (q.tCenterId != 0) m['tCenterId'] = q.tCenterId;
   if (q.eCenterId != 0) m['eCenterId'] = q.eCenterId;
-  if (q.fromDate != null) m['fromDate'] = q.fromDate!.toIso8601String();
-  if (q.toDate != null) m['toDate'] = q.toDate!.toIso8601String();
+  if (q.fromDate != null) {
+    final f = q.fromDate!;
+    // Start of the picked day.
+    m['fromDate'] = DateTime(f.year, f.month, f.day).toIso8601String();
+  }
+  if (q.toDate != null) {
+    final t = q.toDate!;
+    // End of the picked day — a midnight toDate would exclude every
+    // record timestamped later that same day.
+    m['toDate'] =
+        DateTime(t.year, t.month, t.day, 23, 59, 59).toIso8601String();
+  }
   return m;
 }
 
