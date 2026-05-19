@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/response_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
@@ -27,6 +28,7 @@ class InstructorReportListScreen extends StatefulWidget {
 class _InstructorReportListScreenState
     extends State<InstructorReportListScreen> {
   dynamic _data;
+  dynamic _rawResponse;
   bool _loading = true;
   String? _error;
 
@@ -137,9 +139,8 @@ class _InstructorReportListScreenState
     });
     try {
       final resp = await widget.fetcher();
-      final data =
-          resp is Map && resp.containsKey('data') ? resp['data'] : resp;
-      setState(() => _data = data);
+      _rawResponse = resp;
+      setState(() => _data = findRecordList(resp));
     } catch (e) {
       debugPrint('${widget.title} failed: $e');
       setState(() => _error = e.toString());
@@ -150,17 +151,12 @@ class _InstructorReportListScreenState
 
   List<Map<String, dynamic>> _rows() {
     final d = _data;
-    if (d is List) {
-      return d
-          .map((e) => e is Map
-              ? Map<String, dynamic>.from(e)
-              : <String, dynamic>{'value': e})
-          .toList();
-    }
-    if (d is Map) {
-      return [Map<String, dynamic>.from(d)];
-    }
-    return const [];
+    if (d is! List) return const [];
+    return d
+        .map((e) => e is Map
+            ? Map<String, dynamic>.from(e)
+            : <String, dynamic>{'value': e})
+        .toList();
   }
 
   @override
