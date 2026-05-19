@@ -134,10 +134,12 @@ class _InstructorReportListScreenState
     if (status == null || status.isEmpty || _spec.rowStatus == null) {
       return rows;
     }
+    // Exact match — rowStatus getters return normalized values
+    // ('Active'/'Inactive', 'Pending'/'Approved'/'Rejected', etc).
+    // A substring test would wrongly match 'Active' against 'inactive'.
     final want = status.toLowerCase();
     return rows.where((r) {
-      final s = _spec.rowStatus!(r).toLowerCase();
-      return s.contains(want) || want.contains(s) && s.isNotEmpty;
+      return _spec.rowStatus!(r).toLowerCase() == want;
     }).toList();
   }
 
