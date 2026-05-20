@@ -268,12 +268,25 @@ class UserSession extends ChangeNotifier {
     return scoped.isNotEmpty ? scoped : list;
   }
 
-  /// Total amount due. Tries, in order:
-  ///   1. Sum of [outstandingForCurrentStudent] amounts
-  ///   2. `homeStats` fields via fuzzy [_readAmount]
-  ///   3. The raw outstanding response root (covers `{dueAmount: X, data: [...]}`)
-  ///   4. The `data` wrapper of the raw outstanding response
+  /// Total amount due — the "FEES DUE / total due amt" badge.
+  ///
+  /// /Reports/HomePageStats is the authoritative server-precomputed
+  /// summary for the logged-in account (instructor: own personal due
+  /// only; student: own outstanding). /Outstanding/Fetch on an
+  /// instructor token returns ALL the instructor's students' invoices
+  /// aggregated — wrong for the badge but right for per-invoice views.
+  ///
+  /// Resolution order:
+  ///   1. `homeStats.dueAmount` (precomputed, role-correct)
+  ///   2. raw `homeStatsRaw`
+  ///   3. Sum of [outstandingForCurrentStudent] (only when home stats
+  ///      missing — typical for guardian sibling-filter case)
+  ///   4. raw outstanding response root
   num get dueAmount {
+    final h1 = _deepReadAmount(homeStats);
+    if (h1 != 0) return h1;
+    final h2 = _deepReadAmount(homeStatsRaw);
+    if (h2 != 0) return h2;
     final list = outstandingForCurrentStudent;
     if (list.isNotEmpty) {
       num total = 0;
@@ -282,10 +295,6 @@ class UserSession extends ChangeNotifier {
       }
       if (total != 0) return total;
     }
-    final n1 = _deepReadAmount(homeStats);
-    if (n1 != 0) return n1;
-    final n2 = _deepReadAmount(homeStatsRaw);
-    if (n2 != 0) return n2;
     final n3 = _deepReadAmount(outstandingRaw);
     if (n3 != 0) return n3;
     return 0;
@@ -329,20 +338,20 @@ class UserSession extends ChangeNotifier {
     return 0;
   }
 
-  /// Number of unpaid invoices. Tries:
-  ///   1. `outstandingList.length`
-  ///   2. `homeStats` known + fuzzy keys (case-insensitive substring)
-  ///   3. Same lookup on the outstanding raw response wrapper
+  /// Number of unpaid invoices — must match [dueAmount]'s source.
+  /// Reads `homeStats.invoiceCount` first (server-precomputed,
+  /// role-correct: instructor = own count, NOT students' aggregated).
+  /// Falls back to outstandingList length only when home stats absent.
   int get invoiceCount {
-    final list = outstandingForCurrentStudent;
-    if (list.isNotEmpty) return list.length;
     final n1 = _deepReadCount(homeStats);
     if (n1 != 0) return n1;
     final n2 = _deepReadCount(homeStatsRaw);
     if (n2 != 0) return n2;
+    final list = outstandingForCurrentStudent;
+    if (list.isNotEmpty) return list.length;
     final n3 = _deepReadCount(outstandingRaw);
     if (n3 != 0) return n3;
-    return list?.length ?? 0;
+    return 0;
   }
 
   /// Extract an integer count from any map by trying exact keys then a
