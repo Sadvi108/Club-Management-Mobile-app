@@ -730,6 +730,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 children: [
                   Text('Upcoming Holidays', style: TextStyle(color: c.isDark ? const Color(0xFFFDBA74) : const Color(0xFF92400E), fontSize: 14, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
+                  // awaiting holidays endpoint — no swagger path exists; kHolidays
+                  // is an intentional placeholder until the backend exposes one.
                   ...kHolidays.map((h) => Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text('• ${h.date} — ${h.name}', style: TextStyle(fontSize: 12, color: c.isDark ? const Color(0xFFFED7AA) : const Color(0xFF92400E))),
