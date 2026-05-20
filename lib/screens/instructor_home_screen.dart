@@ -7,6 +7,7 @@ import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/api_diagnostic_sheet.dart';
 import '../widgets/notification_bell.dart';
+import '../widgets/pressable.dart';
 
 class InstructorHomeScreen extends StatefulWidget {
   const InstructorHomeScreen({super.key});
@@ -45,6 +46,8 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
               const SizedBox(height: Gaps.lg),
               _notificationsStrip(c, session),
               const SizedBox(height: Gaps.lg),
+              _quickAccessHeader(c, context),
+              const SizedBox(height: Gaps.md),
               _actionGrid(c),
               const SizedBox(height: Gaps.lg),
               _latestUpdates(c, session),
@@ -257,9 +260,11 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
     );
   }
 
-  Widget _actionGrid(AppColors c) {
+  /// Single source of truth for the Quick Access tiles. The on-screen
+  /// 3x3 grid renders the first 9; "See all" opens the full list.
+  List<_ActionTile> _buildTiles() {
     // Each tile carries its own accent so the grid reads at a glance rather
-    // than as 12 identical orange chips.
+    // than as identical orange chips.
     const amber  = Color(0xFFF59E0B);
     const teal   = Color(0xFF14B8A6);
     const green  = Color(0xFF10B981);
@@ -271,8 +276,7 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
     const yellow = Color(0xFFFBBF24);
     const cyan   = Color(0xFF06B6D4);
     const purple = Color(0xFFA855F7);
-    const orange = Color(0xFFFB923C);
-    final tiles = <_ActionTile>[
+    return <_ActionTile>[
       _ActionTile(Icons.alarm, 'Training Time', amber,
           () => context.push('/instructor/reports/training-time')),
       _ActionTile(Icons.directions_run, 'Activities', teal,
@@ -295,43 +299,69 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
           () => context.push('/instructor/reports/new-student')),
       _ActionTile(Icons.receipt, 'Payment Slip', purple,
           () => context.push('/instructor/reports/payment-slip')),
-      _ActionTile(Icons.apps, 'More', orange, () => _openMoreSheet(context)),
     ];
-    return Container(
-      padding: const EdgeInsets.all(Gaps.md),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.xl),
-        border: Border.all(color: c.border),
-        boxShadow: Shadows.card(c),
+  }
+
+  Widget _actionGrid(AppColors c) {
+    final tiles = _buildTiles();
+    // First 9 tiles in the visible 3x3 grid. The rest surface via the
+    // "See all" sheet — matches the student home Quick Access pattern.
+    final visible = tiles.take(9).toList();
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.95,
       ),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          mainAxisExtent: 104,
-        ),
-        itemCount: tiles.length,
-        itemBuilder: (_, i) => _tile(c, tiles[i]),
-      ),
+      itemCount: visible.length,
+      itemBuilder: (_, i) => _tile(c, visible[i]),
     );
   }
 
+  /// Student-home-style section header for the Quick Access grid.
+  Widget _quickAccessHeader(AppColors c, BuildContext ctx) {
+    return Row(children: [
+      Text('Quick Access',
+          style: TextStyle(
+              color: c.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w800)),
+      const Spacer(),
+      InkWell(
+        onTap: () => _openMoreSheet(ctx),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Row(children: [
+            Text('See all',
+                style: TextStyle(
+                    color: c.primary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800)),
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right, color: c.primary, size: 16),
+          ]),
+        ),
+      ),
+    ]);
+  }
+
   Widget _tile(AppColors c, _ActionTile t) {
-    final bg = t.color.withOpacity(c.isDark ? 0.18 : 0.12);
-    return InkWell(
+    return Pressable(
       onTap: t.onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(Radii.lg),
       child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         decoration: BoxDecoration(
           color: c.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: c.border),
+          borderRadius: BorderRadius.circular(Radii.lg),
+          border: c.isDark ? Border.all(color: c.border) : null,
+          boxShadow: Shadows.card(c),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -339,33 +369,25 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [bg, t.color.withOpacity(c.isDark ? 0.30 : 0.22)],
-                ),
+                color: t.color.withOpacity(c.isDark ? 0.2 : 0.12),
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: t.color.withOpacity(0.18),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
               ),
               alignment: Alignment.center,
-              child: Icon(t.icon, color: t.color, size: 22),
+              child: Icon(t.icon, size: 22, color: t.color),
             ),
             const SizedBox(height: 8),
-            Text(t.label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 11,
-                    height: 1.15,
-                    fontWeight: FontWeight.w700)),
+            Text(
+              t.label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                color: c.textPrimary,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
+              ),
+            ),
           ],
         ),
       ),
@@ -374,54 +396,74 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
 
   void _openMoreSheet(BuildContext context) {
     final c = context.appColors;
+    final tiles = _buildTiles();
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        maxChildSize: 0.92,
+        minChildSize: 0.4,
+        expand: false,
+        builder: (_, scrollCtrl) => Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+          child: Column(children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                  color: c.border, borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 14),
+            Row(children: [
+              Text('Quick Access',
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18)),
+              const Spacer(),
+              InkWell(
+                onTap: () => Navigator.pop(ctx),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 32, height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                      color: c.surfaceAlt, shape: BoxShape.circle),
+                  child: Icon(Icons.close,
+                      color: c.textSecondary, size: 18),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            Expanded(
+              child: GridView.builder(
+                controller: scrollCtrl,
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.95,
+                ),
+                itemCount: tiles.length,
+                itemBuilder: (_, i) => InkWell(
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    tiles[i].onTap();
+                  },
+                  borderRadius: BorderRadius.circular(Radii.lg),
+                  child: _tile(c, tiles[i]),
+                ),
+              ),
+            ),
+          ]),
         ),
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-                color: c.border, borderRadius: BorderRadius.circular(2)),
-          ),
-          const SizedBox(height: 14),
-          Text('More options',
-              style: TextStyle(
-                  color: c.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16)),
-          const SizedBox(height: 10),
-          ListTile(
-            leading: Icon(Icons.support_agent, color: c.primary),
-            title: const Text('Help Desk'),
-            onTap: () {
-              Navigator.pop(ctx);
-              context.push('/instructor/settings');
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.payments_outlined, color: c.primary),
-            title: const Text('Reimbursement'),
-            onTap: () {
-              Navigator.pop(ctx);
-              context.push('/instructor/reports/reimbursement');
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.swap_horiz, color: c.primary),
-            title: const Text('Switch Branch'),
-            onTap: () {
-              Navigator.pop(ctx);
-              context.go('/instructor/settings');
-            },
-          ),
-        ]),
       ),
     );
   }
