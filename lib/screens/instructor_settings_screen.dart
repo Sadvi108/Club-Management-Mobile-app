@@ -354,11 +354,7 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
                 _row(c, Icons.swap_horiz, 'Switch Branch', _openSwitchBranch),
                 const SizedBox(height: Gaps.md),
                 _sectionLabel(c, 'Preferences'),
-                _row(
-                    c,
-                    theme.isDark ? Icons.light_mode : Icons.dark_mode,
-                    theme.isDark ? 'Light Mode' : 'Dark Mode',
-                    theme.toggle),
+                _themeToggleRow(c, theme),
                 _row(c, Icons.support_agent, 'Help Desk', _openHelpDesk),
                 _row(c, Icons.info_outline, 'About', _showAbout),
                 const SizedBox(height: Gaps.md),
@@ -383,6 +379,66 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
           ),
         ),
       );
+
+  /// Dark/Light mode row with a Switch — matches the student Profile
+  /// theme toggle (icon + title + subtitle + Switch).
+  Widget _themeToggleRow(AppColors c, ThemeProvider theme) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.md),
+        border: Border.all(color: c.border),
+        boxShadow: c.isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withOpacity(0.03),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+      ),
+      child: Row(children: [
+        Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(
+              color: c.surfaceAlt, shape: BoxShape.circle),
+          alignment: Alignment.center,
+          child: Icon(
+              theme.isDark ? Icons.dark_mode : Icons.light_mode,
+              color: c.primary,
+              size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(theme.isDark ? 'Dark Mode' : 'Light Mode',
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(theme.isDark ? 'Orange & black' : 'Orange & white',
+                  style: TextStyle(
+                      color: c.textSecondary, fontSize: 11)),
+            ],
+          ),
+        ),
+        Switch(
+          value: theme.isDark,
+          onChanged: (v) => theme.setDark(v),
+          activeColor: Colors.white,
+          activeTrackColor: c.primary,
+          inactiveThumbColor: Colors.white,
+          inactiveTrackColor: c.border,
+        ),
+      ]),
+    );
+  }
 
   Widget _row(AppColors c, IconData icon, String label, VoidCallback onTap,
       {bool danger = false}) {
