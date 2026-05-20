@@ -1,4 +1,8 @@
+import 'package:flutter/widgets.dart';
+import 'package:go_router/go_router.dart';
+
 import '../../services/api.dart';
+import 'student_list_fetch.dart';
 
 /// A filter control a report can show.
 enum RFilter { trainingCenter, examCenter, dateRange, status, nameText, icText }
@@ -26,6 +30,7 @@ class ReportQuery {
 
 typedef SpecFetch = Future<dynamic> Function(ReportQuery q);
 typedef RowStatus = String Function(Map row);
+typedef RowTap = void Function(BuildContext ctx, Map<String, dynamic> row);
 
 /// Per-report configuration.
 class ReportSpec {
@@ -36,6 +41,9 @@ class ReportSpec {
   final RowStatus? rowStatus;
   final String statusLabel;
   final bool trainingTimeMode;
+  /// Optional row-tap handler — when set, rows become tappable (e.g. open
+  /// a per-student detail screen from the Student List report).
+  final RowTap? onRowTap;
 
   const ReportSpec({
     required this.title,
@@ -45,6 +53,7 @@ class ReportSpec {
     this.rowStatus,
     this.statusLabel = 'Status',
     this.trainingTimeMode = false,
+    this.onRowTap,
   });
 }
 
@@ -77,28 +86,16 @@ final Map<String, ReportSpec> kReportSpecs = {
     title: 'Student List',
     filters: const [
       RFilter.trainingCenter,
-      RFilter.status,
       RFilter.nameText,
       RFilter.icText,
     ],
-    statusLabel: 'Status',
-    statusOptions: const ['Active', 'Inactive'],
-    rowStatus: (r) {
-      final a = r['isActive'];
-      if (a is bool) return a ? 'Active' : 'Inactive';
-      final s = (r['status'] ?? r['activeStatus'] ?? r['studentStatus'] ?? '')
-          .toString()
-          .toLowerCase();
-      if (s.contains('inactive')) return 'Inactive';
-      if (s.contains('active')) return 'Active';
-      return '';
-    },
-    fetch: (q) {
-      final b = reportBody(q);
-      if (q.name.isNotEmpty) b['studentName'] = q.name;
-      if (q.ic.isNotEmpty) b['studentIcNo'] = q.ic;
-      return Api.reportsStudentDetails(b);
-    },
+    // /Reports/StudentDetails returns the instructor's schedule rows
+    // (tCenterName / dayOfWeek / instructorName), NOT students. The
+    // aggregator below pulls real students from listingStudentListByTcId
+    // and enriches them with stats from /Outstanding/Fetch.
+    fetch: fetchInstructorStudentList,
+    onRowTap: (ctx, row) =>
+        ctx.push('/instructor/student-detail', extra: row),
   ),
   'training-time': ReportSpec(
     title: 'Training Time',

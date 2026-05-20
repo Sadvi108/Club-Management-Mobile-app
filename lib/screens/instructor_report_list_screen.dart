@@ -182,7 +182,15 @@ class _InstructorReportListScreenState
                         offsetY: 14,
                         child: _spec.trainingTimeMode
                             ? _trainingTimeCard(c, entry.value)
-                            : _rowCard(c, entry.value),
+                            : (_spec.onRowTap != null
+                                ? InkWell(
+                                    onTap: () => _spec.onRowTap!(
+                                        context, entry.value),
+                                    borderRadius:
+                                        BorderRadius.circular(Radii.lg),
+                                    child: _rowCard(c, entry.value),
+                                  )
+                                : _rowCard(c, entry.value)),
                       ),
                 ],
               ),

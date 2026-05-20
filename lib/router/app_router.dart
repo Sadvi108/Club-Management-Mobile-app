@@ -23,6 +23,7 @@ import '../screens/instructor_reports_screen.dart';
 import '../screens/instructor_settings_screen.dart';
 import '../screens/instructor_report_list_screen.dart';
 import '../screens/instructor_reports/report_spec.dart';
+import '../screens/instructor_reports/student_detail_screen.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
 
@@ -191,6 +192,19 @@ final GoRouter appRouter = GoRouter(
         Api.reportsPaymentSlips),
     _reportRoute('/instructor/reports/reimbursement', 'Reimbursement',
         Api.reportsReimbursement),
+    GoRoute(
+      path: '/instructor/student-detail',
+      pageBuilder: (_, state) {
+        final extra = state.extra;
+        final student = extra is Map
+            ? Map<String, dynamic>.from(extra)
+            : <String, dynamic>{};
+        return MaterialPage(
+          key: state.pageKey,
+          child: InstructorStudentDetailScreen(student: student),
+        );
+      },
+    ),
     _reportRoute('/instructor/reports/contribution', 'Contribution',
         Api.reportsContribution),
     GoRoute(
