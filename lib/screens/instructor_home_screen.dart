@@ -200,13 +200,17 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
             ),
           ]),
           const SizedBox(height: 12),
+          // Both badges show /Reports/HomePageStats — the instructor's
+          // personal-due summary. The API does not expose per-invoice
+          // rows for that aggregate, so the rows are non-tappable.
+          // The full branch outstanding list is still reachable via
+          // Reports tab -> Outstanding Report.
           _notifRow(
             c,
             '#$invoiceCount invoices are due',
             icon: Icons.attach_money,
             iconBg: const Color(0xFFDCFCE7),
             iconColor: const Color(0xFF16A34A),
-            onTap: () => context.push('/instructor/reports/outstanding'),
           ),
           const SizedBox(height: 6),
           _notifRow(
@@ -215,7 +219,6 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
             icon: Icons.credit_card,
             iconBg: const Color(0xFFFFECEC),
             iconColor: const Color(0xFFDC2626),
-            onTap: () => context.push('/instructor/reports/outstanding'),
           ),
         ],
       ),
@@ -254,7 +257,8 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
                     fontWeight: FontWeight.w700,
                     fontSize: 13)),
           ),
-          Icon(Icons.north_east, color: c.primary, size: 15),
+          if (onTap != null)
+            Icon(Icons.north_east, color: c.primary, size: 15),
         ]),
       ),
     );
