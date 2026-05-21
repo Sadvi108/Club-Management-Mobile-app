@@ -47,16 +47,74 @@ class _InstructorStudentDetailScreenState
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        Api.outstandingFetch(),
-        Api.reportsReceipts(const <String, dynamic>{}),
-      ]);
-      final os = findRecordList(results[0])
+      final now = DateTime.now();
+      final start = DateTime(now.year - 2, 1, 1).toIso8601String();
+      final end = DateTime(now.year + 2, 12, 31).toIso8601String();
+
+      final rawId = widget.student['studentId'] ?? widget.student['id'];
+      final sidInt = rawId is int
+          ? rawId
+          : int.tryParse(rawId?.toString().trim() ?? '') ?? 0;
+
+      // Try scoped bodies first (student-specific), then fall back to
+      // all-branch. Instructor tokens are branch-wide so the server should
+      // honour studentId/studentName without a token switch.
+      final candidateBodies = <Map<String, dynamic>>[
+        {
+          'studentId': sidInt,
+          'studentName': _name,
+          'icNo': '',
+          'startDate': start,
+          'endDate': end,
+          'eCenterId': 0,
+          'tCenterId': 0,
+          'sCenterId': 0,
+          'transactionType': '',
+        },
+        {
+          'studentId': 0,
+          'studentName': _name,
+          'icNo': '',
+          'startDate': start,
+          'endDate': end,
+          'eCenterId': 0,
+          'tCenterId': 0,
+          'sCenterId': 0,
+          'transactionType': '',
+        },
+        {
+          'studentId': 0,
+          'studentName': '',
+          'icNo': '',
+          'startDate': start,
+          'endDate': end,
+          'eCenterId': 0,
+          'tCenterId': 0,
+          'sCenterId': 0,
+          'transactionType': '',
+        },
+        const <String, dynamic>{},
+      ];
+
+      dynamic osResp;
+      for (final body in candidateBodies) {
+        try {
+          final r = await Api.outstandingFetch(body);
+          final list = findRecordList(r).whereType<Map>().toList();
+          osResp ??= r;
+          if (list.isNotEmpty) break;
+        } catch (_) {}
+      }
+
+      final receiptsResp =
+          await Api.reportsReceipts(const <String, dynamic>{});
+
+      final os = findRecordList(osResp)
           .whereType<Map>()
           .map((m) => Map<String, dynamic>.from(m))
           .where(_matches)
           .toList();
-      final rc = findRecordList(results[1])
+      final rc = findRecordList(receiptsResp)
           .whereType<Map>()
           .map((m) => Map<String, dynamic>.from(m))
           .where(_matchesReceipt)
@@ -92,11 +150,15 @@ class _InstructorStudentDetailScreenState
   }
 
   bool _matchesReceipt(Map<String, dynamic> r) {
-    // Receipts rows use `name` + `icNo`. We don't have icNo here, so match
-    // on name (case-insensitive). regNo is a separate concept.
+    final sid = _studentIdStr;
+    if (sid.isNotEmpty &&
+        (r['studentId'] ?? '').toString().trim() == sid) return true;
     final nm = _name.toLowerCase();
     if (nm.isEmpty) return false;
-    return (r['name'] ?? '').toString().toLowerCase() == nm;
+    return (r['studentName'] ?? r['name'] ?? r['receiverName'] ?? '')
+        .toString()
+        .toLowerCase() ==
+        nm;
   }
 
   num _totalDue() {

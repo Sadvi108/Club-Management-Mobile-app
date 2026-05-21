@@ -97,6 +97,32 @@ final Map<String, ReportSpec> kReportSpecs = {
     onRowTap: (ctx, row) =>
         ctx.push('/instructor/student-detail', extra: row),
   ),
+  'outstanding': ReportSpec(
+    title: 'Outstanding Report',
+    filters: const [RFilter.trainingCenter, RFilter.dateRange],
+    fetch: (q) {
+      final now = DateTime.now();
+      final start = q.fromDate != null
+          ? DateTime(q.fromDate!.year, q.fromDate!.month, q.fromDate!.day)
+              .toIso8601String()
+          : DateTime(now.year - 2, 1, 1).toIso8601String();
+      final end = q.toDate != null
+          ? DateTime(q.toDate!.year, q.toDate!.month, q.toDate!.day, 23, 59, 59)
+              .toIso8601String()
+          : DateTime(now.year + 2, 12, 31).toIso8601String();
+      return Api.outstandingFetch(<String, dynamic>{
+        'studentId': 0,
+        'studentName': '',
+        'icNo': '',
+        'startDate': start,
+        'endDate': end,
+        'eCenterId': 0,
+        'tCenterId': q.tCenterId,
+        'sCenterId': 0,
+        'transactionType': '',
+      });
+    },
+  ),
   'training-time': ReportSpec(
     title: 'Training Time',
     filters: const [RFilter.trainingCenter],
