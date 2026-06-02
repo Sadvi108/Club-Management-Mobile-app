@@ -67,58 +67,105 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
     final pic = session.clubPic;
     final initial =
         (clubName.isNotEmpty ? clubName[0] : 'C').toUpperCase();
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Welcome,',
-                  style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
-              const SizedBox(height: 2),
-              Text(name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800)),
-              if (clubName.isNotEmpty)
-                Text('($clubName)',
+    // White-card hero — same premium treatment as the student home:
+    // gradient avatar ring, greeting, club chip, brand-mark tile, bell.
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.xxl),
+        border: c.isDark ? Border.all(color: c.border) : null,
+        boxShadow: Shadows.card(c),
+      ),
+      child: Row(
+        children: [
+          // Gradient-ring avatar (club logo / initial).
+          Container(
+            width: 54, height: 54,
+            padding: const EdgeInsets.all(2.5),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: c.gradient,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: c.primary.withOpacity(0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: c.surface,
+                shape: BoxShape.circle,
+                border: Border.all(color: c.surface, width: 2),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: pic.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: pic,
+                      fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => _initialAvatar(c, initial),
+                    )
+                  : _initialAvatar(c, initial),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Welcome,',
                     style: TextStyle(
-                        color: c.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
-            ],
+                        color: c.textMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500)),
+                Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: c.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2)),
+                if (clubName.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: c.surfaceAlt,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: c.primary.withOpacity(0.28)),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.shield_moon_outlined,
+                          size: 11, color: c.primaryDark),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(clubName.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.3,
+                                color: c.primaryDark)),
+                      ),
+                    ]),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
-        const NotificationBell(),
-        const SizedBox(width: 10),
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: c.surface,
-            shape: BoxShape.circle,
-            border: Border.all(color: c.border),
-            boxShadow: Shadows.card(c),
-          ),
-          alignment: Alignment.center,
-          clipBehavior: Clip.antiAlias,
-          child: pic.isNotEmpty
-              ? CachedNetworkImage(
-                  imageUrl: pic,
-                  fit: BoxFit.cover,
-                  width: 48,
-                  height: 48,
-                  errorWidget: (_, __, ___) => _initialAvatar(c, initial),
-                )
-              : _initialAvatar(c, initial),
-        ),
-      ],
+          const SizedBox(width: 8),
+          const NotificationBell(),
+        ],
+      ),
     );
   }
 
@@ -134,7 +181,8 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
 
   Widget _notificationsStrip(AppColors c, UserSession session) {
     final isDark = c.isDark;
-    final accent = const Color(0xFF2563EB);
+    // On-brand orange accent (design system: never blue/purple).
+    final accent = c.primary;
     final invoiceCount = session.invoiceCount;
     final due = session.dueAmount;
     return Container(
@@ -144,14 +192,14 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-              : [const Color(0xFFF0F9FF), const Color(0xFFEFF6FF)],
+              ? [const Color(0xFF2D1A0A), const Color(0xFF3F2410)]
+              : [const Color(0xFFFFF7ED), const Color(0xFFFFEDD5)],
         ),
         borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: accent.withOpacity(0.18)),
+        border: Border.all(color: accent.withOpacity(0.20)),
         boxShadow: [
           BoxShadow(
-            color: accent.withOpacity(isDark ? 0.10 : 0.06),
+            color: accent.withOpacity(isDark ? 0.12 : 0.08),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),

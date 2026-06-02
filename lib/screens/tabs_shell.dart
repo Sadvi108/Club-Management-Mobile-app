@@ -7,11 +7,13 @@ class TabsShell extends StatelessWidget {
   final String location;
   const TabsShell({super.key, required this.child, required this.location});
 
-  /// Bottom-tab order per D-Clix design system (ui_kits/mobile-app):
-  ///   Home · Training · [FAB] · Schedule · Payments
-  /// Progress + Profile are reached from the Home Quick Access grid and
-  /// the Home header avatar, matching the reference kit.
-  static const _routes = ['/home', '/training', '/schedule', '/payments'];
+  /// Student/parent bottom-tab order:
+  ///   Home · Training · [QR FAB] · Payments · Profile
+  /// Schedule lives on the Home screen (Timetable quick tile + Today's
+  /// Class), so it is off the bar; Profile takes the slot to give direct
+  /// access to settings, theme, switch-student and logout. Progress is
+  /// reached from the Home Quick Access grid.
+  static const _routes = ['/home', '/training', '/payments', '/profile'];
 
   int _idxFromLocation() {
     final i = _routes.indexWhere((r) => location.startsWith(r));
@@ -55,8 +57,8 @@ class TabsShell extends StatelessWidget {
             _tab(context, 0, idx, Icons.home_outlined, Icons.home, 'Home', '/home'),
             _tab(context, 1, idx, Icons.fitness_center_outlined, Icons.fitness_center, 'Training', '/training'),
             const SizedBox(width: 60), // notch space for FAB
-            _tab(context, 2, idx, Icons.calendar_month_outlined, Icons.calendar_month, 'Schedule', '/schedule'),
-            _tab(context, 3, idx, Icons.receipt_long_outlined, Icons.receipt_long, 'Payments', '/payments'),
+            _tab(context, 2, idx, Icons.receipt_long_outlined, Icons.receipt_long, 'Payments', '/payments'),
+            _tab(context, 3, idx, Icons.person_outline, Icons.person, 'Profile', '/profile'),
           ],
         ),
         )),
