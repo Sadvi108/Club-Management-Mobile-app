@@ -373,8 +373,10 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
 
   Widget _invoiceCard(AppColors c, int index, Map<String, dynamic> inv) {
     final title = _pick(inv,
-        ['invoiceName', 'description', 'particulars', 'name', 'invoiceTitle', 'item', 'feeType']);
-    final invoiceNo = _pick(inv, ['invoiceNo', 'invoiceNumber', 'invNo', 'docNo', 'refNo', 'id']);
+        ['invoiceDescription', 'invoiceName', 'description', 'particulars', 'name', 'invoiceTitle', 'item', 'feeType']);
+    final studentName = _pick(inv, ['studentName', 'name', 'memberName']);
+    final period = _pick(inv, ['period', 'invoicePeriod', 'month']);
+    final invoiceNo = _pick(inv, ['invoiceNo', 'invoiceNumber', 'invNo', 'docNo', 'refNo', 'invoiceId', 'id']);
     final dueDate = _pick(inv,
         ['dueDate', 'invoiceDate', 'date', 'paymentDue', 'expiryDate', 'due_date']);
     final amount = _readAmount(inv);
@@ -445,6 +447,18 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
                             letterSpacing: 0.6)),
                   ),
               ]),
+              if (studentName.isNotEmpty || period.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(
+                  [studentName, period].where((s) => s.isNotEmpty).join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600),
+                ),
+              ],
               const SizedBox(height: 4),
               Wrap(
                 spacing: 12, runSpacing: 4,

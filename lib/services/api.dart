@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'api_service.dart';
 
 /// Typed wrapper around every Swagger endpoint exposed by
@@ -187,8 +188,11 @@ class Api {
   static Future<dynamic> profileMyClubStats() =>
       ApiService.get('/Profile/MyClubStats');
 
-  static Future<dynamic> profileUpdateProfile(Map<String, dynamic> body) =>
-      ApiService.post('/Profile/UpdateProfile', body);
+  /// /Profile/UpdateProfile is multipart/form-data (NOT JSON). Pass string
+  /// fields (Id, Name, IcNo, Gender, Address1-4, PostalCode, EmailAddress,
+  /// HandPhone, Height, Weight, ProfilePic base64, ...).
+  static Future<dynamic> profileUpdateProfile(Map<String, String> fields) =>
+      ApiService.postMultipart('/Profile/UpdateProfile', fields);
 
   static Future<dynamic> profileMyNotifications() =>
       ApiService.get('/Profile/MyNotifications');
@@ -339,5 +343,15 @@ class Api {
     required Object invoiceId,
   }) =>
       ApiService.get(
+          '/Utilities/ReceiptAsPDF/${_enc(clubId)}/${_enc(paymentId)}/${_enc(invoiceId)}');
+
+  /// Raw PDF bytes for a receipt — the endpoint returns a PDF body, not
+  /// JSON, so this must use the bytes path.
+  static Future<Uint8List> utilitiesReceiptAsPdfBytes({
+    required Object clubId,
+    required Object paymentId,
+    required Object invoiceId,
+  }) =>
+      ApiService.getBytes(
           '/Utilities/ReceiptAsPDF/${_enc(clubId)}/${_enc(paymentId)}/${_enc(invoiceId)}');
 }

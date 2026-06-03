@@ -46,6 +46,30 @@ class UserSession extends ChangeNotifier {
   String? activeStudentName;
   Object? activeStudentId;
 
+  /// Payment lock — when a payment is in progress, a 2-minute window
+  /// blocks starting any other payment. Pure client-side guard.
+  DateTime? paymentLockUntil;
+
+  bool get paymentLocked =>
+      paymentLockUntil != null && DateTime.now().isBefore(paymentLockUntil!);
+
+  /// Seconds remaining on the payment lock (0 when not locked).
+  int get paymentLockSeconds {
+    if (paymentLockUntil == null) return 0;
+    final s = paymentLockUntil!.difference(DateTime.now()).inSeconds;
+    return s > 0 ? s : 0;
+  }
+
+  void startPaymentLock([Duration d = const Duration(minutes: 2)]) {
+    paymentLockUntil = DateTime.now().add(d);
+    notifyListeners();
+  }
+
+  void clearPaymentLock() {
+    paymentLockUntil = null;
+    notifyListeners();
+  }
+
   /// Set (or clear, with null) the active student filter. Pure client-side,
   /// no network — instantly re-scopes every list via [notifyListeners].
   void setActiveStudent({String? name, Object? id}) {
@@ -233,6 +257,37 @@ class UserSession extends ChangeNotifier {
       if (v.isNotEmpty && v.startsWith('http')) return v;
     }
     return clubPic;
+  }
+
+  /// Locally-cached profile photo (base64), keyed by student id. The API
+  /// exposes no read-back for an uploaded ProfilePic, so the picked image
+  /// is cached on-device and shown until the server provides a real URL.
+  String localPhotoB64 = '';
+
+  String get _photoPrefKey {
+    final id = (myInfo?['id'] ?? authData?['id'] ?? registrationNo).toString();
+    return 'studentPhoto_$id';
+  }
+
+  Future<void> loadLocalPhoto() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      localPhotoB64 = prefs.getString(_photoPrefKey) ?? '';
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> setLocalPhoto(String b64) async {
+    localPhotoB64 = b64;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (b64.isEmpty) {
+        await prefs.remove(_photoPrefKey);
+      } else {
+        await prefs.setString(_photoPrefKey, b64);
+      }
+    } catch (_) {}
   }
 
   /// Attendance percentage from profile data, or empty string when unavailable.
@@ -726,6 +781,9 @@ class UserSession extends ChangeNotifier {
       }));
     }
     await Future.wait(futures);
+    // Restore any locally-cached profile photo (keyed by the now-loaded
+    // student id). Server has no photo read-back endpoint.
+    await loadLocalPhoto();
   }
 
   /// POST helper that returns the raw response (without auto-unwrapping

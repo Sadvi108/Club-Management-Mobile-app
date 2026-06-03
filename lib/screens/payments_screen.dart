@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/mock_data.dart';
@@ -103,36 +105,29 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   Future<void> _viewReceiptPDF(dynamic r) async {
     final m = r is Map ? r : <dynamic, dynamic>{};
     final session = UserSession.instance;
-    final clubId = session.authData?['clubId'] ?? session.authData?['clubID'] ?? 0;
+    final clubId = session.authData?['clubId'] ??
+        session.authData?['clubID'] ??
+        _clubIdFromPic(session) ??
+        0;
     final paymentId = m['paymentId'] ?? m['id'] ?? 0;
     final invoiceId = m['invoiceId'] ?? m['invoiceID'] ?? 0;
+    final receiptNo = (m['receiptNo'] ?? m['id'] ?? '').toString();
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
         const SnackBar(content: Text('Preparing receipt…')));
     try {
-      final resp = await Api.utilitiesReceiptAsPDF(
+      // ReceiptAsPDF returns raw PDF bytes (not JSON, not a URL).
+      final bytes = await Api.utilitiesReceiptAsPdfBytes(
           clubId: clubId, paymentId: paymentId, invoiceId: invoiceId);
-      // Endpoint returns a PDF URL — pull it out of whatever shape comes back.
-      String url = '';
-      if (resp is String) {
-        url = resp;
-      } else if (resp is Map) {
-        url = (resp['data'] ?? resp['url'] ?? resp['pdfUrl'] ?? '')
-            .toString();
-      }
-      url = url.trim();
       if (!mounted) return;
-      if (url.isEmpty || !(url.startsWith('http'))) {
-        messenger.showSnackBar(
-            const SnackBar(content: Text('Receipt not available for this payment.')));
+      if (bytes.isEmpty || !_looksLikePdf(bytes)) {
+        messenger.showSnackBar(const SnackBar(
+            content: Text('Receipt not available for this payment.')));
         return;
       }
-      final ok = await launchUrl(Uri.parse(url),
-          mode: LaunchMode.externalApplication);
-      if (!ok && mounted) {
-        messenger.showSnackBar(
-            const SnackBar(content: Text('Could not open the receipt.')));
-      }
+      await Printing.sharePdf(
+          bytes: bytes,
+          filename: 'receipt_${receiptNo.isEmpty ? paymentId : receiptNo}.pdf');
     } catch (e) {
       debugPrint('ReceiptAsPDF failed: $e');
       if (!mounted) return;
@@ -140,6 +135,18 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           SnackBar(content: Text('Receipt failed: $e')));
     }
   }
+
+  /// Derive clubId from the club logo URL (.../Logo//49.png) when authData
+  /// doesn't carry it directly.
+  int? _clubIdFromPic(UserSession session) {
+    final pic = (session.authData?['clubPic'] ?? '').toString();
+    final match = RegExp(r'/(\d+)\.png').firstMatch(pic);
+    return match != null ? int.tryParse(match.group(1)!) : null;
+  }
+
+  bool _looksLikePdf(List<int> b) =>
+      b.length > 4 &&
+      b[0] == 0x25 && b[1] == 0x50 && b[2] == 0x44 && b[3] == 0x46; // %PDF
 
   List<dynamic> _filteredReceipts() {
     List<dynamic> base;
@@ -214,13 +221,29 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   /// varying key names across invoice types, so probe a wide set.
   String _invoiceLabel(Map m, int idx) {
     for (final k in const [
-      'invoiceName', 'description', 'particulars', 'name', 'invoiceTitle',
-      'item', 'feeType', 'invoiceNo', 'invoiceNumber', 'text'
+      'invoiceDescription', 'invoiceName', 'description', 'particulars',
+      'invoiceTitle', 'item', 'feeType', 'invoiceNo', 'invoiceNumber', 'text'
     ]) {
       final v = (m[k] ?? '').toString().trim();
       if (v.isNotEmpty && v != 'null') return v;
     }
     return 'Invoice #${idx + 1}';
+  }
+
+  /// Owner (student) for an outstanding row — for the "paying for" label.
+  String _invoiceOwner(Map m) {
+    for (final k in const ['studentName', 'name', 'memberName']) {
+      final v = (m[k] ?? '').toString().trim();
+      if (v.isNotEmpty && v != 'null') return v;
+    }
+    return '';
+  }
+
+  /// "<student> · <period>" sub-line for an invoice row.
+  String _invoiceSub(Map m) {
+    final owner = _invoiceOwner(m);
+    final period = (m['period'] ?? m['invoicePeriod'] ?? '').toString().trim();
+    return [owner, period].where((s) => s.isNotEmpty && s != 'null').join(' · ');
   }
 
   num _invoiceAmount(Map m) {
@@ -417,12 +440,101 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     );
   }
 
+  /// "Paying for" block — names each student + invoice being settled, so
+  /// the user always sees whose invoices and what they cover.
+  Widget _payingForBlock(AppColors c) {
+    final rows = (_outstanding ?? const <dynamic>[])
+        .whereType<Map>()
+        .toList();
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.surfaceAlt,
+        borderRadius: BorderRadius.circular(Radii.md),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('PAYING FOR',
+            style: TextStyle(
+                color: c.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.8)),
+        const SizedBox(height: 8),
+        ...rows.take(6).map((m) {
+          final label = _invoiceLabel(m, 0);
+          final owner = _invoiceOwner(m);
+          final amt = _invoiceAmount(m).toStringAsFixed(2);
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (owner.isNotEmpty)
+                      Text(owner,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800)),
+                    Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text('RM $amt',
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800)),
+            ]),
+          );
+        }),
+        if (rows.length > 6)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text('+ ${rows.length - 6} more',
+                style: TextStyle(
+                    color: c.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600)),
+          ),
+      ]),
+    );
+  }
+
+  String _mmss(int total) {
+    final m = (total ~/ 60).toString().padLeft(2, '0');
+    final s = (total % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
   void _openPayModal() {
     final c = context.appColors;
+    final session = UserSession.instance;
+    // 2-minute lock: while a payment window is open, block starting a
+    // second one.
+    if (session.paymentLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              'A payment is already in progress. Try again in ${_mmss(session.paymentLockSeconds)}.')));
+      return;
+    }
+    session.startPaymentLock();
+    Timer? ticker;
     // Compute live total at open-time so the modal always shows the
     // current outstanding amount, not a stale mock value.
     final liveTotal = _liveOutstandingTotal();
-    final session = UserSession.instance;
     final modalAmount = liveTotal > 0
         ? liveTotal.toStringAsFixed(2)
         : (session.dueAmount > 0
@@ -433,6 +545,13 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setModal) {
+        ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+          if (!session.paymentLocked) {
+            ticker?.cancel();
+          }
+          if (ctx.mounted) setModal(() {});
+        });
+        final remain = session.paymentLockSeconds;
         return Container(
           decoration: BoxDecoration(
             color: c.surface,
@@ -442,12 +561,36 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 18),
-            Text('Complete Payment', style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+            Row(children: [
+              Expanded(
+                child: Text('Complete Payment', style: TextStyle(color: c.textPrimary, fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+              ),
+              // Countdown chip — the active payment window.
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: c.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.timer_outlined, size: 13, color: c.primary),
+                  const SizedBox(width: 4),
+                  Text(_mmss(remain),
+                      style: TextStyle(
+                          color: c.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          fontFeatures: const [FontFeature.tabularFigures()])),
+                ]),
+              ),
+            ]),
             const SizedBox(height: 4),
             Text('Choose payment method', style: TextStyle(color: c.textSecondary, fontSize: 12)),
             const SizedBox(height: 12),
             Text('RM $modalAmount', style: TextStyle(color: c.primary, fontSize: 32, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
+            _payingForBlock(c),
+            const SizedBox(height: 12),
             ...kPayMethods.map((m) {
               final active = selectedMethod == m.id;
               return Padding(
@@ -500,14 +643,18 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             const SizedBox(height: 10),
             Center(
               child: TextButton(
-                onPressed: () => Navigator.pop(ctx),
+                onPressed: () {
+                  // Explicit abort — release the lock so they can retry.
+                  UserSession.instance.clearPaymentLock();
+                  Navigator.pop(ctx);
+                },
                 child: Text('Cancel', style: TextStyle(color: c.textSecondary, fontSize: 13)),
               ),
             ),
           ]),
         );
       }),
-    );
+    ).whenComplete(() => ticker?.cancel());
   }
 
   @override
@@ -746,6 +893,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             final inv = e.value;
             final m = inv is Map ? inv : <dynamic, dynamic>{};
             final label = _invoiceLabel(m, idx);
+            final sub = _invoiceSub(m);
             final amount = _invoiceAmount(m).toStringAsFixed(2);
             final selected = _selectedInvoiceIdx.contains(idx);
             return InkWell(
@@ -757,12 +905,37 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 }
               }),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(children: [
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Icon(selected ? Icons.check_box : Icons.check_box_outline_blank, size: 18, color: selected ? c.primary : c.textMuted),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(label, style: TextStyle(fontSize: 12, color: c.textPrimary))),
-                  Text('RM $amount', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c.textPrimary)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: c.textPrimary)),
+                        if (sub.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 1),
+                            child: Text(sub,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: c.textSecondary,
+                                    fontWeight: FontWeight.w500)),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('RM $amount', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: c.textPrimary)),
                 ]),
               ),
             );
