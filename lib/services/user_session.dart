@@ -325,31 +325,35 @@ class UserSession extends ChangeNotifier {
 
   /// Total amount due — the "FEES DUE / total due amt" badge.
   ///
-  /// /Reports/HomePageStats is the authoritative server-precomputed
-  /// summary for the logged-in account (instructor: own personal due
-  /// only; student: own outstanding). /Outstanding/Fetch on an
-  /// instructor token returns ALL the instructor's students' invoices
-  /// aggregated — wrong for the badge but right for per-invoice views.
-  ///
-  /// Resolution order:
-  ///   1. `homeStats.dueAmount` (precomputed, role-correct)
-  ///   2. raw `homeStatsRaw`
-  ///   3. Sum of [outstandingForCurrentStudent] (only when home stats
-  ///      missing — typical for guardian sibling-filter case)
-  ///   4. raw outstanding response root
+  /// Role matters:
+  ///  - STUDENT/parent: `/Outstanding/Fetch` returns the user's own (and
+  ///    siblings') invoices, so the summed rows are the true personal due.
+  ///    `/Reports/HomePageStats` can lag/return 0, so the live row sum
+  ///    wins; HomePageStats is only a fallback.
+  ///  - INSTRUCTOR: `/Outstanding/Fetch` returns ALL branch students'
+  ///    invoices (wrong for a personal badge), so the server-precomputed
+  ///    `HomePageStats.dueAmount` (instructor's own) wins.
   num get dueAmount {
-    final h1 = _deepReadAmount(homeStats);
-    if (h1 != 0) return h1;
-    final h2 = _deepReadAmount(homeStatsRaw);
-    if (h2 != 0) return h2;
-    final list = outstandingForCurrentStudent;
-    if (list.isNotEmpty) {
+    num sumOutstanding() {
       num total = 0;
-      for (final row in list) {
+      for (final row in outstandingForCurrentStudent) {
         if (row is Map) total += _readAmount(row);
       }
-      if (total != 0) return total;
+      return total;
     }
+
+    final hps = _deepReadAmount(homeStats);
+    final hpsRaw = _deepReadAmount(homeStatsRaw);
+    if (isInstructor) {
+      if (hps != 0) return hps;
+      if (hpsRaw != 0) return hpsRaw;
+      return 0;
+    }
+    // Student: live outstanding rows are authoritative.
+    final s = sumOutstanding();
+    if (s != 0) return s;
+    if (hps != 0) return hps;
+    if (hpsRaw != 0) return hpsRaw;
     final n3 = _deepReadAmount(outstandingRaw);
     if (n3 != 0) return n3;
     return 0;
@@ -393,17 +397,22 @@ class UserSession extends ChangeNotifier {
     return 0;
   }
 
-  /// Number of unpaid invoices — must match [dueAmount]'s source.
-  /// Reads `homeStats.invoiceCount` first (server-precomputed,
-  /// role-correct: instructor = own count, NOT students' aggregated).
-  /// Falls back to outstandingList length only when home stats absent.
+  /// Number of unpaid invoices — must mirror [dueAmount]'s source.
+  ///  - INSTRUCTOR: HomePageStats.invoiceCount (own, not branch-aggregated).
+  ///  - STUDENT: live outstanding row count is authoritative; HomePageStats
+  ///    is only a fallback (it can lag/return 0).
   int get invoiceCount {
-    final n1 = _deepReadCount(homeStats);
-    if (n1 != 0) return n1;
-    final n2 = _deepReadCount(homeStatsRaw);
-    if (n2 != 0) return n2;
+    final hps = _deepReadCount(homeStats);
+    final hpsRaw = _deepReadCount(homeStatsRaw);
+    if (isInstructor) {
+      if (hps != 0) return hps;
+      if (hpsRaw != 0) return hpsRaw;
+      return 0;
+    }
     final list = outstandingForCurrentStudent;
     if (list.isNotEmpty) return list.length;
+    if (hps != 0) return hps;
+    if (hpsRaw != 0) return hpsRaw;
     final n3 = _deepReadCount(outstandingRaw);
     if (n3 != 0) return n3;
     return 0;
