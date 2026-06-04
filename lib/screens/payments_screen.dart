@@ -1,5 +1,9 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -125,9 +129,24 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             content: Text('Receipt not available for this payment.')));
         return;
       }
-      await Printing.sharePdf(
-          bytes: bytes,
-          filename: 'receipt_${receiptNo.isEmpty ? paymentId : receiptNo}.pdf');
+      final fname = 'receipt_${receiptNo.isEmpty ? paymentId : receiptNo}.pdf';
+      if (kIsWeb) {
+        // Web has no file system — sharePdf triggers the browser download.
+        await Printing.sharePdf(bytes: bytes, filename: fname);
+        return;
+      }
+      // Native: write the bytes to a real file first, then open it in the
+      // device's PDF viewer. Sharing bytes directly (Printing.sharePdf)
+      // raced with the receiving app and produced 0-byte files.
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$fname');
+      await file.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      final res = await OpenFilex.open(file.path, type: 'application/pdf');
+      if (res.type != ResultType.done && mounted) {
+        // Fall back to the share sheet if no PDF viewer handled it.
+        await Printing.sharePdf(bytes: bytes, filename: fname);
+      }
     } catch (e) {
       debugPrint('ReceiptAsPDF failed: $e');
       if (!mounted) return;
