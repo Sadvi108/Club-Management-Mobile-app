@@ -447,25 +447,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 22),
-                  Row(children: [
-                    Expanded(child: Container(height: 1, color: c.border)),
-                    const SizedBox(width: 10),
-                    Text('or continue with',
-                        style: TextStyle(
-                            color: c.textMuted,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5)),
-                    const SizedBox(width: 10),
-                    Expanded(child: Container(height: 1, color: c.border)),
-                  ]),
-                  const SizedBox(height: 16),
-                  Row(children: [
-                    Expanded(child: _altBtn(c, Icons.qr_code_2, 'Academy QR')),
-                    const SizedBox(width: 12),
-                    Expanded(child: _altBtn(c, Icons.fingerprint, 'Biometric')),
-                  ]),
                   const SizedBox(height: 28),
                   Center(
                     child: RichText(
@@ -887,27 +868,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _altBtn(AppColors c, IconData icon, String label) {
-    return InkWell(
-      onTap: () {},
-      borderRadius: BorderRadius.circular(Radii.md),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: c.surfaceAlt,
-          borderRadius: BorderRadius.circular(Radii.md),
-          border: Border.all(color: c.border),
-        ),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, size: 20, color: c.primary),
-          const SizedBox(width: 8),
-          Text(label,
-              style: TextStyle(
-                  color: c.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13)),
-        ]),
-      ),
-    );
-  }
 }

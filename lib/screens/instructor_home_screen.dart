@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
-import '../widgets/api_diagnostic_sheet.dart';
 import '../widgets/notification_bell.dart';
 import '../widgets/pressable.dart';
 
@@ -225,27 +224,6 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
                     fontWeight: FontWeight.w800,
                     fontSize: 14,
                     letterSpacing: 0.2)),
-            const Spacer(),
-            InkWell(
-              onTap: () => ApiDiagnosticSheet.open(context),
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.info_outline, color: accent, size: 12),
-                  const SizedBox(width: 4),
-                  Text('Diagnose',
-                      style: TextStyle(
-                          color: accent,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800)),
-                ]),
-              ),
-            ),
           ]),
           const SizedBox(height: 12),
           // Both badges show /Reports/HomePageStats — the instructor's
