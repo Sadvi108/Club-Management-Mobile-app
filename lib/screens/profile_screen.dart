@@ -5,7 +5,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import '../data/mock_data.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
@@ -917,19 +916,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Text(liveName, style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 2),
                         Text('$liveLevel · $liveBelt', style: TextStyle(color: c.textSecondary, fontSize: 11)),
-                        const SizedBox(height: 10),
-                        Row(children: List.generate(20, (i) =>
-                          Padding(padding: const EdgeInsets.only(right: 2), child: Container(width: 2, height: (20 + (i * 7) % 12).toDouble(), color: c.textPrimary.withOpacity(i % 3 == 0 ? 1 : 0.6))))),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 12),
                         Text(liveId, style: TextStyle(color: c.textPrimary, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1)),
                       ],
                     ),
                   ),
                   const SizedBox(width: 14),
-                  Container(
-                    width: 90, height: 90,
-                    decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: BorderRadius.circular(Radii.md)),
-                    child: Icon(Icons.qr_code_2, size: 60, color: c.primary),
+                  _VirtualIdQr(
+                    content: (session.authData?['studentId'] ??
+                            session.authData?['id'] ??
+                            session.registrationNo)
+                        .toString(),
+                    size: 90,
                   ),
                 ]),
               ),
@@ -1014,7 +1012,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Row(children: [
             Icon(Icons.notifications_active, size: 16, color: c.primary),
             const SizedBox(width: 6),
-            Text('LIVE · Notifications (${notifs.length})',
+            Text('Notifications (${notifs.length})',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
@@ -1062,4 +1060,119 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ]),
         ),
       );
+}
+
+/// Real scannable QR for the student's virtual ID card.
+///
+/// Fetches the official QR image from `/Utilities/QRCode` (same source the
+/// in-app scanner resolves against) using the student's id as the payload.
+/// Shows a spinner while loading and a clearly-labelled "Unavailable"
+/// placeholder on error — never a fake/decorative QR.
+class _VirtualIdQr extends StatefulWidget {
+  final String content;
+  final double size;
+  const _VirtualIdQr({required this.content, required this.size});
+
+  @override
+  State<_VirtualIdQr> createState() => _VirtualIdQrState();
+}
+
+class _VirtualIdQrState extends State<_VirtualIdQr> {
+  Uint8List? _bytes;
+  bool _loading = true;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _VirtualIdQr old) {
+    super.didUpdateWidget(old);
+    if (old.content != widget.content) _load();
+  }
+
+  Future<void> _load() async {
+    final content = widget.content.trim();
+    if (content.isEmpty || content == 'null') {
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final resp =
+          await Api.utilitiesQRCode(width: 300, height: 300, content: content);
+      Uint8List? bytes;
+      String? s;
+      if (resp is String) {
+        s = resp;
+      } else if (resp is Map) {
+        s = (resp['data'] ?? resp['image'] ?? resp['qr'] ?? resp['base64'])
+            ?.toString();
+      } else if (resp is List<int>) {
+        bytes = Uint8List.fromList(resp);
+      }
+      if (bytes == null && s != null && s.isNotEmpty) {
+        final cleaned = s.contains(',') ? s.split(',').last : s;
+        try {
+          bytes = base64Decode(cleaned);
+        } catch (_) {/* not base64 */}
+      }
+      if (!mounted) return;
+      setState(() {
+        _bytes = bytes;
+        _loading = false;
+        _failed = bytes == null;
+      });
+    } catch (e) {
+      debugPrint('Virtual ID QR load failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    return Container(
+      width: widget.size,
+      height: widget.size,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(Radii.md),
+        border: Border.all(color: c.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      child: _loading
+          ? SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
+            )
+          : (_failed || _bytes == null)
+              ? Column(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.qr_code_2, size: 30, color: c.textMuted),
+                  const SizedBox(height: 2),
+                  Text('Unavailable',
+                      style: TextStyle(fontSize: 8, color: c.textMuted)),
+                ])
+              : Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Image.memory(_bytes!,
+                      fit: BoxFit.contain, gaplessPlayback: true),
+                ),
+    );
+  }
 }

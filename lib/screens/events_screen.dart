@@ -7,7 +7,7 @@ import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 
-/// Events & Competition — fully live-data screen.
+/// Events & Competition screen.
 ///
 /// Sources merged:
 ///   • /Reports/TournamentSummary — primary upcoming events
@@ -230,10 +230,10 @@ class _EventsScreenState extends State<EventsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.cloud_done, size: 16, color: c.primary),
+            Icon(Icons.campaign_outlined, size: 16, color: c.primary),
             const SizedBox(width: 6),
             Text(
-              'LIVE · Offers (${offers.length}) · News (${news.length})',
+              'Offers (${offers.length}) · News (${news.length})',
               style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,

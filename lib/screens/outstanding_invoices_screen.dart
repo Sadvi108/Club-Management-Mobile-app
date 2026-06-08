@@ -6,7 +6,6 @@ import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/anim.dart';
-import '../widgets/api_diagnostic_sheet.dart';
 import '../widgets/app_header.dart';
 import '../widgets/list_search.dart';
 
@@ -128,29 +127,9 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
       body: SafeArea(
         bottom: false,
         child: Column(children: [
-          AppHeader(
+          const AppHeader(
             title: 'My Invoices',
             showBack: true,
-            trailing: InkWell(
-              onTap: () => ApiDiagnosticSheet.open(context),
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: c.surfaceAlt,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.info_outline, size: 14, color: c.primary),
-                  const SizedBox(width: 4),
-                  Text('Diagnose',
-                      style: TextStyle(
-                          color: c.primary,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800)),
-                ]),
-              ),
-            ),
           ),
           Expanded(
             child: RefreshIndicator(

@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../data/mock_data.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
-import '../widgets/app_icon_button.dart';
-import '../widgets/filter_sheet.dart';
 
 class TrainingScreen extends StatefulWidget {
   const TrainingScreen({super.key});
@@ -192,23 +188,6 @@ class _TrainingScreenState extends State<TrainingScreen> {
               Text('Enrolled Programs', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 14),
               _buildLivePrograms(c),
-              // Add new program CTA
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: c.surfaceAlt,
-                  borderRadius: BorderRadius.circular(Radii.md),
-                  border: Border.all(color: c.primary, style: BorderStyle.solid, width: 1),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_circle_outline, color: c.primary, size: 22),
-                    const SizedBox(width: 8),
-                    Text('Add New Program', style: TextStyle(color: c.primary, fontWeight: FontWeight.w700, fontSize: 14)),
-                  ],
-                ),
-              ),
             ]),
           ),
         ],
@@ -240,10 +219,10 @@ class _TrainingScreenState extends State<TrainingScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.cloud_done, size: 16, color: c.primary),
+            Icon(Icons.location_on_outlined, size: 16, color: c.primary),
             const SizedBox(width: 6),
             Text(
-              'LIVE · Training Centers (${centers.length})',
+              'Training Centers (${centers.length})',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1),
             ),
           ]),
@@ -292,7 +271,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
           Row(children: [
             Icon(Icons.person_pin, size: 16, color: c.primary),
             const SizedBox(width: 6),
-            Text('LIVE · Instructors (${list.length})',
+            Text('Instructors (${list.length})',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
@@ -322,7 +301,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
           Row(children: [
             Icon(Icons.access_time, size: 16, color: c.primary),
             const SizedBox(width: 6),
-            Text('LIVE · Training Times',
+            Text('Training Times',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
@@ -509,95 +488,4 @@ class _TrainingScreenState extends State<TrainingScreen> {
     );
   }
 
-  Widget _programCard(BuildContext context, AppColors c, program) {
-    return Container(
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.xl),
-        border: c.isDark ? Border.all(color: c.border) : null,
-        boxShadow: Shadows.card(c),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 140,
-            width: double.infinity,
-            child: CachedNetworkImage(imageUrl: program.image, fit: BoxFit.cover, errorWidget: (_, __, ___) => Container(color: c.surfaceAlt)),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(program.sport, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.textPrimary)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(color: (program.color as Color).withOpacity(c.isDark ? 0.2 : 0.12), borderRadius: BorderRadius.circular(20)),
-                      child: Text(program.level, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: program.color)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(children: [
-                  Icon(Icons.person_outline, size: 16, color: c.textSecondary),
-                  const SizedBox(width: 4),
-                  Text(program.trainer, style: TextStyle(color: c.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
-                ]),
-                const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Progress to ${program.nextMilestone}', style: TextStyle(color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
-                    Text('${program.progress}%', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: program.color)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    minHeight: 8,
-                    value: program.progress / 100,
-                    backgroundColor: c.surfaceAlt,
-                    valueColor: AlwaysStoppedAnimation(program.color),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () {},
-                      borderRadius: BorderRadius.circular(Radii.md),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(Radii.md)),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.trending_up, color: Colors.white, size: 14),
-                            SizedBox(width: 6),
-                            Text('Upgrade Level', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Container(
-                    width: 44, height: 44,
-                    decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: BorderRadius.circular(Radii.md)),
-                    child: Icon(Icons.info_outline, color: c.textSecondary, size: 18),
-                  ),
-                ]),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

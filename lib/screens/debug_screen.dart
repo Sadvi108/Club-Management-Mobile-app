@@ -36,7 +36,7 @@ class DebugScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: c.background,
       appBar: AppBar(
-        title: const Text('Debug — Live API dump'),
+        title: const Text('Debug — API dump'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.canPop() ? context.pop() : context.go('/home'),

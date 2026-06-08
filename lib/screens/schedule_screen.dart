@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import '../data/mock_data.dart';
-import '../models/models.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
@@ -66,6 +64,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   static const _weekday = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
+  /// Current month + year label for the header (e.g. "Jun 2026").
+  String _monthYearLabel() {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final now = DateTime.now();
+    return '${months[now.month - 1]} ${now.year}';
+  }
+
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
@@ -121,7 +126,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         children: [
           AppHeader(
             title: 'Schedule',
-            subtitle: 'Feb 2026 · Week 4',
+            subtitle: _monthYearLabel(),
             trailing: AppIconButton(
               icon: Icons.tune,
               onPressed: () async {
@@ -226,8 +231,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   ),
                 ...sessions.map((s) => _liveSessionCard(c, s)),
                 const SizedBox(height: 16),
-                // Holidays — awaiting holidays endpoint; mock placeholder kept intentionally.
-                _holidaysCard(c),
               ],
             ),
           ),
@@ -451,64 +454,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  Widget _sessionCard(AppColors c, Session s) {
-    final parts = s.time.split(' ');
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: c.isDark ? Border.all(color: c.border) : null,
-        boxShadow: Shadows.card(c),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 60,
-            child: Column(children: [
-              Text(parts[0], style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: c.textPrimary)),
-              if (parts.length > 1) Text(parts[1], style: TextStyle(fontSize: 10, color: c.textSecondary, fontWeight: FontWeight.w700)),
-            ]),
-          ),
-          Container(width: 4, height: 60, margin: const EdgeInsets.symmetric(horizontal: 10), decoration: BoxDecoration(color: s.color, borderRadius: BorderRadius.circular(2))),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(s.title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.textPrimary)),
-                const SizedBox(height: 6),
-                Row(children: [
-                  Icon(Icons.access_time, size: 12, color: c.textSecondary),
-                  const SizedBox(width: 4),
-                  Text(s.duration, style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w500)),
-                  const SizedBox(width: 10),
-                  Icon(Icons.person_outline, size: 12, color: c.textSecondary),
-                  const SizedBox(width: 4),
-                  Flexible(child: Text(s.trainer, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w500))),
-                ]),
-                const SizedBox(height: 12),
-                Row(children: [
-                  _actBtn(c, 'Details', false),
-                  const SizedBox(width: 8),
-                  _actBtn(c, 'Remind Me', true),
-                ]),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _actBtn(AppColors c, String l, bool filled) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(color: filled ? c.primary : c.surfaceAlt, borderRadius: BorderRadius.circular(Radii.sm)),
-        child: Text(l, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: filled ? Colors.white : c.textPrimary)),
-      );
-
-  /// Renders a session card from a live `/ClassBooking/*` row. Field
+  /// Renders a session card from a `/ClassBooking/*` row. Field
   /// lookups use multi-key fallback because the swag response shape isn't
   /// strictly typed.
   Widget _liveSessionCard(AppColors c, Map<String, dynamic> row) {
@@ -620,7 +566,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
           ),
           const SizedBox(width: 8),
-          Text('Loading live bookings…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+          Text('Loading bookings…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
         ]),
       );
     }
@@ -638,10 +584,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.cloud_done, size: 16, color: c.primary),
+            Icon(Icons.event_available, size: 16, color: c.primary),
             const SizedBox(width: 6),
             Text(
-              'LIVE · Next Bookings (${bookings.length})',
+              'Upcoming Bookings (${bookings.length})',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1),
             ),
           ]),
@@ -678,9 +624,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.cloud_done, size: 16, color: c.primary),
+            Icon(Icons.calendar_month, size: 16, color: c.primary),
             const SizedBox(width: 6),
-            Text('LIVE · All Bookings (${all.length})',
+            Text('All Bookings (${all.length})',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
@@ -709,37 +655,4 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  Widget _holidaysCard(AppColors c) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: c.isDark ? const Color(0xFF2D1A0A) : const Color(0xFFFEF3C7),
-          borderRadius: BorderRadius.circular(Radii.lg),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(color: c.isDark ? const Color(0xFF3F2410) : const Color(0xFFFDE68A), shape: BoxShape.circle),
-              child: Icon(Icons.wb_sunny, color: c.warning, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Upcoming Holidays', style: TextStyle(color: c.isDark ? const Color(0xFFFDBA74) : const Color(0xFF92400E), fontSize: 14, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  // awaiting holidays endpoint — no swagger path exists; kHolidays
-                  // is an intentional placeholder until the backend exposes one.
-                  ...kHolidays.map((h) => Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text('• ${h.date} — ${h.name}', style: TextStyle(fontSize: 12, color: c.isDark ? const Color(0xFFFED7AA) : const Color(0xFF92400E))),
-                      )),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
 }

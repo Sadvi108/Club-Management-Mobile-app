@@ -6,7 +6,6 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../data/mock_data.dart';
 import '../services/api.dart';
 import '../services/bcpg_service.dart';
@@ -15,7 +14,6 @@ import '../theme/app_theme.dart';
 import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
 import '../widgets/list_search.dart';
-import '../widgets/app_icon_button.dart';
 import 'payment/bcpg_webview_screen.dart';
 
 class PaymentsScreen extends StatefulWidget {
@@ -878,7 +876,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 child: Row(children: [
                   SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
                   const SizedBox(width: 8),
-                  Text('Loading live invoices…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+                  Text('Loading invoices…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
                 ]),
               ),
             if (invoices.isNotEmpty) _liveInvoicesCard(c, invoices),
@@ -889,25 +887,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             if ((_reimbursement ?? const []).isNotEmpty) const SizedBox(height: 16),
             if (slips.isNotEmpty) _livePaymentSlipsCard(c, slips),
             if (slips.isNotEmpty) const SizedBox(height: 16),
-            const SizedBox(height: 8),
-            Text('Quick Pay', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 14),
-            Row(children: [
-              _pkgCard(c, Icons.calendar_month, c.primary, 'Monthly', 'RM 480'),
-              const SizedBox(width: 10),
-              _pkgCard(c, Icons.calendar_today, c.primaryDark, 'Quarterly', 'RM 1,300'),
-              const SizedBox(width: 10),
-              _pkgCard(c, Icons.emoji_events, c.warning, 'Tournament', 'RM 150'),
-            ]),
             const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('Payment History', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-                Text('Export', style: TextStyle(color: c.primary, fontWeight: FontWeight.w700, fontSize: 12)),
-              ],
-            ),
+            Text('Payment History', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
             const SizedBox(height: 14),
             _filterChips(c),
             const SizedBox(height: 8),
@@ -995,28 +976,6 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     );
   }
 
-  Widget _pkgCard(AppColors c, IconData icon, Color tint, String l, String a) => Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(Radii.lg),
-            border: c.isDark ? Border.all(color: c.border) : null,
-            boxShadow: Shadows.card(c),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 22, color: tint),
-              const SizedBox(height: 10),
-              Text(l, style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 2),
-              Text(a, style: TextStyle(fontSize: 15, color: c.textPrimary, fontWeight: FontWeight.w800)),
-            ],
-          ),
-        ),
-      );
-
   Widget _liveInvoicesCard(AppColors c, List<dynamic> invoices) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1031,7 +990,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           Row(children: [
             Icon(Icons.cloud_done, size: 16, color: c.primary),
             const SizedBox(width: 6),
-            Text('LIVE · Outstanding Invoices (${invoices.length})',
+            Text('Outstanding Invoices (${invoices.length})',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
           ]),
           const SizedBox(height: 10),
@@ -1127,7 +1086,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           Row(children: [
             Icon(Icons.receipt_long, size: 16, color: c.primary),
             const SizedBox(width: 6),
-            Text('LIVE · Payment Slips (${slips.length})',
+            Text('Payment Slips (${slips.length})',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
@@ -1289,7 +1248,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           child: Row(children: [
             Icon(Icons.inventory_2, size: 16, color: c.primary),
             const SizedBox(width: 6),
-            Text('LIVE · Collection Count', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+            Text('Collection Count', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
             const Spacer(),
             Text(count, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: c.textPrimary)),
             const SizedBox(width: 6),
@@ -1343,7 +1302,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         Row(children: [
           Icon(Icons.savings, size: 16, color: c.primary),
           const SizedBox(width: 6),
-          Text('LIVE · Reimbursements (${items.length})', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+          Text('Reimbursements (${items.length})', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
           const Spacer(),
           Text('RM ${total.toStringAsFixed(2)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: c.textPrimary)),
         ]),
@@ -1351,44 +1310,4 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     );
   }
 
-  Widget _histRow(AppColors c, payment) => Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(Radii.lg),
-          border: c.isDark ? Border.all(color: c.border) : null,
-          boxShadow: Shadows.card(c),
-        ),
-        child: Row(children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(color: c.isDark ? const Color(0xFF064E3B) : const Color(0xFFD1FAE5), shape: BoxShape.circle),
-            child: Icon(Icons.check, size: 18, color: c.success),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(payment.label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary)),
-                const SizedBox(height: 2),
-                Text('${payment.date} · ${payment.method}', style: TextStyle(fontSize: 11, color: c.textSecondary)),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('RM ${payment.amount}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: c.textPrimary)),
-              const SizedBox(height: 4),
-              Row(children: [
-                Icon(Icons.download, size: 12, color: c.primary),
-                const SizedBox(width: 3),
-                Text('Receipt', style: TextStyle(color: c.primary, fontSize: 10, fontWeight: FontWeight.w700)),
-              ]),
-            ],
-          ),
-        ]),
-      );
 }

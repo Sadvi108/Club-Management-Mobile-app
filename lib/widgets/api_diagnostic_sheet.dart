@@ -56,7 +56,7 @@ class ApiDiagnosticSheet extends StatelessWidget {
                     fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             Text(
-              'Live responses for the endpoints feeding the invoice + due '
+              'Responses for the endpoints feeding the invoice + due '
               'amount strip. If a number is 0 here it means the API returned '
               '0 (not a parser bug).',
               style: TextStyle(color: c.textSecondary, fontSize: 12),

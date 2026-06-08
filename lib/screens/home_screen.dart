@@ -6,7 +6,6 @@ import '../data/mock_data.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/anim.dart';
-import '../widgets/api_diagnostic_sheet.dart';
 import '../widgets/notification_bell.dart';
 import '../widgets/pressable.dart';
 import '../widgets/responsive_body.dart';
@@ -305,26 +304,7 @@ class HomeScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(children: [
-                            Text('FEES DUE', style: TextStyle(color: c.isDark ? const Color(0xFFFDBA74) : const Color(0xFF9A3412), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-                            const SizedBox(width: 8),
-                            InkWell(
-                              onTap: () => ApiDiagnosticSheet.open(context),
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: (c.isDark ? const Color(0xFFFDBA74) : const Color(0xFF9A3412)).withOpacity(0.18),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                  Icon(Icons.info_outline, size: 11, color: c.isDark ? const Color(0xFFFED7AA) : const Color(0xFF7C2D12)),
-                                  const SizedBox(width: 3),
-                                  Text('Diagnose', style: TextStyle(color: c.isDark ? const Color(0xFFFED7AA) : const Color(0xFF7C2D12), fontSize: 9, fontWeight: FontWeight.w800)),
-                                ]),
-                              ),
-                            ),
-                          ]),
+                          Text('FEES DUE', style: TextStyle(color: c.isDark ? const Color(0xFFFDBA74) : const Color(0xFF9A3412), fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
                           const SizedBox(height: 2),
                           Text(liveDue, style: TextStyle(color: c.isDark ? const Color(0xFFFED7AA) : const Color(0xFF7C2D12), fontSize: 24, fontWeight: FontWeight.w800)),
                           const SizedBox(height: 2),

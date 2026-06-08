@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../data/mock_data.dart';
 import '../models/models.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
@@ -567,9 +566,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.cloud_done, size: 16, color: c.primary),
+            Icon(Icons.fact_check_outlined, size: 16, color: c.primary),
             const SizedBox(width: 6),
-            Text('LIVE · Attendance (${rows.length})',
+            Text('Recent Attendance (${rows.length})',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
@@ -607,9 +606,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(Icons.cloud_done, size: 16, color: c.primary),
+            Icon(Icons.insights, size: 16, color: c.primary),
             const SizedBox(width: 6),
-            Text('LIVE · Club Stats',
+            Text('Club Stats',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
@@ -642,7 +641,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           Row(children: [
             Icon(Icons.notifications_active, size: 16, color: c.primary),
             const SizedBox(width: 6),
-            Text('LIVE · Recent Notifications',
+            Text('Recent Notifications',
                 style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),

@@ -795,18 +795,6 @@ class UserSession extends ChangeNotifier {
     await loadLocalPhoto();
   }
 
-  /// POST helper that returns the raw response (without auto-unwrapping
-  /// `data`). [_findList] is more flexible about response shapes.
-  Future<dynamic> _safePostRaw(String endpoint,
-      [Map<String, dynamic> body = const {}]) async {
-    try {
-      return await ApiService.post(endpoint, body);
-    } catch (e) {
-      debugPrint('Failed POST $endpoint: $e');
-      return null;
-    }
-  }
-
   /// Pull /Reports/HomePageStats and keep both the parsed map AND the raw
   /// response. Some deployments wrap the payload twice (`{data: {data: {...}}}`)
   /// so we recursively descend until we find the actual stats object.
@@ -919,17 +907,14 @@ class UserSession extends ChangeNotifier {
     }
   }
 
+  /// Register the device push token with the backend.
+  ///
+  /// FCM is not wired yet, so there is no real device token to send. We
+  /// deliberately do NOT post a placeholder/stub token (that would write
+  /// junk into the server's notification routing table). Re-enable this
+  /// once a genuine FCM/APNs token is available.
   Future<void> _registerPushToken() async {
-    try {
-      final branchId = authData?['branchId'] ?? authData?['branchID'] ?? 0;
-      // FCM not wired — send a stub so the endpoint is exercised.
-      await ApiService.post('/Profile/UpdateToken/$branchId', <String, dynamic>{
-        'token': 'flutter-stub-token',
-        'deviceType': 'android',
-      });
-    } catch (e) {
-      debugPrint('UpdateToken failed: $e');
-    }
+    return;
   }
 
   // ---------------------------------------------------------------------------
