@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api.dart';
 import 'api_service.dart';
 
 class UserSession extends ChangeNotifier {
@@ -25,6 +26,11 @@ class UserSession extends ChangeNotifier {
   /// `invoiceCount` since `/Reports/HomePageStats` doesn't include them
   /// for instructor accounts.
   List<dynamic>? outstandingList;
+
+  /// `/Reports/GradingSchedule` — the student's grading/exam rows. Source
+  /// for Current Grade, Next Grading Date and Grading Payment Status on the
+  /// home "Your info" card.
+  List<dynamic>? gradingSchedule;
 
   /// `/ClassBooking/NextBookings` — upcoming sessions for the student.
   List<dynamic>? nextBookings;
@@ -180,6 +186,85 @@ class UserSession extends ChangeNotifier {
 
   String get currentGrade => _pick([myInfo, authData],
       ['currentGrade', 'belt', 'grade', 'CurrentGrade']);
+
+  /// Student code / membership number — distinct from registrationNo.
+  String get studentCode => _pick([myInfo, authData], [
+        'studentCode', 'studentcode', 'studentNo', 'studentNumber',
+        'memberCode', 'memberNo', 'StudentCode',
+      ]);
+
+  /// Most relevant grading row: the soonest upcoming exam, else the latest.
+  /// Scoped to the active student for guardian accounts.
+  Map<String, dynamic>? get _gradingRow {
+    final rows = filterByActiveStudent(gradingSchedule)
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    if (rows.isEmpty) return null;
+    DateTime? dateOf(Map<String, dynamic> r) {
+      for (final k in const [
+        'nextGradingDate', 'nextGradeDate', 'examDate', 'gradingDate',
+        'nextExamDate', 'date',
+      ]) {
+        final v = r[k];
+        if (v == null) continue;
+        final d = DateTime.tryParse(v.toString());
+        if (d != null) return d;
+      }
+      return null;
+    }
+
+    final now = DateTime.now();
+    final upcoming = rows
+        .where((r) {
+          final d = dateOf(r);
+          return d != null && !d.isBefore(DateTime(now.year, now.month, now.day));
+        })
+        .toList()
+      ..sort((a, b) => (dateOf(a) ?? now).compareTo(dateOf(b) ?? now));
+    if (upcoming.isNotEmpty) return upcoming.first;
+    rows.sort((a, b) => (dateOf(b) ?? DateTime(1970))
+        .compareTo(dateOf(a) ?? DateTime(1970)));
+    return rows.first;
+  }
+
+  /// Next grading/exam date (yyyy-MM-dd or full label). Checks myInfo first
+  /// (some deployments return it inline), then the grading schedule.
+  String get nextGradingDate {
+    const keys = [
+      'nextGradingDate', 'nextGradeDate', 'nextExamDate', 'examDate',
+      'gradingDate',
+    ];
+    final inline = _pick([myInfo, studentAddtnlInfo], keys);
+    final raw = inline.isNotEmpty ? inline : _pickFrom(_gradingRow, keys);
+    if (raw.isEmpty) return '';
+    // Keep an explicit time window if the API provides one
+    // (e.g. "2026-07-18 @ 14:00-16:00"); otherwise trim to the date.
+    if (raw.contains('@') || raw.length <= 10) return raw;
+    return raw.length >= 10 ? raw.substring(0, 10) : raw;
+  }
+
+  /// Grading payment status (e.g. "Paid").
+  String get gradingPaymentStatus {
+    const keys = [
+      'gradingPaymentStatus', 'gradePaymentStatus', 'examPaymentStatus',
+      'paymentStatus', 'payStatus',
+    ];
+    final inline = _pick([myInfo, studentAddtnlInfo], keys);
+    return inline.isNotEmpty ? inline : _pickFrom(_gradingRow, keys);
+  }
+
+  /// First non-empty string value in [src] for any of [keys].
+  static String _pickFrom(Map<String, dynamic>? src, List<String> keys) {
+    if (src == null) return '';
+    for (final k in keys) {
+      final v = src[k];
+      if (v != null && v.toString().trim().isNotEmpty) {
+        return v.toString().trim();
+      }
+    }
+    return '';
+  }
 
   String get instructorName => _pick([myInfo],
       ['instructorName', 'trainer', 'sensei', 'coachName', 'InstructorName']);
@@ -788,6 +873,18 @@ class UserSession extends ChangeNotifier {
         }
         debugPrint('📅 AllBookings: ${allBookings?.length ?? 0} rows');
       }));
+      // Grading schedule powers Current Grade / Next Grading Date / Grading
+      // Payment Status on the home "Your info" card.
+      futures.add(() async {
+        try {
+          final d = await Api.reportsGradingSchedule();
+          gradingSchedule = (d is List) ? d : findList(d);
+          debugPrint('🥋 GradingSchedule: ${gradingSchedule?.length ?? 0} rows'
+              '${gradingSchedule != null && gradingSchedule!.isNotEmpty && gradingSchedule!.first is Map ? " keys=${(gradingSchedule!.first as Map).keys.toList()}" : ""}');
+        } catch (e) {
+          debugPrint('🥋 GradingSchedule failed: $e');
+        }
+      }());
     }
     await Future.wait(futures);
     // Restore any locally-cached profile photo (keyed by the now-loaded
@@ -1090,6 +1187,7 @@ class UserSession extends ChangeNotifier {
       notifications = null;
       studentAddtnlInfo = null;
       outstandingList = null;
+      gradingSchedule = null;
 
       await _loadAll();
       _previousUnread = unreadNotifications;
@@ -1140,6 +1238,7 @@ class UserSession extends ChangeNotifier {
     homeStatsError = null;
     nextBookings = null;
     allBookings = null;
+    gradingSchedule = null;
     unreadNotifications = 0;
     _previousUnread = 0;
     ApiService.clearToken();

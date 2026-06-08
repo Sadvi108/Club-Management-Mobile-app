@@ -352,6 +352,6 @@ class Api {
     required Object paymentId,
     required Object invoiceId,
   }) =>
-      ApiService.getBytes(
-          '/Utilities/ReceiptAsPDF/${_enc(clubId)}/${_enc(paymentId)}/${_enc(invoiceId)}');
+      ApiService.getPdfSmart(
+          '/Utilities/ReceiptAsPDF/${_enc(clubId)}/${_enc(paymentId)}/${_enc(invoiceId)}?asDownload=true');
 }

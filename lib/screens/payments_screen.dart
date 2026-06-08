@@ -109,22 +109,31 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   Future<void> _viewReceiptPDF(dynamic r) async {
     final m = r is Map ? r : <dynamic, dynamic>{};
     final session = UserSession.instance;
-    final clubId = session.authData?['clubId'] ??
-        session.authData?['clubID'] ??
-        _clubIdFromPic(session) ??
-        0;
-    final paymentId = m['paymentId'] ?? m['id'] ?? 0;
-    final invoiceId = m['invoiceId'] ?? m['invoiceID'] ?? 0;
+    // clubId: auth payload → receipt row → myInfo → logo-URL fallback.
+    int clubId = _pickInt([session.authData], const ['clubId', 'clubID']);
+    if (clubId == 0) clubId = _pickInt([m], const ['clubId', 'clubID']);
+    if (clubId == 0) clubId = _pickInt([session.myInfo], const ['clubId', 'clubID']);
+    if (clubId == 0) clubId = _clubIdFromPic(session) ?? 0;
+    // paymentId / invoiceId: probe the many key spellings the API uses
+    // across receipt types so the PDF resolves for every account.
+    final paymentId = _pickInt([m],
+        const ['paymentId', 'paymentID', 'payId', 'payID', 'id', 'receiptId', 'receiptID']);
+    final invoiceId = _pickInt([m],
+        const ['invoiceId', 'invoiceID', 'invId', 'invID', 'invoiceNo', 'invoiceNumber']);
     final receiptNo = (m['receiptNo'] ?? m['id'] ?? '').toString();
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
         const SnackBar(content: Text('Preparing receipt…')));
+    debugPrint('🧾 ReceiptAsPDF clubId=$clubId paymentId=$paymentId '
+        'invoiceId=$invoiceId rowKeys=${m.keys.toList()}');
     try {
-      // ReceiptAsPDF returns raw PDF bytes (not JSON, not a URL).
+      // getPdfSmart normalises raw-bytes / base64 / JSON-url responses.
       final bytes = await Api.utilitiesReceiptAsPdfBytes(
           clubId: clubId, paymentId: paymentId, invoiceId: invoiceId);
       if (!mounted) return;
       if (bytes.isEmpty || !_looksLikePdf(bytes)) {
+        debugPrint('🧾 ReceiptAsPDF not a PDF: ${bytes.length}B '
+            'first=${bytes.take(16).toList()}');
         messenger.showSnackBar(const SnackBar(
             content: Text('Receipt not available for this payment.')));
         return;
@@ -161,6 +170,24 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final pic = (session.authData?['clubPic'] ?? '').toString();
     final match = RegExp(r'/(\d+)\.png').firstMatch(pic);
     return match != null ? int.tryParse(match.group(1)!) : null;
+  }
+
+  /// First int-coercible value found across [sources] for any of [keys].
+  /// Returns 0 when nothing matches.
+  int _pickInt(List<Map?> sources, List<String> keys) {
+    for (final src in sources) {
+      if (src == null) continue;
+      for (final k in keys) {
+        final v = src[k];
+        if (v is int) return v;
+        if (v is num) return v.toInt();
+        if (v is String) {
+          final n = int.tryParse(v.trim());
+          if (n != null && n != 0) return n;
+        }
+      }
+    }
+    return 0;
   }
 
   bool _looksLikePdf(List<int> b) =>

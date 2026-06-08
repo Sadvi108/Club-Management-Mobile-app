@@ -1130,11 +1130,16 @@ class HomeScreen extends StatelessWidget {
 
     final rows = <List<String>>[
       ['Registration No', pick(['registrationNo', 'registrationNumber', 'regNo'])],
-      ['Student Code', pick(['studentCode', 'code', 'studentNo'])],
+      ['Student Code', session.studentCode.isNotEmpty
+          ? session.studentCode
+          : pick(['studentCode', 'code', 'studentNo', 'studentNumber', 'memberCode'])],
       ['Training Centre', pick(['tCenterName', 'trainingCenter', 'trainingCentre', 'tcName'])],
       ['Training Time', pick(['trainingTme', 'trainingTime', 'tTime'])],
       ['Exam Center', pick(['examCenterName', 'eCenterName', 'examCentre', 'examCenter'])],
       ['Instructor Name', pick(['instructorName', 'trainer', 'sensei'])],
+      ['Current Grade', session.currentGrade],
+      ['Next Grading Date', session.nextGradingDate],
+      ['Grading Payment Status', session.gradingPaymentStatus],
     ];
     final visible = rows.where((r) => r[1].isNotEmpty).toList();
     if (visible.isEmpty) return const SizedBox.shrink();
