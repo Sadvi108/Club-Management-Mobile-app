@@ -38,6 +38,10 @@ dependencies:
   shared_preferences: ^2.3.3
   http: 1.2.2
 
+  # BCPG payment gateway — HMAC-SHA256 Basic auth + in-app WebView for FPX flow.
+  crypto: ^3.0.3
+  flutter_inappwebview: ^6.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

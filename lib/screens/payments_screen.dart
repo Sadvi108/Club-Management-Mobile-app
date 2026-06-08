@@ -9,12 +9,14 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../data/mock_data.dart';
 import '../services/api.dart';
+import '../services/bcpg_service.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
 import '../widgets/list_search.dart';
 import '../widgets/app_icon_button.dart';
+import 'payment/bcpg_webview_screen.dart';
 
 class PaymentsScreen extends StatefulWidget {
   const PaymentsScreen({super.key});
@@ -376,87 +378,213 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     );
   }
 
-  Future<void> _initiateGatewayPayment(List<Map<String, dynamic>> invoices) async {
+  /// Initiate an FPX payment through BCPG directly (no webapp middleman).
+  ///
+  /// Flow:
+  ///   1. Pre-flight checks (config + lock + amount).
+  ///   2. POST /v1/payments/init via [BcpgService.initiatePayment] →
+  ///      get back `uuid` + `paymentUrl`.
+  ///   3. Push [BcpgWebViewScreen] which opens `paymentUrl` and watches
+  ///      for the merchant returnUrl. On detection it polls
+  ///      `getFPXPaymentDetails` to confirm the terminal status.
+  ///   4. On `succeeded` → mark invoices paid via the existing
+  ///      `/Outstanding/PayInvoices` endpoint (the webapp's manual-paid
+  ///      pipeline), refresh the list, release the lock.
+  Future<void> _initiateGatewayPayment(
+      List<Map<String, dynamic>> invoices) async {
+    if (invoices.isEmpty) return;
+
+    // Compile-time BCPG creds missing → tell the user, don't pretend.
+    if (!BcpgService.isConfigured) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Online payment not configured (missing BCPG credentials).')));
+      _onlineUnavailable(invoices);
+      return;
+    }
+
     final session = UserSession.instance;
-    final sid = session.authData?['studentId'] ?? session.authData?['id'];
+    // Resolve clubId — authData first, then the logo-URL fallback used
+    // for receipts (.../Logo/49.png). Handle int / num / String shapes.
+    int coerceInt(dynamic v) {
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v.trim()) ?? 0;
+      return 0;
+    }
+    final clubIdRaw =
+        session.authData?['clubId'] ?? session.authData?['clubID'];
+    int clubId = coerceInt(clubIdRaw);
+    if (clubId == 0) clubId = _clubIdFromPic(session) ?? 0;
+    if (clubId == 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Cannot determine club id for payment.')));
+      return;
+    }
+
     num total = 0;
     final ids = <dynamic>[];
+    final invoiceNos = <String>[];
     for (final inv in invoices) {
       ids.add(inv['id'] ?? inv['invoiceId'] ?? inv['invoiceID']);
       total += _invoiceAmount(inv);
+      final no = (inv['invoiceNo'] ??
+              inv['invoiceNumber'] ??
+              inv['invoiceId'] ??
+              inv['id'] ??
+              '')
+          .toString();
+      if (no.isNotEmpty) invoiceNos.add(no);
     }
-    String? gatewayUrl;
-    String? orderId;
-    try {
-      final resp = await Api.paymentInitiate(<String, dynamic>{
-        'invoiceIds': ids,
-        'amount': total,
-        'studentId': sid,
-      });
-      if (resp is Map) {
-        gatewayUrl = (resp['url'] ?? resp['gatewayUrl'] ?? resp['paymentUrl'] ??
-            (resp['data'] is Map ? (resp['data']['url'] ?? resp['data']['paymentUrl']) : null))?.toString();
-        orderId = (resp['orderId'] ?? resp['id'] ??
-            (resp['data'] is Map ? (resp['data']['orderId'] ?? resp['data']['id']) : null))?.toString();
-      }
-    } catch (e) {
-      debugPrint('paymentInitiate failed: $e');
+    if (total <= 0) {
       if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nothing to pay (amount is zero).')));
+      return;
+    }
+
+    final referenceId = BcpgService.generateReferenceId(clubId);
+    final firstNo = invoiceNos.isNotEmpty ? invoiceNos.first : '';
+    final description = 'Club Subscription - $firstNo'
+        '${invoiceNos.length > 1 ? " (${invoiceNos.join(",")})" : ""}';
+
+    // BCPG requires a reachable returnUrl + callbackUrl. We keep the same
+    // webapp URLs the PHP integration uses, so any future server-side
+    // callback wiring stays in one place. The WebView only needs the
+    // returnUrl to contain the `bcpg_redirect` needle so it can detect
+    // the return navigation — we never actually render that page in-app.
+    const returnUrl =
+        'https://app.maclubsystem.com/transaction/clubsubscriptioninvoice/bcpg_redirect';
+    const callbackUrl =
+        'https://app.maclubsystem.com/transaction/clubsubscriptioninvoice/bcpg_callback';
+
+    final payload = <String, dynamic>{
+      'referenceId': referenceId,
+      'amount': total,
+      'currency': 'MYR',
+      'created': BcpgService.utcIsoNow(),
+      'description': description,
+      'returnUrl': returnUrl,
+      'callbackUrl': callbackUrl,
+      'customer': {
+        'fullName': session.displayName.isNotEmpty
+            ? session.displayName
+            : (session.clubDisplayName.isNotEmpty
+                ? session.clubDisplayName
+                : 'Club Member'),
+        'email': session.email.isNotEmpty
+            ? session.email
+            : 'billing@maclubsystem.com',
+        'phone': session.phone,
+      },
+    };
+
+    if (!mounted) return;
+    showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) =>
+            const Center(child: CircularProgressIndicator()));
+
+    final initResp = await BcpgService.initiatePayment(payload);
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pop(); // dismiss spinner
+
+    if (initResp['error'] == true ||
+        initResp['paymentUrl'] == null ||
+        (initResp['paymentUrl'] as String).isEmpty) {
+      debugPrint('BCPG init failed: $initResp');
+      if (!mounted) return;
+      final msg = (initResp['message'] ?? 'Payment init failed').toString();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Pay failed: $msg')));
       _onlineUnavailable(invoices);
       return;
     }
-    if (!mounted) return;
-    final c = context.appColors;
-    if (gatewayUrl == null || gatewayUrl.isEmpty) {
-      _onlineUnavailable(invoices);
-      return;
-    }
-    // Open the real payment gateway in the browser / external app.
-    final launched = await launchUrl(Uri.parse(gatewayUrl),
-        mode: LaunchMode.externalApplication);
-    if (!mounted) return;
-    if (!launched) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Could not open the payment gateway.')));
-      return;
-    }
-    // After the user returns from the gateway, let them confirm so the
-    // app can finalize the order against the server.
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Complete payment'),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Total: RM ${total.toStringAsFixed(2)}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: c.textPrimary)),
-          const SizedBox(height: 8),
-          if (orderId != null) Text('Order: $orderId', style: TextStyle(fontSize: 12, color: c.textSecondary)),
-          const SizedBox(height: 8),
-          Text('Finish the payment in the gateway tab, then tap below to confirm.',
-              style: TextStyle(fontSize: 12, color: c.textSecondary, height: 1.4)),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await Api.paymentFinalizing(<String, dynamic>{'orderId': orderId});
-                await Api.paymentCompleted('success');
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment confirmed')));
-                _selectedInvoiceIdx.clear();
-                await _loadAll();
-              } catch (e) {
-                debugPrint('finalize failed: $e');
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Confirm failed: $e')));
-              }
-            },
-            child: const Text("I've completed payment"),
-          ),
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Later')),
-        ],
+
+    final paymentUrl = (initResp['paymentUrl']).toString();
+
+    // Open BCPG-hosted FPX flow in an in-app WebView. Pop result is a
+    // map: { status, verification, referenceId }.
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (_) => BcpgWebViewScreen(
+          paymentUrl: paymentUrl,
+          referenceId: referenceId,
+          returnUrlNeedle: 'bcpg_redirect',
+        ),
       ),
     );
+
+    // Release the 2-minute payment lock regardless of outcome — the
+    // attempt is finished.
+    UserSession.instance.clearPaymentLock();
+
+    if (!mounted) return;
+    final status = (result?['status'] ?? 'unknown').toString();
+    if (status == 'succeeded') {
+      await _onBcpgSuccess(
+        invoices: invoices,
+        referenceId: referenceId,
+        verification: (result?['verification'] is Map)
+            ? Map<String, dynamic>.from(result!['verification'] as Map)
+            : <String, dynamic>{},
+      );
+    } else if (status == 'cancelled') {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Payment cancelled.')));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Payment $status. Please try again.')));
+    }
+  }
+
+  /// Persist a successful BCPG payment: tell the webapp which invoices
+  /// were settled (so its DB updates `ManualInvoice.paidstatus`), then
+  /// refresh the live lists.
+  Future<void> _onBcpgSuccess({
+    required List<Map<String, dynamic>> invoices,
+    required String referenceId,
+    required Map<String, dynamic> verification,
+  }) async {
+    final extra = verification['extraDetails'];
+    final fpxTxnId = (extra is Map ? extra['fpxTxnId'] : null)?.toString();
+    final debitAuthCode =
+        (extra is Map ? extra['debitAuthCode'] : null)?.toString();
+    final buyerName =
+        (extra is Map ? extra['buyerName'] : null)?.toString();
+    final uuid = verification['uuid']?.toString();
+    final paymentRefNo = 'BCPG:FPX:${fpxTxnId ?? uuid ?? referenceId}';
+
+    try {
+      await Api.outstandingPayInvoices(<String, dynamic>{
+        'invoices': invoices,
+        'paymentMethod': 'BCPG-FPX',
+        'referenceId': referenceId,
+        'paymentRefNo': paymentRefNo,
+        'fpxTxnId': fpxTxnId,
+        'debitAuthCode': debitAuthCode,
+        'buyerName': buyerName,
+      });
+    } catch (e) {
+      debugPrint('PayInvoices (post-BCPG) failed: $e');
+      // Don't block the success UX — payment IS done at BCPG. Surface
+      // a warning so the user knows to ping the club if the invoice
+      // doesn't flip to Paid.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Payment succeeded but invoice sync failed: $e. Contact club.')));
+      }
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Payment successful · Ref: $paymentRefNo')));
+    _selectedInvoiceIdx.clear();
+    await _loadAll();
   }
 
   /// "Paying for" block — names each student + invoice being settled, so
