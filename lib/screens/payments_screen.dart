@@ -209,8 +209,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       default:
         base = _receipts ?? const <dynamic>[];
     }
-    // Guardian accounts: narrow to the picked child first.
-    base = UserSession.instance.filterByActiveStudent(base);
+    // Scope to the logged-in student (or picked guardian child). Receipt /
+    // term / charge / manual report endpoints return the whole branch for a
+    // student token, so this prevents showing other students' records.
+    base = UserSession.instance.scopedRows(base);
     final q = _receiptQuery.trim().toLowerCase();
     return base.where((r) {
       if (r is! Map) return true;
@@ -835,7 +837,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final session = context.watch<UserSession>();
     final liveTotal = _liveOutstandingTotal();
     final invoices = _outstanding ?? const <dynamic>[];
-    final slips = _slips ?? const <dynamic>[];
+    final slips = UserSession.instance.scopedRows(_slips);
     final liveAmount = liveTotal > 0
         ? liveTotal.toStringAsFixed(2)
         : (session.dueAmount > 0

@@ -196,7 +196,7 @@ class UserSession extends ChangeNotifier {
   /// Most relevant grading row: the soonest upcoming exam, else the latest.
   /// Scoped to the active student for guardian accounts.
   Map<String, dynamic>? get _gradingRow {
-    final rows = filterByActiveStudent(gradingSchedule)
+    final rows = scopedRows(gradingSchedule)
         .whereType<Map>()
         .map((m) => Map<String, dynamic>.from(m))
         .toList();
@@ -388,6 +388,58 @@ class UserSession extends ChangeNotifier {
   /// selected, otherwise the full multi-student list.
   List<dynamic> get outstandingForCurrentStudent =>
       filterByActiveStudent(outstandingList);
+
+  /// Narrow a report list to the logged-in student.
+  ///
+  /// Some report endpoints (`/Reports/Receipts`, `/Reports/GradingSchedule`,
+  /// `/Reports/PaymentSlips`) return the WHOLE branch even for a student
+  /// token, so without this a student would see other students' receipts /
+  /// grading. Match by `icNo` (== authData.icNo) or `name` (== displayName).
+  ///
+  /// Instructors are meant to see everyone, so this is a no-op for them.
+  List<dynamic> scopeToSelf(List<dynamic>? rows) {
+    final list = rows ?? const [];
+    if (list.isEmpty || isInstructor) return list;
+    final myIc =
+        (authData?['icNo'] ?? myInfo?['icNo'] ?? '').toString().trim().toUpperCase();
+    final myName = displayName.trim().toUpperCase();
+    if (myIc.isEmpty && myName.isEmpty) return list;
+    bool mine(dynamic r) {
+      if (r is! Map) return false;
+      final ic = (r['icNo'] ?? '').toString().trim().toUpperCase();
+      final nm = (r['name'] ?? r['studentName'] ?? r['receiverName'] ?? '')
+          .toString()
+          .trim()
+          .toUpperCase();
+      return (myIc.isNotEmpty && ic == myIc) ||
+          (myName.isNotEmpty && nm == myName);
+    }
+
+    final scoped = list.where(mine).toList();
+    if (scoped.isNotEmpty) return scoped;
+    // None matched. If the list holds multiple distinct people the endpoint
+    // returned the whole branch and none are ours → show nothing (never leak
+    // another student). If it's a single subject, the server already scoped
+    // to us (the icNo/name key just differs) → keep it.
+    final subjects = <String>{};
+    for (final r in list) {
+      if (r is Map) {
+        subjects.add((r['icNo'] ?? r['name'] ?? r['studentName'] ?? '')
+            .toString()
+            .toUpperCase());
+      }
+    }
+    return subjects.length > 1 ? const <dynamic>[] : list;
+  }
+
+  /// Scope a per-student report list: a picked guardian child wins, else
+  /// narrow to the logged-in student.
+  List<dynamic> scopedRows(List<dynamic>? rows) {
+    if (activeStudentName != null && activeStudentName!.isNotEmpty) {
+      return filterByActiveStudent(rows);
+    }
+    return scopeToSelf(rows);
+  }
 
   /// Narrow any multi-student row list to [activeStudentName]. Matches the
   /// row's `studentName` or `name` field (case-insensitive). When no active
