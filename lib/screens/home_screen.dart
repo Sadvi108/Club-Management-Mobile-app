@@ -1138,7 +1138,12 @@ class HomeScreen extends StatelessWidget {
       ['Exam Center', pick(['examCenterName', 'eCenterName', 'examCentre', 'examCenter'])],
       ['Instructor Name', pick(['instructorName', 'trainer', 'sensei'])],
       ['Current Grade', session.currentGrade],
-      ['Next Grading Date', session.nextGradingDate],
+      // Show the upcoming exam date when present, otherwise the most recent
+      // grading date so a date is always visible for students with history.
+      if (session.nextGradingDate.isNotEmpty)
+        ['Next Grading Date', session.nextGradingDate]
+      else
+        ['Last Grading Date', session.lastGradingDate],
       ['Grading Payment Status', session.gradingPaymentStatus],
     ];
     final visible = rows.where((r) => r[1].isNotEmpty).toList();

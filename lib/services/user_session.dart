@@ -244,6 +244,34 @@ class UserSession extends ChangeNotifier {
     return raw.length >= 10 ? raw.substring(0, 10) : raw;
   }
 
+  /// Most recent past grading date — shown when there's no upcoming exam so
+  /// the student still sees their grading history date.
+  String get lastGradingDate {
+    const keys = ['lastGradingDate', 'lastGradeDate', 'lastExamDate'];
+    final inline = _pick([myInfo, studentAddtnlInfo], keys);
+    String raw = inline;
+    if (raw.isEmpty) {
+      // Latest examDate among this student's grading rows.
+      final rows = scopedRows(gradingSchedule).whereType<Map>().toList();
+      DateTime? best;
+      String bestRaw = '';
+      for (final r in rows) {
+        for (final k in const ['examDate', 'gradingDate', 'date']) {
+          final v = r[k];
+          if (v == null) continue;
+          final d = DateTime.tryParse(v.toString());
+          if (d != null && (best == null || d.isAfter(best))) {
+            best = d;
+            bestRaw = v.toString();
+          }
+        }
+      }
+      raw = bestRaw;
+    }
+    if (raw.isEmpty) return '';
+    return raw.length >= 10 ? raw.substring(0, 10) : raw;
+  }
+
   /// Grading payment status (e.g. "Paid").
   String get gradingPaymentStatus {
     const keys = [
