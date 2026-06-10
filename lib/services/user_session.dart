@@ -230,6 +230,10 @@ class UserSession extends ChangeNotifier {
 
   /// Next grading/exam date (yyyy-MM-dd or full label). Checks myInfo first
   /// (some deployments return it inline), then the grading schedule.
+  ///
+  /// Only an UPCOMING date is returned. When the student's most relevant
+  /// grading row is in the past, this returns empty so the home card falls
+  /// through to [lastGradingDate] instead of labelling a past exam "Next".
   String get nextGradingDate {
     const keys = [
       'nextGradingDate', 'nextGradeDate', 'nextExamDate', 'examDate',
@@ -238,6 +242,13 @@ class UserSession extends ChangeNotifier {
     final inline = _pick([myInfo, studentAddtnlInfo], keys);
     final raw = inline.isNotEmpty ? inline : _pickFrom(_gradingRow, keys);
     if (raw.isEmpty) return '';
+    // Drop dates that have already passed — they belong on the "Last Grading
+    // Date" row, not "Next".
+    final parsed = DateTime.tryParse(raw);
+    if (parsed != null) {
+      final now = DateTime.now();
+      if (parsed.isBefore(DateTime(now.year, now.month, now.day))) return '';
+    }
     // Keep an explicit time window if the API provides one
     // (e.g. "2026-07-18 @ 14:00-16:00"); otherwise trim to the date.
     if (raw.contains('@') || raw.length <= 10) return raw;

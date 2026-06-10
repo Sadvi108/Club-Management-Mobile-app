@@ -63,10 +63,12 @@ class _EventsScreenState extends State<EventsScreen> {
         return true;
       }).toList();
 
-      // Past grades → certificate cards, scoped to the active student.
+      // Past grades → certificate cards, scoped to the logged-in student (or
+      // the picked guardian child). scopedRows narrows a direct student login
+      // to their own rows; filterByActiveStudent alone would leak the branch.
       final now = DateTime.now();
       final scopedGrading = UserSession.instance
-          .filterByActiveStudent(grading)
+          .scopedRows(grading)
           .whereType<Map>()
           .map((m) => Map<String, dynamic>.from(m));
       _certs = scopedGrading.where((m) {
@@ -324,6 +326,19 @@ class _EventsScreenState extends State<EventsScreen> {
     final category = _pick(event,
         ['category', 'type', 'tournamentType', 'activityType'],
         (event['_kind'] ?? 'event').toString());
+    // Tournament rows carry no date/venue/image — surface what they DO have
+    // (age group, gender, entrants, medal tally) so the card isn't blank.
+    final ageGroup = _pick(event, ['ageGroup', 'age'], '');
+    final gender   = _pick(event, ['gender'], '');
+    final players  = _pick(event, ['playerCount', 'players', 'entries'], '');
+    final gold     = _pick(event, ['medalGold'], '');
+    final silver   = _pick(event, ['medalSilver'], '');
+    final bronze   = _pick(event, ['medalBronze'], '');
+    final medals = [
+      if (gold.isNotEmpty && gold != '0') '🥇 $gold',
+      if (silver.isNotEmpty && silver != '0') '🥈 $silver',
+      if (bronze.isNotEmpty && bronze != '0') '🥉 $bronze',
+    ].join('  ');
     final registered = _readRegistered(event);
     final countdown  = _daysTo(_parseDate(dateStr));
 
@@ -458,7 +473,17 @@ class _EventsScreenState extends State<EventsScreen> {
                               color: c.textSecondary,
                               fontWeight: FontWeight.w600)),
                     ]),
+                  if (ageGroup.isNotEmpty)
+                    _metaChip(c, Icons.cake_outlined, ageGroup),
+                  if (gender.isNotEmpty)
+                    _metaChip(c, Icons.wc_outlined, gender),
+                  if (players.isNotEmpty && players != '0')
+                    _metaChip(c, Icons.groups_outlined, '$players players'),
                 ]),
+            if (medals.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(medals, style: const TextStyle(fontSize: 13)),
+            ],
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
@@ -482,6 +507,17 @@ class _EventsScreenState extends State<EventsScreen> {
       ]),
     );
   }
+
+  Widget _metaChip(AppColors c, IconData icon, String label) =>
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 14, color: c.textSecondary),
+        const SizedBox(width: 4),
+        Text(label,
+            style: TextStyle(
+                fontSize: 11,
+                color: c.textSecondary,
+                fontWeight: FontWeight.w600)),
+      ]);
 
   Widget _heroPlaceholder(AppColors c) => Container(
         color: c.surfaceAlt,
@@ -520,8 +556,11 @@ class _EventsScreenState extends State<EventsScreen> {
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(
+                // The grade attained — grading rows expose nextGrade /
+                // currentGrade, not a "name" (which is the student's name).
                 _pick(cert,
-                    ['title', 'gradeName', 'beltName', 'name', 'description'],
+                    ['nextGrade', 'currentGrade', 'gradeName', 'beltName',
+                     'title', 'description'],
                     'Grading'),
                 style: TextStyle(
                     fontSize: 14,
@@ -530,7 +569,7 @@ class _EventsScreenState extends State<EventsScreen> {
               ),
               const SizedBox(height: 3),
               Text(
-                'Issued by ${_pick(cert, ['issuer', 'examCenter', 'centerName'], 'Academy')} · ${_pick(cert, ['date', 'gradingDate', 'examDate'], '')}',
+                'Issued by ${_pick(cert, ['ecName', 'examCenter', 'centerName', 'tcName', 'issuer'], 'Academy')} · ${_pick(cert, ['date', 'gradingDate', 'examDate'], '').split('T').first}',
                 style: TextStyle(fontSize: 11, color: c.textSecondary),
               ),
             ]),

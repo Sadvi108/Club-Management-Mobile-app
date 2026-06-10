@@ -71,14 +71,18 @@ class _ProgressScreenState extends State<ProgressScreen> {
     }
   }
 
-  /// Attendance rows scoped to the active student (guardian accounts).
+  /// Attendance rows scoped to the logged-in student (or picked guardian
+  /// child) — the report endpoint returns the whole branch otherwise.
   List<Map> get _scopedAttendance => UserSession.instance
-      .filterByActiveStudent(_attendance)
+      .scopedRows(_attendance)
       .whereType<Map>()
       .toList();
 
+  // scopedRows narrows to the logged-in student (or the picked guardian
+  // child); filterByActiveStudent alone leaves a direct student login seeing
+  // the whole branch's grading rows.
   List<Map> get _scopedGrading => UserSession.instance
-      .filterByActiveStudent(_grading)
+      .scopedRows(_grading)
       .whereType<Map>()
       .toList();
 
