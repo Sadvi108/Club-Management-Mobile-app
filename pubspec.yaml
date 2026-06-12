@@ -42,6 +42,7 @@ dependencies:
   # BCPG payment gateway — HMAC-SHA256 Basic auth + in-app WebView for FPX flow.
   crypto: ^3.0.3
   flutter_inappwebview: ^6.0.0
+  nfc_manager: ^4.2.1
 
 dev_dependencies:
   flutter_test:

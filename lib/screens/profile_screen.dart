@@ -9,6 +9,7 @@ import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_provider.dart';
+import '../utils/qr_content.dart';
 import '../widgets/app_icon_button.dart';
 import '../widgets/student_switcher.dart';
 
@@ -923,10 +924,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(width: 14),
                   _VirtualIdQr(
-                    content: (session.authData?['studentId'] ??
-                            session.authData?['id'] ??
-                            session.registrationNo)
-                        .toString(),
+                    // Official ST-XXXXXXXX format — the same payload as the
+                    // club's printed student QR, so an instructor scanning
+                    // this card marks attendance for this student.
+                    content: QrContent.studentFromRaw(
+                            session.authData?['studentId'] ??
+                                session.authData?['id']) ??
+                        session.registrationNo,
                     size: 90,
                   ),
                 ]),
@@ -980,6 +984,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
 
             const SizedBox(height: 12),
+            _actionTile(c, Icons.qr_code_scanner, 'Scan QR to Check In',
+                () => context.push('/qr-scan')),
             _actionTile(c, Icons.support_agent, 'Help Desk', _openHelpDesk),
             _actionTile(c, Icons.badge_outlined, 'Student Details', _openStudentDetails),
             _actionTile(c, Icons.shopping_bag_outlined, 'My Purchases', _openMyPurchases),
@@ -1108,29 +1114,14 @@ class _VirtualIdQrState extends State<_VirtualIdQr> {
       _failed = false;
     });
     try {
-      final resp =
-          await Api.utilitiesQRCode(width: 300, height: 300, content: content);
-      Uint8List? bytes;
-      String? s;
-      if (resp is String) {
-        s = resp;
-      } else if (resp is Map) {
-        s = (resp['data'] ?? resp['image'] ?? resp['qr'] ?? resp['base64'])
-            ?.toString();
-      } else if (resp is List<int>) {
-        bytes = Uint8List.fromList(resp);
-      }
-      if (bytes == null && s != null && s.isNotEmpty) {
-        final cleaned = s.contains(',') ? s.split(',').last : s;
-        try {
-          bytes = base64Decode(cleaned);
-        } catch (_) {/* not base64 */}
-      }
+      // The endpoint returns raw PNG bytes — must skip the JSON decoder.
+      final bytes = await Api.utilitiesQRCodeBytes(
+          width: 300, height: 300, content: content);
       if (!mounted) return;
       setState(() {
-        _bytes = bytes;
+        _bytes = bytes.isEmpty ? null : bytes;
         _loading = false;
-        _failed = bytes == null;
+        _failed = bytes.isEmpty;
       });
     } catch (e) {
       debugPrint('Virtual ID QR load failed: $e');

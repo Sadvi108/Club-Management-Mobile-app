@@ -31,7 +31,7 @@ class InstructorTabsShell extends StatelessWidget {
       extendBody: true,
       body: child,
       floatingActionButton: _InstructorScannerFab(
-        onTap: () => context.push('/instructor/qr-scan'),
+        onTap: () => context.push('/instructor/attendance'),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Container(

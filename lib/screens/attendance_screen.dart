@@ -7,7 +7,6 @@ import '../services/user_session.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_icon_button.dart';
-import '../widgets/filter_sheet.dart';
 
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
@@ -19,7 +18,6 @@ class AttendanceScreen extends StatefulWidget {
 class _AttendanceScreenState extends State<AttendanceScreen> {
   List<dynamic>? _liveAttendance;
   bool _loading = false;
-  bool _marking = false;
 
   /// Attendance rows narrowed to the active student (guardian accounts).
   /// Returns the full list when no sibling filter is set.
@@ -73,35 +71,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
-  Future<void> _markAttendance() async {
-    final session = UserSession.instance;
-    final studentId = session.authData?['studentId'] ?? session.authData?['id'];
-    if (studentId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No student id in session')),
-      );
-      return;
-    }
-    setState(() => _marking = true);
-    try {
-      await Api.attendanceAdd(<String, dynamic>{
-        'studentId': studentId,
-        'date': DateTime.now().toIso8601String(),
-      });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Attendance marked')),
-      );
-      await _loadAttendance();
-    } catch (e) {
-      debugPrint('Attendance/Add failed: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _marking = false);
-    }
+  /// Opens the QR scanner and refreshes the history when a check-in
+  /// actually happened (the scanner pops with `true`).
+  Future<void> _scanToCheckIn() async {
+    final ok = await context.push('/qr-scan');
+    if (ok == true && mounted) _loadAttendance();
   }
 
   /// Live attendance summary computed from /Reports/Attendance rows.
@@ -239,7 +213,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             trailing: Row(mainAxisSize: MainAxisSize.min, children: [
               AppIconButton(
                 icon: Icons.qr_code_2,
-                onPressed: () => context.push('/qr-scan'),
+                onPressed: _scanToCheckIn,
                 backgroundColor: c.surfaceAlt,
                 foregroundColor: c.primary,
               ),
@@ -413,7 +387,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ),
             const SizedBox(height: 16),
             InkWell(
-              onTap: () => context.push('/qr-scan'),
+              onTap: _scanToCheckIn,
               borderRadius: BorderRadius.circular(Radii.xl),
               child: Container(
                 padding: const EdgeInsets.all(16),
@@ -442,22 +416,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   ),
                   Icon(Icons.arrow_forward, color: Colors.white, size: 18),
                 ]),
-              ),
-            ),
-            const SizedBox(height: 12),
-            InkWell(
-              onTap: _marking ? null : _markAttendance,
-              borderRadius: BorderRadius.circular(Radii.md),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: c.primary, borderRadius: BorderRadius.circular(Radii.md),
-                ),
-                child: _marking
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Text('Mark Attendance Now',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14)),
               ),
             ),
             const SizedBox(height: 20),

@@ -322,6 +322,20 @@ class Api {
       ApiService.get(
           '/Utilities/QRCode/${_enc(width)}/${_enc(height)}/${_enc(content)}');
 
+  /// Raw PNG bytes of a QR encoding [content]. The JSON variant above
+  /// cannot decode this endpoint (it returns image bytes, not JSON).
+  /// [includeLogo] defaults to false: the centre logo overlay eats into
+  /// the QR's error-correction margin and hurts phone-to-phone scanning.
+  static Future<Uint8List> utilitiesQRCodeBytes({
+    required Object width,
+    required Object height,
+    required Object content,
+    bool includeLogo = false,
+  }) =>
+      ApiService.getBytes(
+          '/Utilities/QRCode/${_enc(width)}/${_enc(height)}/${_enc(content)}'
+          '?includeLogo=$includeLogo');
+
   static Future<dynamic> utilitiesTrainingCenterQRCode({
     required Object clubId,
     required Object tcid,

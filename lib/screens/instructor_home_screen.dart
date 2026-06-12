@@ -312,7 +312,7 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
       _ActionTile(Icons.directions_run, 'Activities', teal,
           () => context.push('/instructor/reports/activity')),
       _ActionTile(Icons.assignment_turned_in_outlined, 'Update Attendance', green,
-          () => context.push('/instructor/qr-scan')),
+          () => context.push('/instructor/attendance')),
       _ActionTile(Icons.receipt_long, 'Receipt', lime,
           () => context.push('/instructor/reports/receipt')),
       _ActionTile(Icons.school, 'Grading Schedule', indigo,

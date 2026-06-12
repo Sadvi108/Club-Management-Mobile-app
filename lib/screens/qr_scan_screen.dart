@@ -1,20 +1,21 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/api.dart';
-import '../services/user_session.dart';
+import '../services/attendance_outcome.dart';
 import '../theme/app_theme.dart';
+import '../utils/qr_content.dart';
 import '../widgets/app_icon_button.dart';
 
-/// Full-screen QR scanner.
+/// Full-screen QR scanner for student check-in.
 ///
-/// Uses `mobile_scanner` for real device scanning and gracefully falls back
-/// to a simulated success state on Flutter Web (where browser permissions may
-/// block camera access) or when camera initialization fails.
+/// Students scan the printed training-centre poster (`TC-XXXXXXXX`);
+/// the screen validates the payload locally and only reports success
+/// after POST /Attendance/Add returns 2xx. Pops with `true` when an
+/// attendance record was created so callers can refresh.
 class QRScanScreen extends StatefulWidget {
   const QRScanScreen({super.key});
   @override
@@ -25,17 +26,16 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
   late final MobileScannerController _controller;
   late final AnimationController _laser;
   bool _scanned = false;
-  String _scannedCode = 'Karate Drills';
-  String? _resolvedInfo;
-  bool _resolving = false;
+  String _scannedCode = '';
   bool _attendancePosted = false;
   bool _attendanceFailed = false;
+  String? _serverMessage;
   bool _cameraFailed = false;
-  Timer? _fallbackTimer;
+  String? _invalidHint;
+  Timer? _hintTimer;
   bool _generateMode = false;
   final _genCtrl = TextEditingController();
   Uint8List? _genBytes;
-  String? _genString;
   bool _generating = false;
 
   @override
@@ -46,19 +46,11 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
       facing: CameraFacing.back,
     );
     _laser = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
-
-    // On web (or in unavailable envs) simulate a successful scan after a few seconds
-    // so the UI flow is still demonstrable.
-    if (kIsWeb) {
-      _fallbackTimer = Timer(const Duration(milliseconds: 2800), () {
-        if (mounted && !_scanned) setState(() => _scanned = true);
-      });
-    }
   }
 
   @override
   void dispose() {
-    _fallbackTimer?.cancel();
+    _hintTimer?.cancel();
     _laser.dispose();
     _controller.dispose();
     _genCtrl.dispose();
@@ -71,31 +63,10 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
     setState(() {
       _generating = true;
       _genBytes = null;
-      _genString = null;
     });
     try {
-      final resp = await Api.utilitiesQRCode(width: 300, height: 300, content: text);
-      if (resp is String) {
-        // Try base64 decode
-        try {
-          final cleaned = resp.contains(',') ? resp.split(',').last : resp;
-          _genBytes = base64Decode(cleaned);
-        } catch (_) {
-          _genString = resp;
-        }
-      } else if (resp is Map) {
-        final s = (resp['data'] ?? resp['image'] ?? resp['qr'])?.toString();
-        if (s != null) {
-          try {
-            final cleaned = s.contains(',') ? s.split(',').last : s;
-            _genBytes = base64Decode(cleaned);
-          } catch (_) {
-            _genString = s;
-          }
-        }
-      } else if (resp is List<int>) {
-        _genBytes = Uint8List.fromList(resp);
-      }
+      _genBytes = await Api.utilitiesQRCodeBytes(
+          width: 300, height: 300, content: text);
     } catch (e) {
       debugPrint('QRCode generate failed: $e');
       if (mounted) {
@@ -109,81 +80,124 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
   void _onDetect(BarcodeCapture capture) {
     if (_scanned) return;
     final code = capture.barcodes.isNotEmpty ? capture.barcodes.first.rawValue : null;
-    if (code != null && mounted) {
-      setState(() {
-        _scanned = true;
-        _scannedCode = 'Class: $code';
-      });
-      _resolveCode(code);
-      _postAttendance(code);
+    if (code == null || !mounted) return;
+    final payload = QrContent.parse(code);
+    if (payload == null) {
+      _showInvalidHint('Not a D-Clix attendance code');
+      return;
     }
-  }
-
-  Future<void> _postAttendance(String qrCode) async {
-    try {
-      await Api.attendanceAdd(<String, dynamic>{
-        'qrCode': qrCode,
-        'attendanceType': 1,
-      });
-      if (mounted) setState(() => _attendancePosted = true);
-    } catch (e) {
-      debugPrint('AttendanceAdd failed: $e');
-      if (mounted) setState(() => _attendanceFailed = true);
+    if (payload.type == QrType.student) {
+      // Students check in against the venue poster, not each other's IDs.
+      _showInvalidHint('Scan the training centre code at your venue');
+      return;
     }
-  }
-
-  Future<void> _resolveCode(String code) async {
-    setState(() => _resolving = true);
-    final session = UserSession.instance;
-    final clubId = session.authData?['clubId'] ?? session.authData?['clubID'];
-    final branchId = session.authData?['branchId'] ?? session.authData?['branchID'];
-    try {
-      // Heuristic — try training-center QR first, then student QR.
-      if (clubId != null) {
-        try {
-          final tc = await Api.utilitiesTrainingCenterQRCode(
-              clubId: clubId, tcid: code);
-          if (tc != null) {
-            _setResolved(_summarize(tc, fallback: 'Training Center: $code'));
-            return;
-          }
-        } catch (_) {/* try next */}
-      }
-      if (clubId != null && branchId != null) {
-        try {
-          final st = await Api.utilitiesStudentQRCode(
-              clubId: clubId, branchId: branchId, studentIds: code);
-          if (st != null) {
-            _setResolved(_summarize(st, fallback: 'Student: $code'));
-            return;
-          }
-        } catch (_) {/* fall through */}
-      }
-      _setResolved(null);
-    } catch (e) {
-      debugPrint('QR resolve failed: $e');
-      _setResolved(null);
-    }
-  }
-
-  void _setResolved(String? info) {
-    if (!mounted) return;
     setState(() {
-      _resolving = false;
-      _resolvedInfo = info;
+      _scanned = true;
+      _scannedCode = payload.label;
+      _invalidHint = null;
+    });
+    _postAttendance(payload.code);
+  }
+
+  void _showInvalidHint(String msg) {
+    if (_invalidHint == msg) return;
+    _hintTimer?.cancel();
+    setState(() => _invalidHint = msg);
+    _hintTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _invalidHint = null);
     });
   }
 
-  String _summarize(dynamic data, {required String fallback}) {
-    if (data is Map) {
-      final name = data['name'] ?? data['text'] ?? data['title'];
-      final id = data['id'] ?? data['code'];
-      if (name != null) return id != null ? '$name ($id)' : name.toString();
+  Future<void> _postAttendance(String qrCode, {int tTimeId = 0}) async {
+    try {
+      final resp = await Api.attendanceAdd(<String, dynamic>{
+        'qrCode': qrCode,
+        'attendanceType': 1,
+        'tTimeId': tTimeId,
+      });
+      if (!mounted) return;
+      final outcome = AttendanceOutcome.parse(resp);
+      if (outcome.success) {
+        setState(() {
+          _attendancePosted = true;
+          _serverMessage = outcome.message;
+        });
+        return;
+      }
+      if (outcome.needsClassTime) {
+        // Server wants the class time — offer the sessions it returned
+        // and re-POST with the chosen id.
+        final picked = await _pickClassTime(outcome.sessions);
+        if (!mounted) return;
+        if (picked != null) {
+          await _postAttendance(qrCode, tTimeId: picked.id);
+          return;
+        }
+      }
+      setState(() {
+        _attendanceFailed = true;
+        _serverMessage = outcome.message ??
+            (outcome.needsClassTime ? 'No class time selected' : 'Rejected');
+      });
+    } catch (e) {
+      debugPrint('AttendanceAdd failed: $e');
+      if (!mounted) return;
+      setState(() {
+        _attendanceFailed = true;
+        _serverMessage = e.toString().replaceFirst('Exception: ', '');
+      });
     }
-    if (data is List && data.isNotEmpty) {
-      return _summarize(data.first, fallback: fallback);
+  }
+
+  Future<AttendanceSession?> _pickClassTime(
+      List<AttendanceSession> sessions) {
+    if (sessions.length == 1) {
+      return Future.value(sessions.first);
     }
-    return fallback;
+    return showModalBottomSheet<AttendanceSession>(
+      context: context,
+      builder: (ctx) {
+        final c = ctx.appColors;
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                    color: c.border, borderRadius: BorderRadius.circular(99)),
+              ),
+              const SizedBox(height: 14),
+              Text('Select your training class time',
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              ...sessions.map((s) => ListTile(
+                    leading: Icon(Icons.schedule, color: c.primary, size: 20),
+                    title: Text(s.text,
+                        style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
+                    onTap: () => Navigator.pop(ctx, s),
+                  )),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
+  void _rescan() {
+    setState(() {
+      _scanned = false;
+      _scannedCode = '';
+      _attendancePosted = false;
+      _attendanceFailed = false;
+      _serverMessage = null;
+    });
   }
 
   @override
@@ -210,7 +224,7 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 AppIconButton(
                   icon: Icons.close,
-                  onPressed: () => context.pop(),
+                  onPressed: () => context.pop(_attendancePosted),
                   backgroundColor: Colors.white.withOpacity(0.12),
                   foregroundColor: Colors.white,
                 ),
@@ -240,9 +254,29 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text(
-                _scanned ? 'Check-in Successful!' : (_cameraFailed ? 'Camera unavailable' : 'Align the QR within the frame'),
+                _scanned
+                    ? (_attendancePosted
+                        ? 'Check-in Successful!'
+                        : _attendanceFailed
+                            ? 'Check-in failed'
+                            : 'Recording attendance…')
+                    : (_cameraFailed
+                        ? 'Camera unavailable'
+                        : 'Align the QR within the frame'),
                 style: const TextStyle(color: Color(0xE6FFFFFF), fontSize: 14, fontWeight: FontWeight.w500),
               ),
+              if (_invalidHint != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: c.danger.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(_invalidHint!,
+                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                ),
+              ],
               const SizedBox(height: 28),
               SizedBox(
                 width: 240, height: 240,
@@ -251,7 +285,7 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
                   _corner(c, top: 0, right: 0, borders: const [_Side.top, _Side.right]),
                   _corner(c, bottom: 0, left: 0, borders: const [_Side.bottom, _Side.left]),
                   _corner(c, bottom: 0, right: 0, borders: const [_Side.bottom, _Side.right]),
-                  if (!_scanned)
+                  if (!_scanned && !_cameraFailed)
                     AnimatedBuilder(
                       animation: _laser,
                       builder: (_, __) => Positioned(
@@ -266,25 +300,47 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
                         ),
                       ),
                     ),
+                  if (_cameraFailed && !_scanned)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Use a device with a camera to check in by QR.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 13),
+                        ),
+                      ),
+                    ),
                   if (_scanned)
                     Center(
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.check_circle, size: 70, color: c.success),
+                        Icon(
+                          _attendancePosted
+                              ? Icons.check_circle
+                              : _attendanceFailed
+                                  ? Icons.error_outline
+                                  : Icons.hourglass_top,
+                          size: 70,
+                          color: _attendancePosted
+                              ? c.success
+                              : _attendanceFailed
+                                  ? c.danger
+                                  : Colors.white70,
+                        ),
                         const SizedBox(height: 12),
                         Text(_scannedCode, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 4),
-                        if (_resolving)
-                          const Text('Resolving…', style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12))
-                        else if (_resolvedInfo != null)
+                        if (_attendancePosted)
+                          Text(_serverMessage ?? 'Attendance recorded ✓',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Color(0xFF86EFAC), fontSize: 12, fontWeight: FontWeight.w700))
+                        else if (_attendanceFailed)
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(_resolvedInfo!, textAlign: TextAlign.center,
-                                style: const TextStyle(color: Color(0xFFFFE4B5), fontSize: 12, fontWeight: FontWeight.w700)),
+                            child: Text(_serverMessage ?? 'Attendance sync failed',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12)),
                           )
-                        else if (_attendancePosted)
-                          const Text('Attendance recorded ✓', style: TextStyle(color: Color(0xFF86EFAC), fontSize: 12, fontWeight: FontWeight.w700))
-                        else if (_attendanceFailed)
-                          const Text('Attendance sync failed', style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12))
                         else
                           const Text('Recording attendance…', style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12)),
                       ]),
@@ -293,23 +349,57 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
               ),
               const SizedBox(height: 26),
               Text(
-                _scanned ? 'Attendance marked for today' : 'Make sure camera has good lighting',
+                _scanned
+                    ? (_attendancePosted ? 'Attendance marked for today' : '')
+                    : 'Make sure camera has good lighting',
                 style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 12),
                 textAlign: TextAlign.center,
               ),
-              if (_scanned) ...[
+              if (_scanned && (_attendancePosted || _attendanceFailed)) ...[
+                const SizedBox(height: 28),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (_attendanceFailed) ...[
+                    InkWell(
+                      onTap: _rescan,
+                      borderRadius: BorderRadius.circular(Radii.md),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.14),
+                          borderRadius: BorderRadius.circular(Radii.md),
+                        ),
+                        child: const Text('Rescan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  InkWell(
+                    onTap: () => context.pop(_attendancePosted),
+                    borderRadius: BorderRadius.circular(Radii.md),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: c.gradient),
+                        borderRadius: BorderRadius.circular(Radii.md),
+                        boxShadow: Shadows.strong(c),
+                      ),
+                      child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                    ),
+                  ),
+                ]),
+              ],
+              if (_cameraFailed && !_scanned) ...[
                 const SizedBox(height: 28),
                 InkWell(
-                  onTap: () => context.pop(),
+                  onTap: () => context.pop(false),
                   borderRadius: BorderRadius.circular(Radii.md),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 14),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: c.gradient),
+                      color: Colors.white.withOpacity(0.14),
                       borderRadius: BorderRadius.circular(Radii.md),
-                      boxShadow: Shadows.strong(c),
                     ),
-                    child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                    child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
                   ),
                 ),
               ],
@@ -341,13 +431,10 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
       controller: _controller,
       onDetect: _onDetect,
       errorBuilder: (_, __, ___) {
-        // Camera init failed (common on web without HTTPS / permission denied)
+        // Camera init failed (common on web without HTTPS / permission
+        // denied). No simulated scan: a check-in must come from a real code.
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          setState(() => _cameraFailed = true);
-          _fallbackTimer ??= Timer(const Duration(milliseconds: 1800), () {
-            if (mounted && !_scanned) setState(() => _scanned = true);
-          });
+          if (mounted && !_cameraFailed) setState(() => _cameraFailed = true);
         });
         return _buildDarkBackdrop();
       },
@@ -428,11 +515,7 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
                       child: Image.memory(_genBytes!, width: 240, height: 240, fit: BoxFit.contain,
                           errorBuilder: (_, __, ___) => const Text('Cannot render image')),
                     )
-                  : _genString != null
-                      ? SingleChildScrollView(
-                          child: SelectableText(_genString!, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                        )
-                      : const Text('No QR generated yet', style: TextStyle(color: Color(0x99FFFFFF))),
+                  : const Text('No QR generated yet', style: TextStyle(color: Color(0x99FFFFFF))),
             ),
           ),
         ]),
