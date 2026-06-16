@@ -84,8 +84,11 @@ class _InstructorReportListScreenState
         final idInt = id is int
             ? id
             : int.tryParse(id.toString()) ?? 0;
+        // Reports/{Exam,Student}Centers return lowercase `centername`;
+        // Listing endpoints return `text`; Reports/TrainingCenters `name`.
         final label = pickField(r, [
-          'name', 'centerName', 'tCenterName', 'eCenterName', 'text',
+          'name', 'centerName', 'centername', 'tCenterName', 'eCenterName',
+          'sCenterName', 'text',
         ]);
         if (idInt != 0 && label.isNotEmpty) {
           list.add(_Centre(idInt, label));
@@ -517,23 +520,35 @@ class _InstructorReportListScreenState
       );
 
   // ─── Record cards ──────────────────────────────────────────────────────
+  // Candidate keys for each rendered slot. The server is inconsistent across
+  // reports (camelCase here, lowercase there: `centerName` vs `centername`,
+  // `receiptAmount`, `ecName`, `invoiceDate`…), so each list is broad and the
+  // matching set below keeps these keys out of the "extras" block.
+  static const _titleKeys = [
+    'name', 'studentName', 'instructorName', 'tcName', 'centerName',
+    'centername', 'ecName', 'eCenterName', 'tCenterName', 'sCenterName',
+    'tournamentName', 'category', 'event', 'ageGroup',
+    'description', 'invoiceDescription', 'text', 'title',
+  ];
+  static const _amountKeys = [
+    'amount', 'dueAmount', 'paidAmount', 'totalAmount', 'receiptAmount',
+    'invoiceAmount', 'feeAmount', 'value', 'total',
+  ];
+  static const _dateKeys = [
+    'date', 'paymentDate', 'examDate', 'receiptDate', 'invoiceDate',
+    'closingDate', 'gradingDate', 'recordedTime', 'createdDate', 'dueDate',
+  ];
+  static const _statusKeys = [
+    'paymentStatus', 'examStatus', 'attendanceType', 'transactionType',
+    'actionStatus', 'status',
+  ];
+
   Widget _rowCard(AppColors c, Map<String, dynamic> row) {
-    final title = pickField(row, [
-      'name', 'studentName', 'instructorName', 'tcName', 'centerName',
-      'description', 'invoiceDescription', 'text', 'title',
-    ]);
-    final amount = pickAmount(row, [
-      'amount', 'dueAmount', 'paidAmount', 'totalAmount', 'value', 'total',
-    ]);
-    final dateRaw = pickField(row, [
-      'date', 'paymentDate', 'examDate', 'recordedTime', 'createdDate',
-      'dueDate',
-    ]);
+    final title = pickField(row, _titleKeys);
+    final amount = pickAmount(row, _amountKeys);
+    final dateRaw = pickField(row, _dateKeys);
     final date = dateRaw.length >= 10 ? dateRaw.substring(0, 10) : dateRaw;
-    final status = pickField(row, [
-      'paymentStatus', 'examStatus', 'attendanceType', 'transactionType',
-      'actionStatus', 'status',
-    ]);
+    final status = pickField(row, _statusKeys);
     final s = status.toLowerCase();
     final ok = s.contains('paid') ||
         s.contains('present') ||
@@ -545,17 +560,13 @@ class _InstructorReportListScreenState
     final statusColor =
         status.isEmpty ? c.textMuted : (ok ? c.success : c.danger);
 
-    const shown = {
-      'name', 'studentName', 'instructorName', 'tcName', 'centerName',
-      'description', 'invoiceDescription', 'text', 'title', 'amount',
-      'dueAmount', 'paidAmount', 'totalAmount', 'value', 'total', 'date',
-      'paymentDate', 'examDate', 'recordedTime', 'createdDate', 'dueDate',
-      'paymentStatus', 'examStatus', 'attendanceType', 'transactionType',
-      'actionStatus', 'status',
+    final shown = {
+      ..._titleKeys, ..._amountKeys, ..._dateKeys, ..._statusKeys,
     };
     final extras = <MapEntry<String, String>>[];
     for (final e in row.entries) {
       if (shown.contains(e.key)) continue;
+      if (_isNoiseKey(e.key)) continue; // internal ids — not user-facing
       final v = (e.value ?? '').toString().trim();
       if (v.isEmpty || v == 'null') continue;
       extras.add(MapEntry(_humanizeKey(e.key), v));
@@ -716,6 +727,14 @@ class _InstructorReportListScreenState
         ),
       ]),
     );
+  }
+
+  /// Internal identifiers that shouldn't be surfaced as a card "extra"
+  /// (e.g. `id`, `resultId`, `studentId`, `tCenterId`, `sno`).
+  static bool _isNoiseKey(String k) {
+    final l = k.toLowerCase();
+    if (l == 'sno' || l == 'srno' || l == 'slno' || l == 'rowid') return true;
+    return l.endsWith('id'); // id, resultId, studentId, invoiceId, shortid…
   }
 
   String _humanizeKey(String k) {

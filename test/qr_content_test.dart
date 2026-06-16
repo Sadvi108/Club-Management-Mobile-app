@@ -68,4 +68,21 @@ void main() {
       expect(QrContent.parse('ST-00022410')!.label, 'Student #22410');
     });
   });
+
+  // Real codes decoded from the club's printed QR posters (STUDENT QR.pdf /
+  // TC-QRCODE.pdf) — guards the codec against the production format.
+  group('production samples round-trip losslessly', () {
+    const samples = [
+      'ST-00055327', 'ST-00055391', 'ST-00055443', 'ST-00055699', // students
+      'TC-00004636', // training centre poster (MYXINI KB FC), different club
+    ];
+    for (final code in samples) {
+      test(code, () {
+        final p = QrContent.parse(code);
+        expect(p, isNotNull, reason: '$code must parse');
+        // The scanner posts p.code, so it must reconstruct the exact string.
+        expect(p!.code, code);
+      });
+    }
+  });
 }

@@ -17,16 +17,52 @@ class InstructorSettingsScreen extends StatefulWidget {
 }
 
 class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
+  /// First non-empty value across [authData] then [myInfo] for any of [keys].
+  static String _pick(List<String> keys) {
+    final session = UserSession.instance;
+    for (final src in [session.authData, session.myInfo]) {
+      if (src == null) continue;
+      for (final k in keys) {
+        final v = src[k];
+        if (v != null && v.toString().trim().isNotEmpty) {
+          return v.toString().trim();
+        }
+      }
+    }
+    return '';
+  }
+
+  /// Curated profile fields. Instructor identity lives in the auth payload
+  /// (name, code, IC, gender, club, role, status); `/Profile/MyInfo` returns
+  /// student-shaped fields that are null for instructors — so reading only
+  /// myInfo left this sheet blank. We merge both sources with key fallbacks.
+  static List<(IconData, String, String)> _profileFields() {
+    final session = UserSession.instance;
+    final role = session.isInstructor
+        ? 'Instructor'
+        : (_pick(['roleName', 'role', 'designation', 'userTypeName']));
+    final fields = <(IconData, String, String)>[
+      (Icons.badge_outlined, 'Name', session.displayName),
+      (Icons.tag, 'Registration No', session.registrationNo),
+      (Icons.credit_card, 'IC Number', _pick(['icNo', 'IcNo', 'icNumber', 'nric'])),
+      (Icons.verified_user_outlined, 'Role', role),
+      (Icons.wc, 'Gender', _pick(['gender', 'Gender'])),
+      (Icons.phone_outlined, 'Phone', session.phone),
+      (Icons.email_outlined, 'Email', session.email),
+      (Icons.apartment_outlined, 'Club', session.clubDisplayName),
+      (Icons.location_city_outlined, 'Branch',
+          _pick(['branchName', 'branch', 'branchText', 'BranchName'])),
+      (Icons.fitness_center_outlined, 'Training Centre', session.tCenterName),
+      (Icons.toggle_on_outlined, 'Status', _pick(['status', 'Status'])),
+    ];
+    return fields.where((f) => f.$3.isNotEmpty).toList();
+  }
+
   Future<void> _openProfile() async {
     final c = context.appColors;
     final session = UserSession.instance;
-    final raw = <String, dynamic>{
-      ...?session.myInfo,
-    };
-    const skip = {'accessToken', 'refreshToken', 'userType', 'clubList', 'branchList', 'password'};
-    final entries = raw.entries
-        .where((e) => !skip.contains(e.key) && e.value != null && e.value.toString().isNotEmpty)
-        .toList();
+    final fields = _profileFields();
+    final name = session.displayName.isNotEmpty ? session.displayName : 'Instructor';
 
     await showModalBottomSheet<void>(
       context: context,
@@ -47,32 +83,59 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
             Center(
               child: Container(
                 width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
+                margin: const EdgeInsets.only(bottom: 14),
                 decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)),
               ),
             ),
-            Text('My Profile',
-                style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800, fontSize: 18)),
-            const SizedBox(height: 16),
-            if (entries.isEmpty)
-              Text('No profile data.', style: TextStyle(color: c.textSecondary))
+            // Avatar + name header.
+            Row(children: [
+              Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: c.gradient),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(name[0].toUpperCase(),
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(name,
+                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800, fontSize: 18)),
+                  Text('My Profile',
+                      style: TextStyle(color: c.textMuted, fontWeight: FontWeight.w600, fontSize: 12)),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: 18),
+            if (fields.isEmpty)
+              Text('No profile data available.', style: TextStyle(color: c.textSecondary))
             else
-              for (final e in entries)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
+              for (final f in fields)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: c.surfaceAlt,
+                    borderRadius: BorderRadius.circular(Radii.md),
+                    border: Border.all(color: c.border),
+                  ),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(f.$1, size: 18, color: c.primary),
+                    const SizedBox(width: 12),
                     SizedBox(
-                      width: 140,
-                      child: Text(
-                        _humanizeKey(e.key),
-                        style: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w600, fontSize: 12),
-                      ),
+                      width: 110,
+                      child: Text(f.$2,
+                          style: TextStyle(
+                              color: c.textSecondary, fontWeight: FontWeight.w600, fontSize: 12)),
                     ),
                     Expanded(
-                      child: Text(
-                        e.value?.toString() ?? '',
-                        style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 13),
-                      ),
+                      child: Text(f.$3,
+                          style: TextStyle(
+                              color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
                     ),
                   ]),
                 ),
@@ -82,24 +145,23 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
     );
   }
 
-  static String _humanizeKey(String key) {
-    final spaced = key.replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m[0]}');
-    final result = spaced[0].toUpperCase() + spaced.substring(1);
-    return result
-        .replaceAll('T Center', 'Training Center')
-        .replaceAll('S Center', 'Student Center')
-        .replaceAll('Hand Phone', 'Phone')
-        .replaceAll('I C ', 'IC ')
-        .replaceAll('Tme', 'Time')
-        .trim();
+  /// The auth payload carries the club code in `clubList[0].value`
+  /// (e.g. "RTT"/"GMM"), not a top-level `clubCode` field.
+  static String _resolveClubCode() {
+    final auth = UserSession.instance.authData;
+    final direct = (auth?['clubCode'] ?? auth?['clubcode'] ?? '').toString();
+    if (direct.isNotEmpty) return direct;
+    final list = auth?['clubList'];
+    if (list is List && list.isNotEmpty && list.first is Map) {
+      final v = (list.first as Map)['value']?.toString() ?? '';
+      if (v.isNotEmpty) return v;
+    }
+    return '';
   }
 
   Future<void> _openSwitchBranch() async {
     final c = context.appColors;
-    final session = UserSession.instance;
-    final clubCode =
-        (session.authData?['clubCode'] ?? session.authData?['clubcode'] ?? '')
-            .toString();
+    final clubCode = _resolveClubCode();
     if (clubCode.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No club code on file.')),
