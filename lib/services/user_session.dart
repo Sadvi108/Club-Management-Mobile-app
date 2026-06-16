@@ -768,8 +768,18 @@ class UserSession extends ChangeNotifier {
   void touch() => notifyListeners();
 
   /// True when the authenticated user is an instructor.
-  /// The Authenticate response sets `userType == 2` for instructors.
-  bool get isInstructor => ((authData?['userType'] as num?)?.toInt() ?? 0) == 2;
+  ///
+  /// Verified against the live API: student/parent accounts authenticate as
+  /// `userType == 3`; instructors authenticate as `userType == 0` (the server
+  /// rejects `2` at login with HTTP 400). `UserType` enum is {0, 2, 3}, so any
+  /// logged-in non-student is an instructor. The `2` branch is kept defensively
+  /// even though it never reaches the client today.
+  bool get isInstructor {
+    final raw = authData?['userType'];
+    final ut = raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '');
+    if (ut == null) return false; // logged out / unknown
+    return ut != 3;               // 3 = student/parent; 0 (and 2) = instructor
+  }
 
   /// Rows surfaced by `Profile/MyClubStats` — each entry is
   /// `{id: <count>, value: <orderIndex>, text: <label>}`.
@@ -895,6 +905,11 @@ class UserSession extends ChangeNotifier {
       }
       ApiService.setToken(token);
       authData = data;
+      // Instructor auth payload omits clubCode/clubList; keep the code the
+      // user entered at login so Switch Branch (and ChangeClub) can resolve it.
+      if (clubCode != null && clubCode.isNotEmpty) {
+        authData!['clubCode'] = clubCode;
+      }
       debugPrint('🔐 AuthData keys: ${data.keys.toList()}');
       await _persistAuth();
       await _loadAll();
