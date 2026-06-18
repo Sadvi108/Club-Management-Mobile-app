@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'api_service.dart';
+import 'response_utils.dart';
 
 class UserSession extends ChangeNotifier {
   static final UserSession instance = UserSession._();
@@ -895,8 +896,17 @@ class UserSession extends ChangeNotifier {
         body['branchId'] = branchId;
       }
       final resp = await ApiService.post('/Account/Authenticate', body);
+      // A wrong password / unknown account comes back as HTTP 200 with an
+      // error envelope (e.g. {status: 404, meta: {error: "Account not
+      // found..."}}). Surface that real message instead of a generic one.
+      final apiErr = apiEnvelopeError(resp);
+      if (apiErr != null) {
+        error = apiErr;
+        return false;
+      }
       if (resp is! Map || resp['data'] is! Map) {
-        throw Exception('Invalid login response');
+        error = 'Unexpected response from the server. Please try again.';
+        return false;
       }
       final data = Map<String, dynamic>.from(resp['data'] as Map);
       final token = data['accessToken']?.toString();

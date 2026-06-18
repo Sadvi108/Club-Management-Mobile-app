@@ -52,17 +52,17 @@ class ReceiptPdf {
     return [method.substring(0, idx).trim(), method.substring(idx + 3).trim()];
   }
 
-  /// All rows that belong to the same receipt as [row] (same receiptNo and
-  /// payer). When no receiptNo is present, just the single row.
+  /// All line items that belong to the same receipt as [row] — every row
+  /// sharing its receiptNo, across all payers. A server receiptNo can cover a
+  /// batch payment for several students, and the official receipt is the whole
+  /// document, so it must NOT be scoped to one payer. When no receiptNo is
+  /// present, just the single row.
   static List<Map> rowsForReceipt(Map row, List<dynamic> allRows) {
     final no = _pick(row, ['receiptNo', 'receiptNumber']);
-    final ic = _pick(row, ['icNo']);
     if (no.isEmpty) return [row];
     return allRows
         .whereType<Map>()
-        .where((r) =>
-            _pick(r, ['receiptNo', 'receiptNumber']) == no &&
-            (ic.isEmpty || _pick(r, ['icNo']) == ic))
+        .where((r) => _pick(r, ['receiptNo', 'receiptNumber']) == no)
         .toList();
   }
 

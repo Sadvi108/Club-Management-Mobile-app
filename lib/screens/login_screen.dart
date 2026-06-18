@@ -171,14 +171,34 @@ class _LoginScreenState extends State<LoginScreen> {
       final session = UserSession.instance;
       context.go(session.isInstructor ? '/instructor/home' : '/home');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Login failed: ${UserSession.instance.error ?? 'Unknown error'}',
-          ),
-        ),
-      );
+      final raw = UserSession.instance.error ?? 'Unknown error';
+      // Strip the Dart "Exception: " prefix and our error glyphs so the
+      // dialog shows the clean, user-facing message.
+      final msg = raw
+          .replaceFirst('Exception: ', '')
+          .replaceAll('❌', '')
+          .trim();
+      await _showLoginError(msg.isEmpty ? 'Unknown error' : msg);
     }
+  }
+
+  Future<void> _showLoginError(String message) async {
+    final c = context.appColors;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.surface,
+        icon: Icon(Icons.lock_outline, color: c.danger, size: 32),
+        title: const Text('Sign in failed'),
+        content: Text(message, textAlign: TextAlign.center),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
