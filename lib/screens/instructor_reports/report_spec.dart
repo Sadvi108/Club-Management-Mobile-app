@@ -145,9 +145,16 @@ final Map<String, ReportSpec> kReportSpecs = {
     title: 'Receipt',
     filters: const [RFilter.trainingCenter, RFilter.dateRange, RFilter.status],
     statusLabel: 'Payment mode',
-    statusOptions: const ['Cash', 'Online', 'Bank Transfer', 'Cheque'],
-    rowStatus: (r) =>
-        (r['paymentMode'] ?? r['mode'] ?? r['paymentType'] ?? '').toString(),
+    // Modes seen in live /Reports/Receipts data (the prefix of paymentMethod).
+    statusOptions: const ['Cash', 'Ibg', 'Contra', 'Online', 'Cheque'],
+    // The real field is `paymentMethod`, formatted "<mode> - <description>"
+    // (e.g. "Cash - Monthly fee for August-2024"); the mode is the prefix.
+    rowStatus: (r) {
+      final pm =
+          (r['paymentMethod'] ?? r['paymentMode'] ?? r['mode'] ?? '').toString();
+      final idx = pm.indexOf(' - ');
+      return (idx >= 0 ? pm.substring(0, idx) : pm).trim();
+    },
     fetch: (q) => Api.reportsReceipts(reportBody(q)),
   ),
   'attendance': ReportSpec(
@@ -196,5 +203,19 @@ final Map<String, ReportSpec> kReportSpecs = {
     title: 'Contribution',
     filters: const [RFilter.dateRange],
     fetch: (q) => Api.reportsContribution(reportBody(q)),
+  ),
+  // "New Student" previously called /Reports/StudentDetails, which for an
+  // instructor token returns the instructor's training-time SCHEDULE rows,
+  // not students — so the report showed schedule data under a student label.
+  // Reuse the real student aggregator (same source as Student List).
+  'new-student': ReportSpec(
+    title: 'New Student',
+    filters: const [
+      RFilter.trainingCenter,
+      RFilter.nameText,
+      RFilter.icText,
+    ],
+    fetch: fetchInstructorStudentList,
+    onRowTap: (ctx, row) => ctx.push('/instructor/student-detail', extra: row),
   ),
 };
