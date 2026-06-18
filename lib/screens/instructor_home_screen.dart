@@ -321,9 +321,13 @@ class _InstructorHomeScreenState extends State<InstructorHomeScreen> {
           () => context.push('/instructor/reports/tournament')),
       _ActionTile(Icons.people_alt_outlined, 'Collections', blue,
           () => context.go('/instructor/collections')),
-      _ActionTile(Icons.receipt_long_outlined, 'Missing Invoice', rose,
-          () => context.push('/instructor/reports/missing-invoice')),
-      _ActionTile(Icons.savings, 'Fee Master', yellow,
+      // No "missing invoice" endpoint exists; this surfaces outstanding
+      // (unpaid) invoices, so label it truthfully and use the filterable spec.
+      _ActionTile(Icons.receipt_long_outlined, 'Outstanding', rose,
+          () => context.push('/instructor/reports/outstanding')),
+      // /Listing/InvoceTypes returns the invoice/transaction-type master, not
+      // a fee schedule — label it for what it is.
+      _ActionTile(Icons.savings, 'Invoice Types', yellow,
           () => context.push('/instructor/reports/fee-master')),
       _ActionTile(Icons.person_add_alt_1, 'New Student', cyan,
           () => context.push('/instructor/reports/new-student')),

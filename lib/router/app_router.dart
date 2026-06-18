@@ -185,7 +185,7 @@ final GoRouter appRouter = GoRouter(
         Api.reportsTournamentSummary),
     _reportRoute('/instructor/reports/missing-invoice', 'Missing Invoice',
         Api.outstandingFetch),
-    _reportRoute('/instructor/reports/fee-master', 'Fee Master',
+    _reportRoute('/instructor/reports/fee-master', 'Invoice Types',
         Api.listingInvoceTypes),
     _reportRoute('/instructor/reports/new-student', 'New Student',
         Api.reportsStudentDetails),

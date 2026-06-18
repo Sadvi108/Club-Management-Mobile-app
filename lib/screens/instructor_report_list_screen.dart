@@ -544,7 +544,21 @@ class _InstructorReportListScreenState
   ];
 
   Widget _rowCard(AppColors c, Map<String, dynamic> row) {
-    final title = pickField(row, _titleKeys);
+    var title = pickField(row, _titleKeys);
+    // Some reports have no name field (e.g. Tournament Summary rows are keyed
+    // by gender/category). Fall back to a categorical label so the card isn't
+    // a bare "Record"; remember the key so it isn't also shown as an "extra".
+    String? fallbackTitleKey;
+    if (title.isEmpty) {
+      for (final k in const ['gender', 'category', 'ageGroup', 'event', 'grade']) {
+        final v = (row[k] ?? '').toString().trim();
+        if (v.isNotEmpty && v != 'null') {
+          title = v;
+          fallbackTitleKey = k;
+          break;
+        }
+      }
+    }
     final amount = pickAmount(row, _amountKeys);
     final dateRaw = pickField(row, _dateKeys);
     final date = dateRaw.length >= 10 ? dateRaw.substring(0, 10) : dateRaw;
@@ -565,7 +579,7 @@ class _InstructorReportListScreenState
     };
     final extras = <MapEntry<String, String>>[];
     for (final e in row.entries) {
-      if (shown.contains(e.key)) continue;
+      if (shown.contains(e.key) || e.key == fallbackTitleKey) continue;
       if (_isNoiseKey(e.key)) continue; // internal ids — not user-facing
       final v = (e.value ?? '').toString().trim();
       if (v.isEmpty || v == 'null') continue;
