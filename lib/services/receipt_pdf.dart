@@ -98,7 +98,9 @@ class ReceiptPdf {
       lineRows.add(pw.TableRow(children: [
         _cell('${i + 1}'),
         _cell(md[1].isEmpty ? '-' : md[1]),
-        _cell(md[0]),
+        // Uppercase the mode: in the PDF's sans-serif font capital-I and
+        // lowercase-l are identical, so "Ibg" read as "lbg". "IBG" is clear.
+        _cell(md[0].toUpperCase()),
         _cell(amt.toStringAsFixed(2), align: pw.TextAlign.right),
       ]));
     }
