@@ -3,21 +3,32 @@ import 'package:dclix_app/screens/instructor_reports/report_spec.dart';
 import 'package:dclix_app/screens/instructor_reports/student_list_fetch.dart';
 
 void main() {
-  group('Receipt report payment-mode filter', () {
-    final spec = kReportSpecs['receipt']!;
-
-    test('extracts the mode from the real paymentMethod field', () {
-      // Live data shape: "Cash - Monthly fee for August-2024".
-      expect(spec.rowStatus!({'paymentMethod': 'Cash - Monthly fee for August-2024'}),
-          'Cash');
-      expect(spec.rowStatus!({'paymentMethod': 'Ibg - Monthly fee for July-2024'}),
-          'Ibg');
-      expect(spec.rowStatus!({'paymentMethod': 'Contra - Monthly fee for Nov-2025'}),
-          'Contra');
+  group('Receipt report body — server-side payment-mode filter', () {
+    // /Reports/Receipts filters by mode via `reportType`, but the server only
+    // accepts 'Cash' or 'FPX' — any other value returns zero rows. So only
+    // pass reportType for those two; otherwise omit it (show all).
+    test('Cash → reportType=Cash', () {
+      final b = receiptReportBody(ReportQuery(status: 'Cash'));
+      expect(b['reportType'], 'Cash');
     });
 
-    test('falls back to the whole value when there is no separator', () {
-      expect(spec.rowStatus!({'paymentMethod': 'Cash'}), 'Cash');
+    test('FPX → reportType=FPX', () {
+      final b = receiptReportBody(ReportQuery(status: 'FPX'));
+      expect(b['reportType'], 'FPX');
+    });
+
+    test('an unsupported mode does NOT send reportType', () {
+      final b = receiptReportBody(ReportQuery(status: 'Ibg'));
+      expect(b.containsKey('reportType'), isFalse);
+    });
+
+    test('no status → no reportType', () {
+      final b = receiptReportBody(ReportQuery());
+      expect(b.containsKey('reportType'), isFalse);
+    });
+
+    test('receipt spec offers only the server-supported modes', () {
+      expect(kReportSpecs['receipt']!.statusOptions, ['Cash', 'FPX']);
     });
   });
 
@@ -26,8 +37,6 @@ void main() {
       final spec = kReportSpecs['new-student'];
       expect(spec, isNotNull);
       expect(spec!.title, 'New Student');
-      // Must reuse the real student aggregator, not Reports/StudentDetails
-      // (which returns instructor schedule rows).
       expect(identical(spec.fetch, fetchInstructorStudentList), isTrue);
     });
   });

@@ -78,6 +78,19 @@ Map<String, dynamic> reportBody(ReportQuery q) {
   return m;
 }
 
+/// Body for `/Reports/Receipts`. The server filters receipts by payment mode
+/// through `reportType`, but only accepts `'Cash'` or `'FPX'` — any other
+/// value returns zero rows (a false "no records"). So `reportType` is sent
+/// ONLY when one of those two modes is selected; otherwise it is omitted and
+/// every receipt is returned.
+Map<String, dynamic> receiptReportBody(ReportQuery q) {
+  final body = reportBody(q);
+  if (q.status == 'Cash' || q.status == 'FPX') {
+    body['reportType'] = q.status!;
+  }
+  return body;
+}
+
 /// Specs keyed by the route slug (last path segment of the report route).
 /// Routes not present here fall back to a no-filter spec built in the
 /// router from a bare fetcher.
@@ -145,17 +158,12 @@ final Map<String, ReportSpec> kReportSpecs = {
     title: 'Receipt',
     filters: const [RFilter.trainingCenter, RFilter.dateRange, RFilter.status],
     statusLabel: 'Payment mode',
-    // Modes seen in live /Reports/Receipts data (the prefix of paymentMethod).
-    statusOptions: const ['Cash', 'Ibg', 'Contra', 'Online', 'Cheque'],
-    // The real field is `paymentMethod`, formatted "<mode> - <description>"
-    // (e.g. "Cash - Monthly fee for August-2024"); the mode is the prefix.
-    rowStatus: (r) {
-      final pm =
-          (r['paymentMethod'] ?? r['paymentMode'] ?? r['mode'] ?? '').toString();
-      final idx = pm.indexOf(' - ');
-      return (idx >= 0 ? pm.substring(0, idx) : pm).trim();
-    },
-    fetch: (q) => Api.reportsReceipts(reportBody(q)),
+    // /Reports/Receipts filters by mode server-side via `reportType`, which the
+    // server only honours for 'Cash' or 'FPX' (any other value returns zero
+    // rows). So those are the only modes we offer, and the filter is applied on
+    // the server (no client-side rowStatus filtering — see receiptReportBody).
+    statusOptions: const ['Cash', 'FPX'],
+    fetch: (q) => Api.reportsReceipts(receiptReportBody(q)),
   ),
   'attendance': ReportSpec(
     title: 'Attendance Report',
