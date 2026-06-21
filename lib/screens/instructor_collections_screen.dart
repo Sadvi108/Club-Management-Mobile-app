@@ -152,7 +152,11 @@ class _InstructorCollectionsScreenState
                           Icons.receipt_long,
                           'Payment Slips',
                           _loading ? null : slip,
-                          () => _openPaymentSlips(context),
+                          // dbt count comes from CollectionCount; its records
+                          // live in CollectionCountList(3) (paymentMethod=DBT),
+                          // not /Reports/PaymentSlips (a different, empty list)
+                          // — so the count and the drill-down agree.
+                          () => _openList(context, 3, 'Payment Slips'),
                           2),
                       _tile(
                           c,
@@ -249,17 +253,6 @@ class _InstructorCollectionsScreenState
         builder: (_) => _SimpleListScreen(
           title: title,
           fetcher: () => Api.outstandingCollectionCountList(typeId),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _openPaymentSlips(BuildContext context) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _SimpleListScreen(
-          title: 'Payment Slips',
-          fetcher: () => Api.reportsPaymentSlips(),
         ),
       ),
     );
