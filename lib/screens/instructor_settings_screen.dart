@@ -288,9 +288,12 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
           FilledButton(
             onPressed: () async {
               try {
+                // Send2ClubHelpDesk takes the Notification model: the subject
+                // maps to `text` and the message to `value` (sending
+                // subject/message keys leaves the ticket blank server-side).
                 await Api.profileSend2ClubHelpDesk(<String, dynamic>{
-                  'subject': subj.text,
-                  'message': body.text,
+                  'text': subj.text,
+                  'value': body.text,
                 });
                 if (!mounted) return;
                 Navigator.pop(ctx);

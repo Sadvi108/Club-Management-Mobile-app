@@ -399,9 +399,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             InkWell(
               onTap: () async {
                 try {
+                  // Send2ClubHelpDesk takes the Notification model: subject ->
+                  // `text`, message -> `value` (subject/message keys are
+                  // ignored server-side, leaving the ticket blank).
                   await Api.profileSend2ClubHelpDesk(<String, dynamic>{
-                    'subject': subjectCtrl.text,
-                    'message': messageCtrl.text,
+                    'text': subjectCtrl.text,
+                    'value': messageCtrl.text,
                   });
                   if (!mounted) return;
                   Navigator.pop(ctx);

@@ -1284,32 +1284,51 @@ class UserSession extends ChangeNotifier {
   /// Clear the student filter — show the aggregate across all children.
   void showAllStudents() => setActiveStudent(name: null, id: null);
 
-  /// Switch the active branch / club (works for both student & instructor).
-  /// Calls `POST /Account/ChangeClub`, swaps the bearer token, refreshes data.
+  /// Extract the new bearer token from a `/Profile/UpdateToken` response.
+  /// The endpoint returns the JWT as the raw `data` string (verified live),
+  /// but tolerate a bare string or a nested `{data: {accessToken}}` shape too.
+  static String? tokenFromUpdateResponse(dynamic resp) {
+    if (resp is String) return resp.isEmpty ? null : resp;
+    if (resp is Map) {
+      final d = resp['data'];
+      if (d is String && d.isNotEmpty) return d;
+      if (d is Map && d['accessToken'] is String) {
+        final t = d['accessToken'] as String;
+        return t.isEmpty ? null : t;
+      }
+    }
+    return null;
+  }
+
+  /// Switch the active branch (works for both student & instructor).
+  ///
+  /// Uses `POST /Profile/UpdateToken/{branchId}`, which returns a new bearer
+  /// token bound to the chosen branch. (`/Account/ChangeClub` returns HTTP 400
+  /// for instructor accounts — verified live — so it can't be used here.) The
+  /// new token is applied, `authData` is updated with the branch + token, and
+  /// every branch-scoped cache is reloaded.
   Future<bool> switchBranch(Object branchId, {String? clubCode}) async {
     if (!isLoggedIn) return false;
     pauseNotificationPolling();
     loading = true;
     notifyListeners();
     try {
-      final oldToken = (authData?['accessToken'] ?? '').toString();
-      final body = <String, dynamic>{
-        'branchId': branchId,
-        'accessToken': oldToken,
-      };
-      if (clubCode != null && clubCode.isNotEmpty) body['clubCode'] = clubCode;
-      final resp = await ApiService.post('/Account/ChangeClub', body);
-      Map<String, dynamic>? newData;
-      if (resp is Map && resp['data'] is Map) {
-        newData = Map<String, dynamic>.from(resp['data'] as Map);
-      } else if (resp is Map) {
-        newData = Map<String, dynamic>.from(resp);
+      final resp = await Api.profileUpdateToken(branchId);
+      final newToken = tokenFromUpdateResponse(resp);
+      if (newToken == null || newToken.isEmpty) {
+        throw Exception('UpdateToken returned no token');
       }
-      if (newData == null) throw Exception('ChangeClub returned no data');
+      ApiService.setToken(newToken);
 
-      final newToken = (newData['accessToken'] ?? oldToken).toString();
-      if (newToken.isNotEmpty) ApiService.setToken(newToken);
-      authData = newData;
+      // UpdateToken returns only the token; carry the rest of authData forward
+      // and patch in the new token + branch so the session/persistence reflect
+      // the switch.
+      authData ??= <String, dynamic>{};
+      authData!['accessToken'] = newToken;
+      authData!['branchId'] = branchId;
+      if (clubCode != null && clubCode.isNotEmpty) {
+        authData!['clubCode'] = clubCode;
+      }
       await _persistAuth();
 
       myInfo = null;
