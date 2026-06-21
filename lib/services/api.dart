@@ -140,6 +140,39 @@ class Api {
   static Future<dynamic> outstandingPayInvoices(Map<String, dynamic> body) =>
       ApiService.post('/Outstanding/PayInvoices', body);
 
+  /// Build the `PayTermPayments` query string for /Outstanding/PayInvoices.
+  /// ASP.NET binds repeated params into arrays.
+  static String termPaymentQuery(
+      List<int> studentIds, int year, List<int> months) {
+    final parts = <String>[
+      for (final s in studentIds) 'studentIds=$s',
+      'year=$year',
+      for (final m in months) 'months=$m',
+    ];
+    return parts.join('&');
+  }
+
+  /// Pay future term (advance) months. Maps to POST /Outstanding/PayInvoices
+  /// with the PayTermPayments query (studentIds/year/months) and a multipart
+  /// PaymentMethod/Remarks body (per swag.json). Not verified live — keep the
+  /// caller gated behind kPrepayPayEnabled until confirmed.
+  static Future<dynamic> outstandingPayTermPayments({
+    required List<int> studentIds,
+    required int year,
+    required List<int> months,
+    required int paymentMethod,
+    String remarks = 'Advance prepayment',
+  }) {
+    final qs = termPaymentQuery(studentIds, year, months);
+    return ApiService.postMultipart(
+      '/Outstanding/PayInvoices?$qs',
+      <String, String>{
+        'PaymentMethod': paymentMethod.toString(),
+        'Remarks': remarks,
+      },
+    );
+  }
+
   static Future<dynamic> outstandingCollectionCount() =>
       ApiService.get('/Outstanding/CollectionCount');
 
