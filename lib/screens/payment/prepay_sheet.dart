@@ -27,6 +27,7 @@ class _PrepaySheetState extends State<_PrepaySheet> {
   PrepayQuote _quote = const PrepayQuote([]);
   bool _pricing = false;
   bool _paying = false;
+  int _repriceSeq = 0;
 
   static const _monthNames = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -45,13 +46,15 @@ class _PrepaySheetState extends State<_PrepaySheet> {
       setState(() => _quote = const PrepayQuote([]));
       return;
     }
+    final seq = ++_repriceSeq;
     setState(() => _pricing = true);
     final quote = await PrepayService.priceMonths(
       studentId: sid,
       year: _year,
       months: _selected.toList()..sort(),
     );
-    if (!mounted) return;
+    // Ignore a stale response when a newer reprice has started.
+    if (!mounted || seq != _repriceSeq) return;
     setState(() {
       _quote = quote;
       _pricing = false;
