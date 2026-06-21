@@ -782,6 +782,21 @@ class UserSession extends ChangeNotifier {
     return ut != 3;               // 3 = student/parent; 0 (and 2) = instructor
   }
 
+  /// Numeric student id to act on for per-student actions (e.g. prepay).
+  /// A picked guardian child wins; otherwise the logged-in account's id.
+  /// Returns null when neither is available.
+  int? get currentStudentId {
+    final active = activeStudentId;
+    if (active != null) {
+      if (active is int) return active;
+      final n = int.tryParse(active.toString());
+      if (n != null) return n;
+    }
+    final raw = authData?['id'];
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw?.toString() ?? '');
+  }
+
   /// Rows surfaced by `Profile/MyClubStats` — each entry is
   /// `{id: <count>, value: <orderIndex>, text: <label>}`.
   List<Map<String, dynamic>> get clubStatsRows =>
