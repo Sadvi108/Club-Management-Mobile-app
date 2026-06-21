@@ -442,7 +442,7 @@ class _InstructorReportListScreenState
           borderRadius: BorderRadius.circular(Radii.md),
           border: Border.all(color: c.border),
         ),
-        child: Text("Couldn't load: $_error",
+        child: Text(friendlyError(_error),
             style: TextStyle(color: c.danger, fontWeight: FontWeight.w600)),
       );
 

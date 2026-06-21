@@ -53,6 +53,37 @@ String? apiEnvelopeError(dynamic resp) {
   return 'Request failed (status $code).';
 }
 
+/// Turn any error/exception into a short, user-facing message — never show a
+/// raw `Exception:` / `ClientException: XMLHttpRequest error` string to users.
+/// Maps the common classes (network, auth, server) to friendly text and strips
+/// the Dart exception prefix and our `❌` glyph from anything else.
+String friendlyError(Object? e) {
+  final raw = (e ?? '').toString();
+  final lower = raw.toLowerCase();
+  if (lower.contains('xmlhttprequest') ||
+      lower.contains('clientexception') ||
+      lower.contains('socketexception') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('connection') && lower.contains('refused') ||
+      lower.contains('network is unreachable') ||
+      lower.contains('timeout')) {
+    return 'Network error — please check your connection and try again.';
+  }
+  if (lower.contains('401') || lower.contains('unauthorized')) {
+    return 'Your session has expired. Please log in again.';
+  }
+  if (RegExp(r'\b5\d\d\b').hasMatch(raw) ||
+      lower.contains('internal server')) {
+    return 'Server error — please try again in a moment.';
+  }
+  // Strip "Exception: " prefixes and our error glyph from the remaining text.
+  final cleaned = raw
+      .replaceAll(RegExp(r'^[A-Za-z]*Exception:\s*'), '')
+      .replaceAll('❌', '')
+      .trim();
+  return cleaned.isEmpty ? 'Something went wrong. Please try again.' : cleaned;
+}
+
 /// First non-empty string value across a set of candidate keys.
 String pickField(Map row, List<String> keys) {
   for (final k in keys) {

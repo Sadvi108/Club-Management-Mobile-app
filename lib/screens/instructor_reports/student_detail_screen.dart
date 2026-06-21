@@ -222,7 +222,7 @@ class _InstructorStudentDetailScreenState
                           child: _receiptCard(c, entry.value)),
                   if (_error != null) ...[
                     const SizedBox(height: 16),
-                    Text("Couldn't load: $_error",
+                    Text(friendlyError(_error),
                         style: TextStyle(
                             color: c.danger,
                             fontSize: 12,

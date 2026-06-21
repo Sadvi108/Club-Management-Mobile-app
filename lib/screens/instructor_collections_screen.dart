@@ -121,7 +121,7 @@ class _InstructorCollectionsScreenState
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: Gaps.md),
-                      child: Text('Couldn\'t load counts: $_error',
+                      child: Text(friendlyError(_error),
                           style: TextStyle(
                               color: c.danger, fontWeight: FontWeight.w600)),
                     ),
