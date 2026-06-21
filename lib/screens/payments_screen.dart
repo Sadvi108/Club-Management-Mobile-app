@@ -16,6 +16,7 @@ import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
 import '../widgets/list_search.dart';
 import 'payment/bcpg_webview_screen.dart';
+import 'payment/prepay_sheet.dart';
 
 class PaymentsScreen extends StatefulWidget {
   const PaymentsScreen({super.key});
@@ -843,6 +844,14 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(Gaps.xl, 0, Gaps.xl, 140),
           sliver: SliverList.list(children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: OutlinedButton.icon(
+                onPressed: () => showPrepaySheet(context),
+                icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                label: const Text('Prepay / Advance'),
+              ),
+            ),
             // Due card
             Container(
               padding: const EdgeInsets.all(22),
