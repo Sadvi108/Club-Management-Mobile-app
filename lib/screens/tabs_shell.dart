@@ -7,13 +7,13 @@ class TabsShell extends StatelessWidget {
   final String location;
   const TabsShell({super.key, required this.child, required this.location});
 
-  /// Student/parent bottom-tab order:
-  ///   Home · Training · [QR FAB] · Payments · Profile
-  /// Schedule lives on the Home screen (Timetable quick tile + Today's
-  /// Class), so it is off the bar; Profile takes the slot to give direct
-  /// access to settings, theme, switch-student and logout. Progress is
-  /// reached from the Home Quick Access grid.
-  static const _routes = ['/home', '/training', '/payments', '/profile'];
+  /// Student/parent bottom-tab order (restored classic menu + Payments):
+  ///   Home · Schedule · [QR FAB] · Progress · Payments · Profile
+  /// The QR scanner sits in the centre notch; two tabs to its left, three to
+  /// its right, each half balanced so the notch stays centred.
+  static const _routes = [
+    '/home', '/schedule', '/progress', '/payments', '/profile'
+  ];
 
   int _idxFromLocation() {
     final i = _routes.indexWhere((r) => location.startsWith(r));
@@ -52,13 +52,30 @@ class TabsShell extends StatelessWidget {
         color: c.surface,
         elevation: 0,
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _tab(context, 0, idx, Icons.home_outlined, Icons.home, 'Home', '/home'),
-            _tab(context, 1, idx, Icons.fitness_center_outlined, Icons.fitness_center, 'Training', '/training'),
+            // Left half (2 tabs) — equal weight with the right half keeps the
+            // centre notch aligned under the FAB.
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _tab(context, 0, idx, Icons.home_outlined, Icons.home, 'Home', '/home'),
+                  _tab(context, 1, idx, Icons.calendar_month_outlined, Icons.calendar_month, 'Schedule', '/schedule'),
+                ],
+              ),
+            ),
             const SizedBox(width: 60), // notch space for FAB
-            _tab(context, 2, idx, Icons.receipt_long_outlined, Icons.receipt_long, 'Payments', '/payments'),
-            _tab(context, 3, idx, Icons.person_outline, Icons.person, 'Profile', '/profile'),
+            // Right half (3 tabs).
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _tab(context, 2, idx, Icons.trending_up_outlined, Icons.trending_up, 'Progress', '/progress'),
+                  _tab(context, 3, idx, Icons.receipt_long_outlined, Icons.receipt_long, 'Payments', '/payments'),
+                  _tab(context, 4, idx, Icons.person_outline, Icons.person, 'Profile', '/profile'),
+                ],
+              ),
+            ),
           ],
         ),
         )),
