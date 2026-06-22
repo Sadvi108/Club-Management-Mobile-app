@@ -3,15 +3,14 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-/// Local receipt-PDF generation.
+/// Local receipt-PDF generation, laid out to match the club's official
+/// server receipt: a single document per `receiptNo` with columns
+/// `# | Student Name | Invoice Type | Description | Amount`, an amount-in-words
+/// line, the total, and the payment mode at the foot.
 ///
-/// The server endpoint `/Utilities/ReceiptAsPDF/{clubId}/{paymentId}/{invoiceId}`
-/// returns a blank template (only column headers, no rows) for the IDs the app
-/// can supply — `/Reports/Receipts` exposes a per-line `id` and a `receiptNo`,
-/// neither of which the PDF generator resolves to a payment, so every receipt
-/// downloaded "empty". The receipt rows themselves already carry every value a
-/// receipt needs (number, date, payer, amount, description), so we render the
-/// document client-side instead of relying on the broken endpoint.
+/// The server endpoint `/Utilities/ReceiptAsPDF` returns a blank template for
+/// the ids the app can supply, so the document is rendered client-side from the
+/// `/Reports/Receipts` rows (number, date, payer, amount, paymentMethod).
 class ReceiptPdf {
   /// Pick the first non-empty value among [keys] in [m].
   static String _pick(Map m, List<String> keys, [String fallback = '']) {
@@ -32,15 +31,13 @@ class ReceiptPdf {
     return 0;
   }
 
-  /// Trim an ISO date string to `yyyy-MM-dd HH:mm` (or the date alone).
-  static String _date(String raw) {
+  /// Format a date as `dd-MM-yyyy` (matches the official receipt).
+  static String _dateDMY(String raw) {
     if (raw.isEmpty) return '';
     final d = DateTime.tryParse(raw);
     if (d == null) return raw.length >= 10 ? raw.substring(0, 10) : raw;
     String two(int n) => n.toString().padLeft(2, '0');
-    final date = '${d.year}-${two(d.month)}-${two(d.day)}';
-    if (d.hour == 0 && d.minute == 0 && d.second == 0) return date;
-    return '$date ${two(d.hour)}:${two(d.minute)}';
+    return '${two(d.day)}-${two(d.month)}-${d.year}';
   }
 
   /// Split a combined "Mode - Description" payment method into its two parts.
@@ -66,16 +63,90 @@ class ReceiptPdf {
         .toList();
   }
 
+  // ── Amount → words (Malaysian ringgit) ────────────────────────────────────
+  static const _ones = [
+    '', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE',
+    'TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN',
+    'SEVENTEEN', 'EIGHTEEN', 'NINETEEN',
+  ];
+  static const _tens = [
+    '', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY',
+    'NINETY',
+  ];
+
+  static String _under1000(int n) {
+    final b = StringBuffer();
+    if (n >= 100) {
+      b.write(_ones[n ~/ 100]);
+      b.write(' HUNDRED');
+      n %= 100;
+      if (n > 0) b.write(' AND ');
+    }
+    if (n >= 20) {
+      b.write(_tens[n ~/ 10]);
+      n %= 10;
+      if (n > 0) b.write(' ');
+    }
+    if (n > 0 && n < 20) b.write(_ones[n]);
+    return b.toString();
+  }
+
+  static String _wordsFor(int n) {
+    if (n == 0) return 'ZERO';
+    final parts = <String>[];
+    final million = n ~/ 1000000;
+    n %= 1000000;
+    final thousand = n ~/ 1000;
+    n %= 1000;
+    if (million > 0) parts.add('${_under1000(million)} MILLION');
+    if (thousand > 0) parts.add('${_under1000(thousand)} THOUSAND');
+    if (n > 0) parts.add(_under1000(n));
+    return parts.join(' ');
+  }
+
+  /// "RINGGIT MALAYSIA ONE HUNDRED AND FIFTY SEN ONLY" — the official wording.
+  static String amountInWords(num amount) {
+    final ringgit = amount.floor();
+    final sen = ((amount - ringgit) * 100).round();
+    final buf = StringBuffer('RINGGIT MALAYSIA ');
+    buf.write(_wordsFor(ringgit));
+    if (sen > 0) {
+      buf.write(' AND ');
+      buf.write(_wordsFor(sen));
+      buf.write(' SEN');
+    }
+    buf.write(' ONLY');
+    return buf.toString();
+  }
+
+  /// Invoice "type" column — the server receipt shows e.g. "Monthly". Derive it
+  /// from the line description since `/Reports/Receipts` doesn't return a type.
+  static String invoiceTypeFor(String description) {
+    final d = description.toLowerCase();
+    if (d.contains('monthly')) return 'Monthly';
+    if (d.contains('registration')) return 'Registration';
+    if (d.contains('grading')) return 'Grading';
+    if (d.contains('annual')) return 'Annual';
+    if (d.contains('tournament')) return 'Tournament';
+    if (d.contains('uniform') || d.contains('material') || d.contains('belt')) {
+      return 'Material';
+    }
+    final first = description.trim().split(RegExp(r'\s+')).first;
+    if (first.isEmpty) return '';
+    return first[0].toUpperCase() + first.substring(1).toLowerCase();
+  }
+
   /// Build the receipt PDF bytes for a group of line [rows] (all sharing one
   /// receiptNo). [clubName] is shown as the issuer header.
   static Future<Uint8List> build(List<Map> rows, {String clubName = ''}) async {
     final doc = pw.Document();
     final first = rows.isNotEmpty ? rows.first : const {};
     final receiptNo = _pick(first, ['receiptNo', 'receiptNumber'], '-');
-    final receiptDate = _date(_pick(first, ['receiptDate', 'date', 'paymentDate']));
+    final receiptDate =
+        _dateDMY(_pick(first, ['receiptDate', 'date', 'paymentDate']));
     final payer = _pick(first, ['name', 'studentName'], '-');
-    final icNo = _pick(first, ['icNo']);
-    final centre = _pick(first, ['tcName', 'centerName', 'trainingCenter']);
+    // Mode is per-receipt (shown once at the foot), e.g. "Contra"/"Cash".
+    final mode = _modeAndDesc(_pick(first, ['paymentMethod', 'description'], ''))[0];
 
     double total = 0;
     final lineRows = <pw.TableRow>[];
@@ -84,8 +155,9 @@ class ReceiptPdf {
         decoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFFF1F5F9)),
         children: [
           _cell('#', bold: true),
+          _cell('Student Name', bold: true),
+          _cell('Invoice Type', bold: true),
           _cell('Description', bold: true),
-          _cell('Mode', bold: true),
           _cell('Amount (RM)', bold: true, align: pw.TextAlign.right),
         ],
       ),
@@ -95,12 +167,15 @@ class ReceiptPdf {
       final amt = _amount(r['receiptAmount'] ?? r['amount'] ?? r['value']);
       total += amt;
       final md = _modeAndDesc(_pick(r, ['paymentMethod', 'description'], ''));
+      final desc = md[1].isEmpty ? '-' : md[1];
+      final student = _pick(r, ['name', 'studentName'], payer);
+      final type = _pick(r, ['transactionType', 'invoiceType'],
+          invoiceTypeFor(desc));
       lineRows.add(pw.TableRow(children: [
         _cell('${i + 1}'),
-        _cell(md[1].isEmpty ? '-' : md[1]),
-        // Uppercase the mode: in the PDF's sans-serif font capital-I and
-        // lowercase-l are identical, so "Ibg" read as "lbg". "IBG" is clear.
-        _cell(md[0].toUpperCase()),
+        _cell(student),
+        _cell(type),
+        _cell(desc),
         _cell(amt.toStringAsFixed(2), align: pw.TextAlign.right),
       ]));
     }
@@ -111,57 +186,76 @@ class ReceiptPdf {
         build: (ctx) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
+            // Title + receipt no / date.
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-                  pw.Text('OFFICIAL RECEIPT',
-                      style: pw.TextStyle(
-                          fontSize: 18, fontWeight: pw.FontWeight.bold)),
-                  if (clubName.isNotEmpty)
-                    pw.Text(clubName,
-                        style: const pw.TextStyle(
-                            fontSize: 11, color: PdfColors.grey700)),
-                ]),
+                pw.Text('OFFICIAL RECEIPT',
+                    style: pw.TextStyle(
+                        fontSize: 18, fontWeight: pw.FontWeight.bold)),
                 pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-                  pw.Text('Receipt No. $receiptNo',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                  pw.Text('Date: $receiptDate',
+                  pw.Text('Receipt No.',
                       style: const pw.TextStyle(
-                          fontSize: 10, color: PdfColors.grey700)),
+                          fontSize: 9, color: PdfColors.grey600)),
+                  pw.Text(receiptNo,
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Receipt Date',
+                      style: const pw.TextStyle(
+                          fontSize: 9, color: PdfColors.grey600)),
+                  pw.Text(receiptDate,
+                      style: const pw.TextStyle(fontSize: 10)),
                 ]),
               ],
             ),
-            pw.SizedBox(height: 14),
-            pw.Text('Paid By', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
-            pw.Text(icNo.isEmpty ? payer : '$payer  ($icNo)',
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            if (centre.isNotEmpty) ...[
-              pw.SizedBox(height: 4),
-              pw.Text(centre, style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+            if (clubName.isNotEmpty) ...[
+              pw.SizedBox(height: 10),
+              pw.Text(clubName,
+                  style: pw.TextStyle(
+                      fontSize: 13, fontWeight: pw.FontWeight.bold)),
             ],
             pw.SizedBox(height: 14),
+            pw.Text('Paid By',
+                style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
+            pw.Text(payer,
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 12),
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
               columnWidths: const {
-                0: pw.FixedColumnWidth(28),
-                1: pw.FlexColumnWidth(3),
+                0: pw.FixedColumnWidth(24),
+                1: pw.FlexColumnWidth(2),
                 2: pw.FlexColumnWidth(1.4),
-                3: pw.FixedColumnWidth(80),
+                3: pw.FlexColumnWidth(3),
+                4: pw.FixedColumnWidth(70),
               },
               children: lineRows,
             ),
-            pw.SizedBox(height: 10),
-            pw.Row(mainAxisAlignment: pw.MainAxisAlignment.end, children: [
-              pw.Text('Total:  ',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-              pw.Text('RM ${total.toStringAsFixed(2)}',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
-            ]),
-            pw.SizedBox(height: 28),
+            pw.SizedBox(height: 12),
+            // Amount in words (left) + total (right).
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Text(amountInWords(total),
+                      style: pw.TextStyle(
+                          fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                ),
+                pw.SizedBox(width: 12),
+                pw.Text(total.toStringAsFixed(2),
+                    style: pw.TextStyle(
+                        fontSize: 12, fontWeight: pw.FontWeight.bold)),
+              ],
+            ),
+            if (mode.isNotEmpty) ...[
+              pw.SizedBox(height: 10),
+              pw.Text('Payment Mode :  $mode',
+                  style: const pw.TextStyle(fontSize: 10)),
+            ],
+            pw.SizedBox(height: 24),
             pw.Text(
-                'THIS IS A COMPUTER GENERATED DOCUMENT. NO SIGNATURE IS REQUIRED.',
+                '(THIS IS A COMPUTER GENERATED DOCUMENT. NO SIGNATURE IS REQUIRED.)',
                 style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
           ],
         ),
