@@ -110,7 +110,7 @@ class UserSession extends ChangeNotifier {
   /// [currentAppVersion] to decide whether to show the "new version" banner.
   String? latestStoreVersion;
   bool storeVersionDismissed = false;
-  static const String currentAppVersion = '1.1.0';
+  static const String currentAppVersion = '1.1.1';
 
   bool get hasNewerVersion {
     final latest = latestStoreVersion;
