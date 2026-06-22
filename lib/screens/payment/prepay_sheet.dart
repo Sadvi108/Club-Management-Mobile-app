@@ -97,12 +97,18 @@ class _PrepaySheetState extends State<_PrepaySheet> {
         _quote.months.isNotEmpty &&
         !_paying;
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.9,
+      ),
       decoration: BoxDecoration(
         color: c.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      // Scrollable so every month chip, the line items and the Pay button stay
+      // reachable on small screens (the content was overflowing/clipping).
+      child: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
           width: 40, height: 4,
           margin: const EdgeInsets.only(bottom: 14),
@@ -205,6 +211,7 @@ class _PrepaySheetState extends State<_PrepaySheet> {
           ),
         ),
       ]),
+      ),
     );
   }
 }
