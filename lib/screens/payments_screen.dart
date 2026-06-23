@@ -16,7 +16,7 @@ import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
 import '../widgets/list_search.dart';
 import 'payment/bcpg_webview_screen.dart';
-import 'payment/prepay_sheet.dart';
+import 'payment/term_payment_screen.dart';
 
 class PaymentsScreen extends StatefulWidget {
   const PaymentsScreen({super.key});
@@ -847,9 +847,12 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: OutlinedButton.icon(
-                onPressed: () => showPrepaySheet(context),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (_) => const TermPaymentScreen()),
+                ),
                 icon: const Icon(Icons.calendar_month_outlined, size: 18),
-                label: const Text('Prepay / Advance'),
+                label: const Text('Term / Advance Payment'),
               ),
             ),
             // Due card
