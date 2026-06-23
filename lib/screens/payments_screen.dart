@@ -11,6 +11,7 @@ import '../services/api.dart';
 import '../services/bcpg_service.dart';
 import '../services/receipt_pdf.dart';
 import '../services/user_session.dart';
+import '../services/web_download.dart';
 import '../theme/app_theme.dart';
 import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
@@ -141,8 +142,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       }
       final fname = 'receipt_${receiptNo.isEmpty ? 'receipt' : receiptNo}.pdf';
       if (kIsWeb) {
-        // Web has no file system — sharePdf triggers the browser download.
-        await Printing.sharePdf(bytes: bytes, filename: fname);
+        // Web: download via a Blob + anchor. (Printing.sharePdf throws
+        // MissingPluginException on web in this build.)
+        downloadBytesWeb(bytes, fname, 'application/pdf');
         return;
       }
       // Native: write the bytes to a real file first, then open it in the
@@ -710,12 +712,19 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         });
         final remain = session.paymentLockSeconds;
         return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.9,
+          ),
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
-          padding: const EdgeInsets.fromLTRB(22, 14, 22, 36),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Reserve the gesture-bar + keyboard inset so the Confirm button
+          // never collides with the system bar / bottom nav.
+          padding: EdgeInsets.fromLTRB(22, 14, 22,
+              24 + MediaQuery.of(ctx).padding.bottom + MediaQuery.of(ctx).viewInsets.bottom),
+          child: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 18),
             Row(children: [
@@ -809,6 +818,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               ),
             ),
           ]),
+          ),
         );
       }),
     ).whenComplete(() => ticker?.cancel());

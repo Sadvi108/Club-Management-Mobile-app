@@ -534,7 +534,8 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
           borderRadius:
               const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
         ),
-        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        padding: EdgeInsets.fromLTRB(
+            22, 14, 22, 28 + MediaQuery.of(ctx).padding.bottom),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,

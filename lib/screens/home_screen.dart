@@ -282,7 +282,9 @@ class HomeScreen extends StatelessWidget {
                   _quickTop(c, Icons.check_circle_outline, 'Attendance', () => context.push('/attendance')),
                   _quickTop(c, Icons.calendar_month_outlined, 'Timetable', () => context.go('/schedule')),
                   _quickTop(c, Icons.badge_outlined, 'Virtual ID', () => context.go('/profile')),
-                  _quickTop(c, Icons.person_outline, 'Profile', () => context.go('/profile')),
+                  // Progress moved off the bottom nav (kept the bar to 4 tabs);
+                  // surfaced here instead of a redundant Profile shortcut.
+                  _quickTop(c, Icons.trending_up_outlined, 'Progress', () => context.go('/progress')),
                 ]),
               ),
             ),

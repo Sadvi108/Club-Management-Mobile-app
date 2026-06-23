@@ -136,7 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: c.surface,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             ),
-            padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+            padding: EdgeInsets.fromLTRB(22, 14, 22, 28 + MediaQuery.of(ctx).padding.bottom),
             child: DraggableScrollableSheet(
               expand: false,
               initialChildSize: 0.85,
@@ -327,7 +327,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           color: c.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
         ),
-        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+        padding: EdgeInsets.fromLTRB(22, 14, 22, 28 + MediaQuery.of(ctx).padding.bottom),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 14),
@@ -386,7 +386,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: c.surface,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
           ),
-          padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
+          padding: EdgeInsets.fromLTRB(22, 14, 22, 28 + MediaQuery.of(ctx).padding.bottom),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
             const SizedBox(height: 14),
@@ -519,8 +519,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           color: c.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
         ),
-        padding: const EdgeInsets.fromLTRB(22, 14, 22, 28),
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+        padding: EdgeInsets.fromLTRB(22, 14, 22, 28 + MediaQuery.of(ctx).padding.bottom),
+        // Min height so a short/empty list still shows a clear sheet (not a
+        // sliver hidden behind the nav); cap at 75% of the screen.
+        constraints: BoxConstraints(
+          minHeight: 220,
+          maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+        ),
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
           const SizedBox(height: 14),

@@ -7,13 +7,12 @@ class TabsShell extends StatelessWidget {
   final String location;
   const TabsShell({super.key, required this.child, required this.location});
 
-  /// Student/parent bottom-tab order (restored classic menu + Payments):
-  ///   Home · Schedule · [QR FAB] · Progress · Payments · Profile
-  /// The QR scanner sits in the centre notch; two tabs to its left, three to
-  /// its right, each half balanced so the notch stays centred.
-  static const _routes = [
-    '/home', '/schedule', '/progress', '/payments', '/profile'
-  ];
+  /// Student/parent bottom-tab order:
+  ///   Home · Schedule · [QR FAB] · Payments · Profile
+  /// Four tabs, two each side of the centre QR notch (balanced). Progress was
+  /// moved off the bar (it was cramping labels on small phones) and is reached
+  /// from the Home quick row.
+  static const _routes = ['/home', '/schedule', '/payments', '/profile'];
 
   int _idxFromLocation() {
     final i = _routes.indexWhere((r) => location.startsWith(r));
@@ -65,14 +64,13 @@ class TabsShell extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 60), // notch space for FAB
-            // Right half (3 tabs).
+            // Right half (2 tabs).
             Expanded(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _tab(context, 2, idx, Icons.trending_up_outlined, Icons.trending_up, 'Progress', '/progress'),
-                  _tab(context, 3, idx, Icons.receipt_long_outlined, Icons.receipt_long, 'Payments', '/payments'),
-                  _tab(context, 4, idx, Icons.person_outline, Icons.person, 'Profile', '/profile'),
+                  _tab(context, 2, idx, Icons.receipt_long_outlined, Icons.receipt_long, 'Payments', '/payments'),
+                  _tab(context, 3, idx, Icons.person_outline, Icons.person, 'Profile', '/profile'),
                 ],
               ),
             ),
@@ -90,12 +88,12 @@ class TabsShell extends StatelessWidget {
       child: InkWell(
         onTap: () => ctx.go(route),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 24,
+                width: 22,
                 height: 3,
                 margin: const EdgeInsets.only(bottom: 4),
                 decoration: BoxDecoration(
@@ -103,14 +101,24 @@ class TabsShell extends StatelessWidget {
                   borderRadius: BorderRadius.circular(99),
                 ),
               ),
-              Icon(active ? filled : outline, size: 21, color: active ? c.primary : c.textMuted),
+              Icon(active ? filled : outline, size: 20, color: active ? c.primary : c.textMuted),
               const SizedBox(height: 2),
-              Text(label,
-                  style: TextStyle(
-                      fontSize: 10,
-                      height: 1.1,
-                      fontWeight: FontWeight.w600,
-                      color: active ? c.primary : c.textMuted)),
+              // Auto-fit the label to the (narrow) tab width on one line —
+              // scales down on small screens instead of wrapping/overlapping.
+              SizedBox(
+                width: double.infinity,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(label,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          height: 1.0,
+                          fontWeight: FontWeight.w600,
+                          color: active ? c.primary : c.textMuted)),
+                ),
+              ),
             ],
           ),
         ),
