@@ -131,6 +131,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       final bytes = await ReceiptPdf.build(
         group.isEmpty ? [m] : group,
         clubName: session.clubDisplayName,
+        logoUrl: session.clubPic,
       );
       if (!mounted) return;
       if (bytes.isEmpty || !_looksLikePdf(bytes)) {

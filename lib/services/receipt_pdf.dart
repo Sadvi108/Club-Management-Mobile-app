@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -136,10 +137,25 @@ class ReceiptPdf {
     return first[0].toUpperCase() + first.substring(1).toLowerCase();
   }
 
+  /// Best-effort download of the club logo (PNG/JPG) for the header. Returns
+  /// null on any failure so the receipt still renders without it.
+  static Future<Uint8List?> _fetchLogo(String? url) async {
+    if (url == null || url.isEmpty || !url.startsWith('http')) return null;
+    try {
+      final r = await http.get(Uri.parse(url));
+      if (r.statusCode == 200 && r.bodyBytes.length > 8) return r.bodyBytes;
+    } catch (_) {}
+    return null;
+  }
+
   /// Build the receipt PDF bytes for a group of line [rows] (all sharing one
-  /// receiptNo). [clubName] is shown as the issuer header.
-  static Future<Uint8List> build(List<Map> rows, {String clubName = ''}) async {
+  /// receiptNo). [clubName] is shown as the issuer header; [logoUrl] (e.g. the
+  /// club logo) is embedded top-left when reachable.
+  static Future<Uint8List> build(List<Map> rows,
+      {String clubName = '', String? logoUrl}) async {
     final doc = pw.Document();
+    final logoBytes = await _fetchLogo(logoUrl);
+    final logo = logoBytes != null ? pw.MemoryImage(logoBytes) : null;
     final first = rows.isNotEmpty ? rows.first : const {};
     final receiptNo = _pick(first, ['receiptNo', 'receiptNumber'], '-');
     final receiptDate =
@@ -186,14 +202,41 @@ class ReceiptPdf {
         build: (ctx) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            // Title + receipt no / date.
+            // Header: left = title + logo + club name; right = receipt
+            // no / date / paid-by (matches the official receipt layout).
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('OFFICIAL RECEIPT',
-                    style: pw.TextStyle(
-                        fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('OFFICIAL RECEIPT',
+                          style: pw.TextStyle(
+                              fontSize: 18, fontWeight: pw.FontWeight.bold)),
+                      pw.SizedBox(height: 8),
+                      pw.Row(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          if (logo != null) ...[
+                            pw.Container(
+                                width: 36, height: 36, child: pw.Image(logo)),
+                            pw.SizedBox(width: 8),
+                          ],
+                          if (clubName.isNotEmpty)
+                            pw.Expanded(
+                              child: pw.Text(clubName,
+                                  style: pw.TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: pw.FontWeight.bold)),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 16),
                 pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
                   pw.Text('Receipt No.',
                       style: const pw.TextStyle(
@@ -206,21 +249,16 @@ class ReceiptPdf {
                           fontSize: 9, color: PdfColors.grey600)),
                   pw.Text(receiptDate,
                       style: const pw.TextStyle(fontSize: 10)),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Paid By',
+                      style: const pw.TextStyle(
+                          fontSize: 9, color: PdfColors.grey600)),
+                  pw.Text(payer,
+                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                 ]),
               ],
             ),
-            if (clubName.isNotEmpty) ...[
-              pw.SizedBox(height: 10),
-              pw.Text(clubName,
-                  style: pw.TextStyle(
-                      fontSize: 13, fontWeight: pw.FontWeight.bold)),
-            ],
-            pw.SizedBox(height: 14),
-            pw.Text('Paid By',
-                style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
-            pw.Text(payer,
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 12),
+            pw.SizedBox(height: 16),
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
               columnWidths: const {
