@@ -5,6 +5,7 @@ import '../services/response_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
+import '../widgets/responsive.dart';
 
 class InstructorCollectionsScreen extends StatefulWidget {
   const InstructorCollectionsScreen({super.key});
@@ -79,10 +80,7 @@ class _InstructorCollectionsScreenState
             width: double.infinity,
             padding: EdgeInsets.fromLTRB(
                 Gaps.lg,
-                (MediaQuery.of(context).padding.top > 0
-                        ? MediaQuery.of(context).padding.top
-                        : 44) +
-                    16,
+                context.topInset + 16,
                 Gaps.lg,
                 20),
             decoration: BoxDecoration(

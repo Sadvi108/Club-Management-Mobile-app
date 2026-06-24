@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/anim.dart';
 import '../widgets/notification_bell.dart';
 import '../widgets/pressable.dart';
+import '../widgets/responsive.dart';
 import '../widgets/responsive_body.dart';
 import '../widgets/student_switcher.dart';
 import '../widgets/white_card_hero.dart';
@@ -59,13 +60,7 @@ class HomeScreen extends StatelessWidget {
               Container(
                 width: double.infinity,
                 padding: EdgeInsets.fromLTRB(
-                    Gaps.xl,
-                    (MediaQuery.of(context).padding.top > 0
-                            ? MediaQuery.of(context).padding.top
-                            : 44) +
-                        10,
-                    Gaps.xl,
-                    10),
+                    Gaps.xl, context.topInset + 10, Gaps.xl, 10),
                 color: c.primary,
                 child: Row(children: [
                   const Icon(Icons.system_update, color: Colors.white, size: 18),
@@ -88,13 +83,7 @@ class HomeScreen extends StatelessWidget {
               // so fall back to a fixed clearance that keeps the header
               // content below a hardware notch / status bar.
               padding: EdgeInsets.fromLTRB(
-                  Gaps.xl,
-                  (MediaQuery.of(context).padding.top > 0
-                          ? MediaQuery.of(context).padding.top
-                          : 44) +
-                      14,
-                  Gaps.xl,
-                  24),
+                  Gaps.xl, context.topInset + 14, Gaps.xl, 24),
               child: Column(children: [
                 Row(children: [
                   // 52×52 avatar — tap to switch student
@@ -761,8 +750,9 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _quickTop(AppColors c, IconData icon, String label, VoidCallback onTap) => SizedBox(
-        width: 72,
+  // Flexible cell: shares the bar width evenly so 4 tiles never overflow on
+  // narrow (≤320px) phones, while reading the same as before on normal sizes.
+  Widget _quickTop(AppColors c, IconData icon, String label, VoidCallback onTap) => Expanded(
         child: InkWell(
           onTap: onTap,
           child: Column(children: [
@@ -772,7 +762,11 @@ class HomeScreen extends StatelessWidget {
               child: Icon(icon, size: 22, color: c.primary),
             ),
             const SizedBox(height: 6),
-            Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 10, color: c.textPrimary, fontWeight: FontWeight.w600)),
+            Text(label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10, color: c.textPrimary, fontWeight: FontWeight.w600)),
           ]),
         ),
       );
