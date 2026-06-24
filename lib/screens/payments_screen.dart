@@ -46,6 +46,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   String? _receiptMethodFilter;
   dynamic _invoiceTypeFilter;
   final Set<int> _selectedInvoiceIdx = <int>{};
+  /// Invoices the open pay sheet will charge — the user's selection, or all
+  /// outstanding when paying via "Pay Now". Drives the sheet's detail list,
+  /// total, and the actual charge so selection + siblings are honoured.
+  List<Map<String, dynamic>> _payTargets = const [];
 
   @override
   void initState() {
@@ -309,14 +313,14 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   ///  • card / FPX-eWallet → online gateway (/Payment/Initiate)
   ///  • bank transfer       → manual record (/Outstanding/PayInvoices)
   Future<void> _confirmPayment(String method) async {
-    final invoices = (_outstanding ?? const <dynamic>[])
-        .whereType<Map>()
+    // Pay exactly the invoices the sheet was opened for (selection or all).
+    final invoices = _payTargets
         .map((m) => Map<String, dynamic>.from(m))
         .toList();
     if (invoices.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No outstanding invoices to pay.')),
+        const SnackBar(content: Text('No invoices to pay.')),
       );
       return;
     }
@@ -599,77 +603,95 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     await _loadAll();
   }
 
-  /// "Paying for" block — names each student + invoice being settled, so
-  /// the user always sees whose invoices and what they cover.
+  /// "Paying for" block — lists every selected invoice in detail (Inv No,
+  /// Inv Type, Period, Name/sibling, Discount, Due Amt), matching the Term
+  /// Payment screen, so the user reviews exactly what's being paid (and for
+  /// which child) before proceeding.
   Widget _payingForBlock(AppColors c) {
-    final rows = (_outstanding ?? const <dynamic>[])
-        .whereType<Map>()
-        .toList();
+    final rows = _payTargets;
     if (rows.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('PAYING FOR (${rows.length})',
+          style: TextStyle(
+              color: c.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8)),
+      const SizedBox(height: 8),
+      ...rows.map((m) => _payInvoiceCard(c, m)),
+    ]);
+  }
+
+  /// A single invoice detail card for the pay sheet.
+  Widget _payInvoiceCard(AppColors c, Map<String, dynamic> m) {
+    String pick(List<String> keys, [String fallback = '-']) {
+      for (final k in keys) {
+        final v = (m[k] ?? '').toString().trim();
+        if (v.isNotEmpty && v != 'null') return v;
+      }
+      return fallback;
+    }
+
+    final invNo = pick(['invoiceId', 'invoiceNo', 'invoiceNumber'], '0');
+    final type = pick(['transactionType', 'invoiceType', 'type'], '-');
+    final period = pick(['period', 'invoicePeriod', 'invoiceDescription'], '-');
+    final name = pick(['studentName', 'name', 'memberName'], '-');
+    final discount = _invoiceAmount2(m, ['discountAmount', 'discount']);
+    final due = _invoiceAmount(m);
+
+    Widget kv(String k, String v, {bool strong = false}) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(k, style: TextStyle(color: c.textMuted, fontSize: 10.5)),
+            Text(v,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: strong ? c.primary : c.textPrimary,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700)),
+          ]),
+        );
+
     return Container(
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: c.surfaceAlt,
         borderRadius: BorderRadius.circular(Radii.md),
         border: Border.all(color: c.border),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('PAYING FOR',
-            style: TextStyle(
-                color: c.textMuted,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8)),
-        const SizedBox(height: 8),
-        ...rows.take(6).map((m) {
-          final label = _invoiceLabel(m, 0);
-          final owner = _invoiceOwner(m);
-          final amt = _invoiceAmount(m).toStringAsFixed(2);
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 3),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (owner.isNotEmpty)
-                      Text(owner,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w800)),
-                    Text(label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500)),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('RM $amt',
-                  style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w800)),
-            ]),
-          );
-        }),
-        if (rows.length > 6)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text('+ ${rows.length - 6} more',
-                style: TextStyle(
-                    color: c.textMuted,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600)),
-          ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            kv('Inv No', invNo),
+            kv('Period', period),
+            kv('Discount', discount.toStringAsFixed(2)),
+          ]),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            kv('Inv Type', type),
+            kv('Name', name),
+            kv('Due Amt', 'RM ${due.toStringAsFixed(2)}', strong: true),
+          ]),
+        ),
       ]),
     );
+  }
+
+  /// Like [_invoiceAmount] but for an explicit key set (e.g. discount).
+  num _invoiceAmount2(Map m, List<String> keys) {
+    for (final k in keys) {
+      final v = m[k];
+      if (v is num) return v;
+      if (v is String) {
+        final n = num.tryParse(v.replaceAll(RegExp(r'[^\d.\-]'), ''));
+        if (n != null) return n;
+      }
+    }
+    return 0;
   }
 
   String _mmss(int total) {
@@ -678,7 +700,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     return '$m:$s';
   }
 
-  void _openPayModal() {
+  /// Open the payment sheet for [invoices] — the user's selection, or all
+  /// outstanding when null (the "Pay Now" path).
+  void _openPayModal([List<dynamic>? invoices]) {
     final c = context.appColors;
     final session = UserSession.instance;
     // 2-minute lock: while a payment window is open, block starting a
@@ -689,13 +713,25 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
               'A payment is already in progress. Try again in ${_mmss(session.paymentLockSeconds)}.')));
       return;
     }
+    // Resolve which invoices this sheet pays for.
+    final source = invoices ?? (_outstanding ?? const <dynamic>[]);
+    _payTargets = source
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+    if (_payTargets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No invoices to pay.')),
+      );
+      return;
+    }
     session.startPaymentLock();
     Timer? ticker;
-    // Compute live total at open-time so the modal always shows the
-    // current outstanding amount, not a stale mock value.
-    final liveTotal = _liveOutstandingTotal();
-    final modalAmount = liveTotal > 0
-        ? liveTotal.toStringAsFixed(2)
+    // Total = sum of exactly the invoices being paid (selection-aware).
+    final payTotal =
+        _payTargets.fold<num>(0, (s, m) => s + _invoiceAmount(m));
+    final modalAmount = payTotal > 0
+        ? payTotal.toStringAsFixed(2)
         : (session.dueAmount > 0
             ? session.dueAmount.toStringAsFixed(2)
             : '0.00');
@@ -1083,12 +1119,14 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
             const SizedBox(height: 10),
             InkWell(
               onTap: () {
+                // Open the detailed pay sheet for the selected invoices
+                // (shows owner/sibling + period + amount, then the method
+                // chooser) instead of charging straight away.
                 final picks = _selectedInvoiceIdx
                     .map((i) => invoices[i])
                     .whereType<Map>()
-                    .map((m) => Map<String, dynamic>.from(m))
                     .toList();
-                _initiateGatewayPayment(picks);
+                _openPayModal(picks);
               },
               borderRadius: BorderRadius.circular(Radii.md),
               child: Container(

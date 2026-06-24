@@ -98,6 +98,27 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
 
   Future<void> _pay() async {
     if (_bill.count == 0) return;
+    // Confirm before charging.
+    final c = context.appColors;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: c.surface,
+        title: const Text('Confirm payment'),
+        content: Text(
+            'Pay RM ${_bill.total.toStringAsFixed(2)} for ${_bill.count} '
+            'invoice(s)?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Pay')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
     setState(() => _paying = true);
     try {
       await Api.outstandingPayTermPayments(

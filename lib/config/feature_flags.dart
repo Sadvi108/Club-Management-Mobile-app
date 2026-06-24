@@ -1,5 +1,4 @@
-/// Prepay (advance term payment) execution. Pricing/preview is always on;
-/// the actual /Outstanding/PayInvoices term charge stays disabled until the
-/// pay contract is verified on a plan-enabled account (see the prepay plan's
-/// live-verification task).
-const bool kPrepayPayEnabled = false;
+/// Prepay (advance term payment) execution. Enabled — the Term Payment
+/// "Pay Now" submits the selected months via /Outstanding/PayInvoices
+/// (PayTermPayments query). A confirmation dialog guards the action.
+const bool kPrepayPayEnabled = true;
