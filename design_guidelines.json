@@ -1,0 +1,142 @@
+{
+  "theme": "light",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) adapted for Premium Sports App with Blue/Purple Gradients",
+  "typography": {
+    "headings": "Poppins",
+    "body": "Inter",
+    "scale": {
+      "h1": "text-3xl sm:text-4xl font-bold tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight",
+      "h3": "text-xl font-semibold",
+      "h4": "text-lg font-medium",
+      "body": "text-base font-normal",
+      "small": "text-sm font-medium text-slate-500",
+      "tiny": "text-xs font-semibold uppercase tracking-wider text-slate-400"
+    }
+  },
+  "colors": {
+    "background": "#F8FAFC",
+    "surface": "#FFFFFF",
+    "primary": {
+      "gradient_start": "#4F46E5",
+      "gradient_end": "#9333EA",
+      "solid": "#4F46E5"
+    },
+    "secondary": "#38BDF8",
+    "accent": "#F59E0B",
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#64748B",
+      "inverse": "#FFFFFF"
+    },
+    "border": "#E2E8F0",
+    "success": "#10B981",
+    "warning": "#F59E0B",
+    "danger": "#EF4444"
+  },
+  "components": {
+    "card": {
+      "background": "bg-white",
+      "border_radius": "rounded-2xl lg:rounded-3xl",
+      "shadow": "shadow-[0_4px_20px_rgba(0,0,0,0.05)]",
+      "padding": "p-5 sm:p-6",
+      "border": "border border-slate-100"
+    },
+    "button": {
+      "primary": "bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl shadow-md hover:shadow-lg transition-all",
+      "secondary": "bg-white text-indigo-600 border border-indigo-100 rounded-xl hover:bg-slate-50 transition-colors",
+      "floating_action": "w-16 h-16 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 shadow-xl flex items-center justify-center text-white transform -translate-y-6 border-4 border-slate-50"
+    },
+    "bottom_tab_nav": {
+      "background": "bg-white/90 backdrop-blur-xl",
+      "border_top": "border-t border-slate-100",
+      "height": "h-20",
+      "layout": "fixed bottom-0 w-full max-w-md mx-auto flex justify-around items-center px-4 pb-safe z-50"
+    }
+  },
+  "icons": {
+    "library": "lucide-react",
+    "style": "stroke-2",
+    "size": {
+      "small": "16px",
+      "medium": "24px",
+      "large": "32px",
+      "fab": "28px"
+    }
+  },
+  "layout_patterns": {
+    "spacing": "Generous padding, typically p-4 or p-6 for containers. gap-4 for grid items.",
+    "dashboard_grid": "grid grid-cols-2 gap-4 md:gap-5",
+    "header": "sticky top-0 bg-white/80 backdrop-blur-md pt-4 pb-4 px-5 flex justify-between items-center z-40 border-b border-slate-100/50",
+    "screen_container": "min-h-screen bg-slate-50 pb-28 mx-auto w-full max-w-md shadow-2xl relative overflow-hidden"
+  },
+  "screens": {
+    "1_Splash": {
+      "layout": "Full screen flex-col center, premium gradient overlay",
+      "elements": "Academy Logo, background image with gradient overlay (from-indigo-900/80 to-purple-900/80), 'Premium Sports Academy' text."
+    },
+    "2_Login": {
+      "layout": "Centered card on mobile view",
+      "elements": "Welcome text, ID/Phone input, Password input, 'Forgot Password' link, 'Login' primary button, 'Parent Login' secondary outline button."
+    },
+    "3_Home_Dashboard": {
+      "layout": "Scrollable vertical list with bento grid for quick cards",
+      "elements": "Top: Profile photo + Hello [Name] + Notification bell. Next: Membership Badge / Level Card with gradient. Next: 2xN Grid of quick cards (Attendance, Today's Classes, Timetable, Fees Due, Progress, Chat). Next: Event Banner carousel."
+    },
+    "4_My_Training": {
+      "layout": "Vertical list of enrolled programs",
+      "elements": "Cards showing Sport (Karate/Boxing), Trainer name, Current Level/Belt, Progress bar to next level, 'Upgrade' CTA."
+    },
+    "5_Schedule": {
+      "layout": "Horizontal date selector + Vertical timeline",
+      "elements": "Weekly calendar strip, List of upcoming sessions for selected date, 'Reschedule request' subtle button."
+    },
+    "6_Attendance": {
+      "layout": "Analytics style layout",
+      "elements": "Large Circular Progress for %, Monthly Calendar view with green/red dots, List of missed classes."
+    },
+    "7_Fees_Payments": {
+      "layout": "Split view: Current Due + History",
+      "elements": "Highlight Card: 'Next Payment Due' with amount & 'Pay Now' button. Below: List of past transactions with 'Download Receipt' icon."
+    },
+    "8_Progress": {
+      "layout": "Stats and charts layout",
+      "elements": "Skill Stats (Speed, Power, Technique), Rank timeline, Fitness score card, Trainer comments section."
+    },
+    "9_Events_Competition": {
+      "layout": "Feed of rich image cards",
+      "elements": "Upcoming tournaments with countdown timers, Registration open badge, 'Register Now' button, Past certificates."
+    },
+    "10_Profile": {
+      "layout": "Settings list style",
+      "elements": "Large Avatar, Student Details, Parent Contact, Training History, 'Settings' list items (Notifications, Privacy, Logout)."
+    }
+  },
+  "media": {
+    "images": {
+      "splash_background": {
+        "url": "https://images.pexels.com/photos/6005457/pexels-photo-6005457.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Karate training background, apply blue/purple gradient overlay."
+      },
+      "boxing_category": {
+        "url": "https://images.unsplash.com/photo-1549719386-74dfcbf7dbed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwxfHxib3hpbmclMjBnbG92ZXN8ZW58MHx8fHwxNzc2OTk5NDA4fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Black boxing gloves for boxing training category card."
+      },
+      "trophy_event": {
+        "url": "https://images.pexels.com/photos/7005050/pexels-photo-7005050.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Trophy for events, competitions, and progress achievements."
+      }
+    }
+  },
+  "instructions_to_main_agent": [
+    "Build a React-based mobile web app (simulating React Native Expo) using Tailwind CSS and lucide-react icons.",
+    "Implement the bottom tab navigation with fixed positioning at the bottom and a floating QR button overlapping the top border (center positioned).",
+    "Use standard HTML divs/buttons for layout and styling (bento grids, cards) to maintain the exact premium styling described in the components section.",
+    "Ensure the layout is highly spacious on mobile. To simulate a mobile app on desktop, wrap the main app content in a 'max-w-md mx-auto shadow-2xl overflow-hidden min-h-screen relative' container.",
+    "All interactive elements MUST have a data-testid attribute.",
+    "Apply `bg-slate-50` to the main application body and `bg-white` to the content cards.",
+    "Gradients should be vibrant yet premium: `bg-gradient-to-r from-indigo-600 to-purple-600` for primary call-to-actions, membership cards, and the floating action button.",
+    "Do NOT use transparent headers. Use the glassmorphism header defined in layout_patterns.header.",
+    "Create 10 distinct views matching the screens object, accessible via the bottom tab nav or internal links."
+  ]
+}
