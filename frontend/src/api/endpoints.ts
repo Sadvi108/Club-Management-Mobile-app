@@ -52,8 +52,9 @@ export const api = {
 
   // ── Outstanding (fees) ──
   outstanding: (body: OutstandingRequest) => http.post<Invoice[]>("/Outstanding/Fetch", body),
+  // Returns full invoice-shaped rows (real invoiceId + dueAmount) for upcoming months.
   fetchTermPayments: (body: { studentIds: number[]; year: number; months: number[] }) =>
-    http.post<import("./types").TermPayment[]>("/Outstanding/FetchTermPayments", body),
+    http.post<Invoice[]>("/Outstanding/FetchTermPayments", body),
   // shape UNRESOLVED — all probed bodies returned 400; needs gateway inspection
   payInvoices: (invoices: any[], opts?: { payTermPayments?: boolean }) =>
     http.post<import("./types").PayInvoicesResult>(

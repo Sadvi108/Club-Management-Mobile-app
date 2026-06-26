@@ -460,36 +460,15 @@ function PrepaySegment({
   }
   return (
     <>
-      {data.map((t: any, i: number) => {
-        const key = `term:${accountId}:${t.year}-${t.month}`;
+      {data.map((t: any) => {
+        // FetchTermPayments returns full invoice-shaped rows (real invoiceId + dueAmount).
+        const key = `term:${accountId}:${t.invoiceId}`;
         const selected = cart.has(key);
-        const invoiceShim = {
-          invoiceId: -1 * (t.month + t.year),
-          dueAmount: t.amount,
-          studentName: accountName,
-          invoiceDescription:
-            t.period || `${t.invoiceType || "Fee"} ${t.month}/${t.year}`,
-          period: t.period || `${t.month}/${t.year}`,
-          transactionType: t.invoiceType || "Prepay",
-          invoiceDate: `${t.year}-${String(t.month).padStart(2, "0")}-01`,
-          paymentStatus: "Advance",
-          // Invoice requires all fields — fill with safe defaults
-          sno: i,
-          studentId: accountId,
-          icNo: "",
-          invoiceAmount: t.amount,
-          discountAmount: 0,
-          paidAmount: 0,
-          centerName: "",
-          grade: "",
-          contactNo: "",
-          attendanceCount: 0,
-        };
         const item: CartItem = {
           key,
           studentId: accountId,
           studentName: accountName,
-          invoice: invoiceShim,
+          invoice: { ...t, studentId: accountId, studentName: accountName },
           isTerm: true,
         };
         return (
@@ -509,10 +488,10 @@ function PrepaySegment({
               color={selected ? colors.primary : colors.textMuted}
             />
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.invDesc}>{invoiceShim.invoiceDescription}</Text>
-              <Text style={styles.invMeta}>{invoiceShim.period} · Advance</Text>
+              <Text style={styles.invDesc}>{t.invoiceDescription || t.period}</Text>
+              <Text style={styles.invMeta}>{t.period} · Advance</Text>
             </View>
-            <Text style={styles.invAmt}>RM {(t.amount || 0).toLocaleString()}</Text>
+            <Text style={styles.invAmt}>RM {(t.dueAmount || 0).toLocaleString()}</Text>
           </TouchableOpacity>
         );
       })}
