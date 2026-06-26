@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as WebBrowser from "expo-web-browser";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { radius, spacing, font, useTheme } from "../../src/theme";
 import { useAuth } from "../../src/api/auth";
 import { api, defaultRange } from "../../src/api/endpoints";
@@ -32,6 +33,7 @@ export default function Payments() {
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { user } = useAuth();
+  const tabBarHeight = useBottomTabBarHeight(); // offset fixed Pay bar above the tab bar
   const cart = usePaymentCart();
   const [seg, setSeg] = useState<Seg>("pay");
   const [busyPdf, setBusyPdf] = useState<string | null>(null);
@@ -142,7 +144,7 @@ export default function Payments() {
       </SafeAreaView>
 
       <ScrollView
-        contentContainerStyle={{ padding: spacing.xl, paddingBottom: 160 }}
+        contentContainerStyle={{ padding: spacing.xl, paddingBottom: tabBarHeight + 140 }}
         showsVerticalScrollIndicator={false}
       >
         {seg === "pay" && (
@@ -319,7 +321,7 @@ export default function Payments() {
 
       {/* Bottom Pay bar — shown when cart has items */}
       {cart.items.length > 0 && (
-        <View style={styles.payBar}>
+        <View style={[styles.payBar, { bottom: tabBarHeight }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.payBarLbl}>{cart.items.length} selected</Text>
             <Text style={styles.payBarTotal}>RM {cart.total.toLocaleString()}</Text>
@@ -592,16 +594,17 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
       position: "absolute",
       left: 0,
       right: 0,
-      bottom: 0,
+      // `bottom` is set inline to the tab-bar height so the bar floats just above it
       flexDirection: "row",
       alignItems: "center",
       gap: 12,
       paddingHorizontal: spacing.xl,
-      paddingTop: 12,
-      paddingBottom: 28,
+      paddingTop: 14,
+      paddingBottom: 14,
       backgroundColor: colors.surface,
       borderTopWidth: 1,
       borderTopColor: colors.border,
+      ...shadow.card,
     },
     payBarLbl: { fontSize: 11, color: colors.textSecondary, fontWeight: "600" },
     payBarTotal: { fontSize: 20, color: colors.textPrimary, fontWeight: "800" },

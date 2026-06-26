@@ -86,6 +86,7 @@ export default function Home() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <View style={styles.topQuick}>
           {[
+            { id: "train", label: "Training", icon: "barbell-outline", route: "/(tabs)/training" },
             { id: "att", label: "Attendance", icon: "checkmark-done-circle", route: "/attendance" },
             { id: "tt", label: "Timetable", icon: "calendar-outline", route: "/(tabs)/schedule" },
             { id: "id", label: "Virtual ID", icon: "card-outline", route: "/(tabs)/profile" },
@@ -93,7 +94,7 @@ export default function Home() {
           ].map((q) => (
             <TouchableOpacity key={q.id} testID={`quick-top-${q.id}`} style={styles.topQuickItem} onPress={() => router.push(q.route as any)} activeOpacity={0.7}>
               <View style={styles.topQuickIcon}><Ionicons name={q.icon as any} size={22} color={colors.primary} /></View>
-              <Text style={styles.topQuickLbl}>{q.label}</Text>
+              <Text style={styles.topQuickLbl} numberOfLines={1}>{q.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -191,10 +192,10 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     statLbl: { color: "rgba(255,255,255,0.85)", fontSize: 10, marginTop: 2, letterSpacing: 0.5 },
     statSep: { width: 1, backgroundColor: "rgba(255,255,255,0.25)" },
 
-    topQuick: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -20, borderRadius: radius.xl, paddingVertical: 16, paddingHorizontal: 8, ...shadow.card, justifyContent: "space-around", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
-    topQuickItem: { alignItems: "center", width: 72 },
-    topQuickIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center", marginBottom: 6 },
-    topQuickLbl: { fontSize: 10, color: colors.textPrimary, fontWeight: "600", textAlign: "center" },
+    topQuick: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -20, borderRadius: radius.xl, paddingVertical: 16, paddingHorizontal: 6, ...shadow.card, justifyContent: "space-between", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    topQuickItem: { alignItems: "center", flex: 1 },
+    topQuickIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center", marginBottom: 6 },
+    topQuickLbl: { fontSize: 9.5, color: colors.textPrimary, fontWeight: "600", textAlign: "center" },
 
     dueCard: { marginHorizontal: spacing.xl, marginTop: 18 },
     dueGradient: { borderRadius: radius.xl, padding: 18, flexDirection: "row", alignItems: "center" },
