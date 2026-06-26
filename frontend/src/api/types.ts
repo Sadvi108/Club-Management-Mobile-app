@@ -171,3 +171,17 @@ export type OutstandingRequest = {
   sCenterId?: number | null;
   transactionType?: string | null;
 };
+
+// POST /Outstanding/FetchTermPayments
+export type TermPayment = {
+  studentId: number;
+  studentName?: string;
+  year: number;
+  month: number;
+  period?: string;
+  amount: number;
+  invoiceType?: string;
+};
+
+// POST /Outstanding/PayInvoices → returns a Billplz bill URL (string) or { url }
+export type PayInvoicesResult = { url?: string } | string;

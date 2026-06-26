@@ -52,6 +52,19 @@ export const api = {
 
   // ── Outstanding (fees) ──
   outstanding: (body: OutstandingRequest) => http.post<Invoice[]>("/Outstanding/Fetch", body),
+  fetchTermPayments: (body: { studentIds: number[]; year: number; months: number[] }) =>
+    http.post<import("./types").TermPayment[]>("/Outstanding/FetchTermPayments", body),
+  // shape UNRESOLVED — all probed bodies returned 400; needs gateway inspection
+  payInvoices: (invoices: any[], opts?: { payTermPayments?: boolean }) =>
+    http.post<import("./types").PayInvoicesResult>(
+      `/Outstanding/PayInvoices?PayTermPayments=${opts?.payTermPayments ? "true" : "false"}`,
+      invoices
+    ),
+  paymentCompleted: (status: string) =>
+    http.get<any>(`/Payment/Completed/${encodeURIComponent(status)}`),
+  // Authed PDF URL. paymentId for paid receipt, or 0 with invoiceId for an unpaid invoice.
+  receiptPdfUrl: (clubId: number, paymentId: number, invoiceId: number) =>
+    `${require("./config").API_BASE_URL}/Utilities/ReceiptAsPDF/${clubId}/${paymentId}/${invoiceId}`,
 
   // ── Attendance (self check-in via scanned center QR) ──
   addAttendance: (body: { qrCode?: string | null; attendanceType: number; tTimeId?: number | null }) =>
