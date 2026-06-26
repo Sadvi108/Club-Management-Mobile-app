@@ -147,41 +147,43 @@ export default function Payments() {
         contentContainerStyle={{ padding: spacing.xl, paddingBottom: tabBarHeight + 140 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Account switcher chips — shared by Pay + Prepay (siblings for this id) */}
+        {seg !== "history" && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}
+          >
+            {[
+              { id: user!.id, name: user!.name },
+              ...((siblings.data ?? []).map((s) => ({ id: s.id, name: s.text }))),
+            ]
+              .filter((a, i, arr) => arr.findIndex((x) => x.id === a.id) === i)
+              .map((a) => {
+                const on = accountId === a.id;
+                return (
+                  <TouchableOpacity
+                    key={a.id}
+                    style={[styles.chip, on && styles.chipOn]}
+                    onPress={() => setActiveAccount(a)}
+                    testID={`acct-${a.id}`}
+                  >
+                    <Ionicons
+                      name="person-circle-outline"
+                      size={16}
+                      color={on ? "#fff" : colors.primary}
+                    />
+                    <Text style={[styles.chipTxt, on && { color: "#fff" }]} numberOfLines={1}>
+                      {a.name.trim()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+          </ScrollView>
+        )}
+
         {seg === "pay" && (
           <>
-            {/* Account switcher chips */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipRow}
-            >
-              {[
-                { id: user!.id, name: user!.name },
-                ...((siblings.data ?? []).map((s) => ({ id: s.id, name: s.text }))),
-              ]
-                .filter((a, i, arr) => arr.findIndex((x) => x.id === a.id) === i)
-                .map((a) => {
-                  const on = accountId === a.id;
-                  return (
-                    <TouchableOpacity
-                      key={a.id}
-                      style={[styles.chip, on && styles.chipOn]}
-                      onPress={() => setActiveAccount(a)}
-                      testID={`acct-${a.id}`}
-                    >
-                      <Ionicons
-                        name="person-circle-outline"
-                        size={16}
-                        color={on ? "#fff" : colors.primary}
-                      />
-                      <Text style={[styles.chipTxt, on && { color: "#fff" }]} numberOfLines={1}>
-                        {a.name.trim()}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-            </ScrollView>
-
             {dues.loading && (
               <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
             )}
@@ -428,7 +430,19 @@ export default function Payments() {
   );
 }
 
-// PrepaySegment lives in the same file (plan Task 5)
+// PrepaySegment: a yearly calendar (months only). Tap available months to prepay in advance.
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function termMonth(t: any): number {
+  const d = new Date(t.invoiceDate);
+  const m = d.getMonth();
+  if (!isNaN(m)) return m + 1;
+  const idx = MONTH_ABBR.findIndex((mm) =>
+    String(t.period || "").toLowerCase().startsWith(mm.toLowerCase())
+  );
+  return idx >= 0 ? idx + 1 : 0;
+}
+
 function PrepaySegment({
   accountId,
   accountName,
@@ -442,62 +456,85 @@ function PrepaySegment({
   styles: ReturnType<typeof createStyles>;
   colors: any;
 }) {
-  const year = new Date().getFullYear();
-  const months = [...Array(12)].map((_, i) => i + 1);
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState(thisYear);
   const terms = useApi(
-    () => api.fetchTermPayments({ studentIds: [accountId], year, months }),
-    [accountId]
+    () => api.fetchTermPayments({ studentIds: [accountId], year, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }),
+    [accountId, year]
   );
   const data = terms.data ?? [];
+  const byMonth = useMemo(() => {
+    const map: Record<number, any> = {};
+    for (const t of data) {
+      const m = termMonth(t);
+      if (m) map[m] = t;
+    }
+    return map;
+  }, [data]);
 
-  if (terms.loading) {
-    return <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />;
-  }
-  if (data.length === 0) {
-    return (
-      <Text style={styles.emptyTxt}>
-        No upcoming months available to prepay for this account.
-      </Text>
-    );
-  }
   return (
-    <>
-      {data.map((t: any) => {
-        // FetchTermPayments returns full invoice-shaped rows (real invoiceId + dueAmount).
-        const key = `term:${accountId}:${t.invoiceId}`;
-        const selected = cart.has(key);
-        const item: CartItem = {
-          key,
-          studentId: accountId,
-          studentName: accountName,
-          invoice: { ...t, studentId: accountId, studentName: accountName },
-          isTerm: true,
-        };
-        return (
-          <TouchableOpacity
-            key={key}
-            style={[
-              styles.invCard,
-              selected && styles.invCardSel,
-              { padding: 14, flexDirection: "row", alignItems: "center" },
-            ]}
-            onPress={() => cart.toggle(item)}
-            testID={`term-${key}`}
-          >
-            <Ionicons
-              name={selected ? "checkbox" : "square-outline"}
-              size={22}
-              color={selected ? colors.primary : colors.textMuted}
-            />
-            <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.invDesc}>{t.invoiceDescription || t.period}</Text>
-              <Text style={styles.invMeta}>{t.period} · Advance</Text>
-            </View>
-            <Text style={styles.invAmt}>RM {(t.dueAmount || 0).toLocaleString()}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </>
+    <View>
+      {/* Year selector */}
+      <View style={styles.calHeader}>
+        <TouchableOpacity
+          disabled={year <= thisYear}
+          onPress={() => setYear((y) => y - 1)}
+          style={styles.calNav}
+          testID="prepay-year-prev"
+        >
+          <Ionicons name="chevron-back" size={20} color={year <= thisYear ? colors.textMuted : colors.primary} />
+        </TouchableOpacity>
+        <Text style={styles.calYear}>{year}</Text>
+        <TouchableOpacity onPress={() => setYear((y) => y + 1)} style={styles.calNav} testID="prepay-year-next">
+          <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.calHint}>Select months to prepay in advance</Text>
+
+      {terms.loading ? (
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: 30 }} />
+      ) : (
+        <View style={styles.calGrid}>
+          {MONTH_ABBR.map((abbr, i) => {
+            const month = i + 1;
+            const t = byMonth[month];
+            const available = !!t;
+            const key = available ? `term:${accountId}:${t.invoiceId}` : "";
+            const selected = available && cart.has(key);
+            return (
+              <TouchableOpacity
+                key={abbr}
+                disabled={!available}
+                activeOpacity={0.8}
+                testID={`prepay-month-${month}`}
+                onPress={() =>
+                  cart.toggle({
+                    key,
+                    studentId: accountId,
+                    studentName: accountName,
+                    invoice: { ...t, studentId: accountId, studentName: accountName },
+                    isTerm: true,
+                  })
+                }
+                style={[styles.calCell, selected && styles.calCellOn, !available && styles.calCellOff]}
+              >
+                {selected && <Ionicons name="checkmark-circle" size={15} color="#fff" style={styles.calCheck} />}
+                <Text style={[styles.calMonth, selected && { color: "#fff" }, !available && { color: colors.textMuted }]}>
+                  {abbr}
+                </Text>
+                <Text style={[styles.calAmt, selected && { color: "#fff" }, !available && { color: colors.textMuted }]}>
+                  {available ? `RM ${t.dueAmount}` : "—"}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      {!terms.loading && data.length === 0 && (
+        <Text style={styles.emptyTxt}>No prepayable months for {year}.</Text>
+      )}
+    </View>
   );
 }
 
@@ -551,6 +588,30 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     },
     chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     chipTxt: { fontSize: 12, fontWeight: "700", color: colors.textPrimary },
+
+    // Prepay calendar (year + month grid)
+    calHeader: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 24, marginTop: 4 },
+    calNav: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    calYear: { fontSize: 22, fontWeight: "800", color: colors.textPrimary, minWidth: 70, textAlign: "center" },
+    calHint: { fontSize: 12, color: colors.textSecondary, textAlign: "center", marginTop: 6, marginBottom: 16 },
+    calGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+    calCell: {
+      width: "31.5%",
+      aspectRatio: 1.25,
+      borderRadius: radius.lg,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 12,
+      ...shadow.soft,
+    },
+    calCellOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+    calCellOff: { backgroundColor: colors.surfaceAlt, opacity: 0.6, shadowOpacity: 0, elevation: 0 },
+    calMonth: { fontSize: 16, fontWeight: "800", color: colors.textPrimary },
+    calAmt: { fontSize: 12, fontWeight: "600", color: colors.textSecondary, marginTop: 4 },
+    calCheck: { position: "absolute", top: 8, right: 8 },
 
     // Invoice / receipt cards
     invCard: {

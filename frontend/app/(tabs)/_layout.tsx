@@ -54,8 +54,9 @@ export default function TabsLayout() {
       <Tabs.Screen name="home" options={{ title: "Home", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} /> }} />
       {/* Training moved into Home → Quick Access; keep the route reachable but off the tab bar (≤5 tabs) */}
       <Tabs.Screen name="training" options={{ href: null }} />
-      <Tabs.Screen name="qr" options={{ title: "", tabBarButton: () => <FabQR onPress={() => router.push("/qr-scan")} gradient={colors.gradient} /> }} />
       <Tabs.Screen name="schedule" options={{ title: "Schedule", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "calendar" : "calendar-outline"} size={22} color={color} /> }} />
+      {/* Scan sits in the visual middle (3rd of 5) */}
+      <Tabs.Screen name="qr" options={{ title: "", tabBarButton: () => <FabQR onPress={() => router.push("/qr-scan")} gradient={colors.gradient} /> }} />
       <Tabs.Screen name="payments" options={{ title: "Payments", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "wallet" : "wallet-outline"} size={22} color={color} /> }} />
       <Tabs.Screen name="profile" options={{ title: "Profile", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} /> }} />
     </Tabs>
