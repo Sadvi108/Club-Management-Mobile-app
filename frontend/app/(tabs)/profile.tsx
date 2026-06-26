@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, Switch } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, Switch, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -9,23 +9,6 @@ import { useAuth } from "../../src/api/auth";
 import { api } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
 
-const settingsItems = [
-  { id: "notif", icon: "notifications-outline", label: "Notifications" },
-  { id: "lang", icon: "language-outline", label: "Language", meta: "English" },
-  { id: "priv", icon: "lock-closed-outline", label: "Privacy & Security" },
-  { id: "help", icon: "help-circle-outline", label: "Help & Support" },
-  { id: "about", icon: "information-circle-outline", label: "About D-Clix" },
-];
-
-function fmtDate(iso?: string) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-}
-function initialsOf(name?: string) {
-  return (name || "?").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-}
-
 export default function Profile() {
   const router = useRouter();
   const { colors, shadow, mode, toggle } = useTheme();
@@ -33,14 +16,15 @@ export default function Profile() {
   const { user, logout } = useAuth();
 
   const info = useApi(() => api.myInfo(), []);
-  const addtnl = useApi(() => api.studentAddtnlInfo(), []);
-  const unread = useApi(() => api.unreadNotificationCount(), []);
+  const siblings = useApi(() => api.mySiblings(), []);
 
   const [qrError, setQrError] = useState(false);
-  // Public PNG QR of the student id (StudentQRCode endpoint returns a PDF, unusable in <Image>).
-  const qrUrl = user?.id ? api.qrCodeUrl(user.id) : null;
+  const [studentModal, setStudentModal] = useState(false);
+  const [clubModal, setClubModal] = useState(false);
 
-  const grade = (info.data?.currentGrade || user?.currentGrade || "—").replace(/Grade\s*/i, "");
+  const qrUrl = user?.id ? api.qrCodeUrl(user.id) : null;
+  const grade = info.data?.currentGrade || user?.currentGrade || "—";
+  const clubName = user?.clubName || user?.clubList?.[0]?.text || "—";
 
   const onLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -49,6 +33,13 @@ export default function Profile() {
     ]);
   };
 
+  const ROWS = [
+    { id: "scan", icon: "qr-code-outline", label: "Scan QR to Check In", onPress: () => router.push("/qr-scan") },
+    { id: "help", icon: "headset-outline", label: "Help Desk", onPress: () => router.push("/helpdesk") },
+    { id: "details", icon: "id-card-outline", label: "Student Details", onPress: () => router.push("/student-details") },
+    { id: "purchases", icon: "bag-handle-outline", label: "My Purchases", onPress: () => router.push("/purchases") },
+  ];
+
   return (
     <View style={styles.root}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
@@ -56,17 +47,17 @@ export default function Profile() {
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerBg}>
             <View style={styles.topRow}>
               <Text style={styles.topTitle}>My Profile</Text>
-              <TouchableOpacity style={styles.topIcon} testID="profile-settings">
-                <Ionicons name="settings-outline" size={20} color="#fff" />
+              <TouchableOpacity style={styles.topIcon} testID="profile-edit" onPress={() => router.push("/student-details")}>
+                <Ionicons name="pencil" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
             <View style={styles.profileTop}>
               <View style={styles.avatarRing}>
-                {user?.clubPic ? (
+                {user?.clubPic && !qrError ? (
                   <Image source={{ uri: user.clubPic }} style={styles.avatar} />
                 ) : (
-                  <View style={[styles.avatar, styles.avatarInitials]}>
-                    <Text style={styles.avatarInitialsTxt}>{initialsOf(user?.name)}</Text>
+                  <View style={[styles.avatar, styles.avatarEmpty]}>
+                    <Ionicons name="person" size={44} color="rgba(255,255,255,0.5)" />
                   </View>
                 )}
               </View>
@@ -74,13 +65,13 @@ export default function Profile() {
               <Text style={styles.id}>{user?.code || user?.icNo}</Text>
               <View style={styles.memberRow}>
                 <Ionicons name="shield-checkmark" size={14} color="#FFF7ED" />
-                <Text style={styles.memberTxt}>{user?.clubName || "Academy"} · {user?.status || "Active"}</Text>
+                <Text style={styles.memberTxt}>{clubName}</Text>
               </View>
             </View>
           </LinearGradient>
         </SafeAreaView>
 
-        {/* Virtual ID */}
+        {/* Virtual ID with QR */}
         <View style={styles.virtualId}>
           <View style={styles.vidLeft}>
             <View style={styles.vidBrandRow}>
@@ -88,24 +79,53 @@ export default function Profile() {
               <Text style={styles.vidBrand}>D-CLIX</Text>
             </View>
             <Text style={styles.vidName}>{user?.name?.trim()}</Text>
-            <Text style={styles.vidLbl}>Grade {grade}</Text>
-            <View style={styles.barcodeRow}>
-              {Array.from({ length: 20 }).map((_, i) => (
-                <View key={i} style={[styles.bar, { height: 20 + ((i * 7) % 12), opacity: i % 3 === 0 ? 1 : 0.6 }]} />
-              ))}
-            </View>
+            <Text style={styles.vidLbl}>· {grade}</Text>
             <Text style={styles.vidId}>{user?.code || user?.icNo}</Text>
           </View>
           <View style={styles.vidQR}>
-            {qrUrl && !qrError ? (
-              <Image source={{ uri: qrUrl }} style={styles.qrImg} resizeMode="contain" onError={() => setQrError(true)} />
+            {qrUrl ? (
+              <Image source={{ uri: qrUrl }} style={styles.qrImg} resizeMode="contain" />
             ) : (
               <Ionicons name="qr-code" size={60} color={colors.primary} />
             )}
           </View>
         </View>
 
-        {/* Theme toggle card */}
+        {/* Active Student + Club */}
+        <View style={styles.dualRow}>
+          <TouchableOpacity style={styles.dualCard} testID="profile-active-student" onPress={() => setStudentModal(true)} activeOpacity={0.85}>
+            <View style={styles.dualTop}>
+              <View style={styles.dualIcon}><Ionicons name="swap-horizontal" size={18} color={colors.primary} /></View>
+              <Ionicons name="chevron-expand" size={16} color={colors.textMuted} />
+            </View>
+            <Text style={styles.dualLbl}>ACTIVE STUDENT</Text>
+            <Text style={styles.dualVal} numberOfLines={1}>{user?.name?.trim()}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.dualCard} testID="profile-club" onPress={() => setClubModal(true)} activeOpacity={0.85}>
+            <View style={styles.dualTop}>
+              <View style={styles.dualIcon}><Ionicons name="business" size={18} color={colors.primary} /></View>
+              <Ionicons name="chevron-expand" size={16} color={colors.textMuted} />
+            </View>
+            <Text style={styles.dualLbl}>CLUB</Text>
+            <Text style={styles.dualVal} numberOfLines={1}>{clubName}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Personal Info */}
+        <View style={styles.card}>
+          <View style={styles.cardHeadRow}>
+            <View style={styles.cardHeadLeft}>
+              <View style={styles.cardHeadIcon}><Ionicons name="id-card" size={18} color={colors.primary} /></View>
+              <Text style={styles.cardTitle}>Personal Info</Text>
+            </View>
+            <Text style={styles.badge}>2 fields</Text>
+          </View>
+          <Row icon="call-outline" label="Phone" value={user?.handPhone || "—"} colors={colors} />
+          <View style={styles.divider} />
+          <Row icon="ribbon-outline" label="Belt / Grade" value={grade} colors={colors} />
+        </View>
+
+        {/* Light Mode */}
         <View style={styles.card}>
           <View style={styles.themeRow}>
             <View style={styles.themeIcon}>
@@ -126,59 +146,74 @@ export default function Profile() {
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Contact & Academy</Text>
-          <Row icon="call-outline" label="Phone" value={user?.handPhone || "—"} colors={colors} />
-          <Row icon="mail-outline" label="Email" value={user?.emailAddress || "—"} colors={colors} />
-          <Row icon="document-text-outline" label="Registration No" value={info.data?.registrationNo || user?.code || "—"} colors={colors} />
-          <Row icon="location-outline" label="Training Center" value={info.data?.tCenterName || "—"} colors={colors} />
-          <Row icon="person-outline" label="Instructor" value={info.data?.instructorName || "—"} colors={colors} />
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Student Information</Text>
-          <Row icon="school-outline" label="School" value={addtnl.data?.schoolname || "—"} colors={colors} />
-          <Row icon="calendar-outline" label="Date of Birth" value={fmtDate(addtnl.data?.dob)} colors={colors} />
-          <Row icon="water-outline" label="Blood Type" value={addtnl.data?.bloodtype || "—"} colors={colors} />
-          <Row icon="fitness-outline" label="Health Status" value={addtnl.data?.healthstatus || "—"} colors={colors} />
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Settings</Text>
-          {settingsItems.map((s) => {
-            const badge = s.id === "notif" && (unread.data ?? 0) > 0 ? String(unread.data) : undefined;
-            return (
-              <TouchableOpacity key={s.id} style={styles.settingRow} testID={`setting-${s.id}`}>
-                <View style={styles.settingIcon}><Ionicons name={s.icon as any} size={18} color={colors.primary} /></View>
-                <Text style={styles.settingLbl}>{s.label}</Text>
-                {badge ? (<View style={styles.settingBadge}><Text style={styles.settingBadgeTxt}>{badge}</Text></View>)
-                  : s.meta ? (<Text style={styles.settingMeta}>{s.meta}</Text>) : null}
-                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {/* Action rows */}
+        {ROWS.map((r) => (
+          <TouchableOpacity key={r.id} style={styles.actionRow} testID={`profile-row-${r.id}`} onPress={r.onPress} activeOpacity={0.85}>
+            <View style={styles.actionIcon}><Ionicons name={r.icon as any} size={20} color={colors.primary} /></View>
+            <Text style={styles.actionLbl}>{r.label}</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        ))}
 
         <TouchableOpacity style={styles.logout} onPress={onLogout} testID="logout-btn">
           <Ionicons name="log-out-outline" size={18} color={colors.danger} />
           <Text style={styles.logoutTxt}>Logout</Text>
         </TouchableOpacity>
-
         <Text style={styles.version}>D-Clix · v1.0.0</Text>
       </ScrollView>
+
+      {/* Active Student picker */}
+      <PickerModal
+        visible={studentModal}
+        title="Switch Student"
+        onClose={() => setStudentModal(false)}
+        items={(siblings.data ?? []).map((s) => ({ id: s.id, label: s.text, active: s.id === user?.id }))}
+        styles={styles}
+        colors={colors}
+      />
+      {/* Club picker */}
+      <PickerModal
+        visible={clubModal}
+        title="Switch Club"
+        onClose={() => setClubModal(false)}
+        items={(user?.clubList ?? []).map((c) => ({ id: c.id, label: c.text, active: c.id === user?.clubId }))}
+        styles={styles}
+        colors={colors}
+      />
     </View>
+  );
+}
+
+function PickerModal({ visible, title, onClose, items, styles, colors }: any) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={onClose}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>{title}</Text>
+          {items.length === 0 && <Text style={styles.modalEmpty}>Nothing to switch to.</Text>}
+          {items.map((it: any) => (
+            <View key={it.id} style={styles.pickRow}>
+              <Ionicons name={it.active ? "radio-button-on" : "radio-button-off"} size={20} color={it.active ? colors.primary : colors.textMuted} />
+              <Text style={styles.pickLbl}>{it.label}</Text>
+              {it.active && <Text style={styles.pickActive}>Active</Text>}
+            </View>
+          ))}
+        </View>
+      </TouchableOpacity>
+    </Modal>
   );
 }
 
 function Row({ icon, label, value, colors }: { icon: string; label: string; value: string; colors: any }) {
   return (
-    <View style={{ flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 8 }}>
-      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" }}>
-        <Ionicons name={icon as any} size={16} color={colors.primary} />
+    <View style={{ flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 10 }}>
+      <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" }}>
+        <Ionicons name={icon as any} size={18} color={colors.primary} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: "700", letterSpacing: 0.5 }}>{label.toUpperCase()}</Text>
-        <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: "600", marginTop: 1 }}>{value}</Text>
+        <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: "600" }}>{label}</Text>
+        <Text style={{ fontSize: 15, color: colors.textPrimary, fontWeight: "700", marginTop: 1 }}>{value}</Text>
       </View>
     </View>
   );
@@ -187,52 +222,65 @@ function Row({ icon, label, value, colors }: { icon: string; label: string; valu
 function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
-    headerBg: { paddingHorizontal: spacing.xl, paddingBottom: 50, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+    headerBg: { paddingHorizontal: spacing.xl, paddingBottom: 56, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
     topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },
-    topTitle: { color: "#fff", fontSize: 18, fontWeight: "800" },
-    topIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" },
-    profileTop: { alignItems: "center", marginTop: 16 },
-    avatarRing: { padding: 4, borderRadius: 60, borderWidth: 2, borderColor: "rgba(255,255,255,0.6)" },
-    avatar: { width: 90, height: 90, borderRadius: 45, backgroundColor: "#fff" },
-    avatarInitials: { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.25)" },
-    avatarInitialsTxt: { color: "#fff", fontWeight: "800", fontSize: 30 },
-    name: { color: "#fff", fontSize: 22, fontWeight: "800", marginTop: 12 },
-    id: { color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 2 },
-    memberRow: { flexDirection: "row", gap: 4, alignItems: "center", marginTop: 8, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14 },
-    memberTxt: { color: "#FFF7ED", fontSize: 11, fontWeight: "700" },
+    topTitle: { color: "#fff", fontSize: 22, fontWeight: "800" },
+    topIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" },
+    profileTop: { alignItems: "center", marginTop: 14 },
+    avatarRing: { padding: 5, borderRadius: 66, borderWidth: 2, borderColor: "rgba(255,255,255,0.55)" },
+    avatar: { width: 104, height: 104, borderRadius: 52, backgroundColor: "rgba(255,255,255,0.18)" },
+    avatarEmpty: { alignItems: "center", justifyContent: "center" },
+    name: { color: "#fff", fontSize: 24, fontWeight: "800", marginTop: 14, textAlign: "center", paddingHorizontal: 10 },
+    id: { color: "rgba(255,255,255,0.9)", fontSize: 13, marginTop: 4 },
+    memberRow: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 10, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16 },
+    memberTxt: { color: "#FFF7ED", fontSize: 12, fontWeight: "700" },
 
-    virtualId: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -36, borderRadius: radius.xl, padding: 18, ...shadow.card, overflow: "hidden", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    virtualId: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -34, borderRadius: radius.xl, padding: 18, ...shadow.card, overflow: "hidden", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border, alignItems: "center" },
     vidLeft: { flex: 1 },
     vidBrandRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-    vidLogo: { width: 22, height: 22, borderRadius: 6 },
-    vidBrand: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 2 },
-    vidName: { color: colors.textPrimary, fontSize: 15, fontWeight: "800", marginTop: 8 },
-    vidLbl: { color: colors.textSecondary, fontSize: 11, marginTop: 2 },
-    barcodeRow: { flexDirection: "row", gap: 2, marginTop: 10, alignItems: "flex-end" },
-    bar: { width: 2, backgroundColor: colors.textPrimary },
-    vidId: { color: colors.textPrimary, fontSize: 10, fontWeight: "700", letterSpacing: 1, marginTop: 4 },
-    vidQR: { width: 90, height: 90, backgroundColor: "#fff", borderRadius: radius.md, alignItems: "center", justifyContent: "center", marginLeft: 14, overflow: "hidden" },
-    qrImg: { width: 86, height: 86 },
+    vidLogo: { width: 24, height: 24, borderRadius: 7 },
+    vidBrand: { color: colors.primary, fontSize: 13, fontWeight: "900", letterSpacing: 2 },
+    vidName: { color: colors.textPrimary, fontSize: 16, fontWeight: "800", marginTop: 10 },
+    vidLbl: { color: colors.textSecondary, fontSize: 13, marginTop: 4 },
+    vidId: { color: colors.textPrimary, fontSize: 12, fontWeight: "700", letterSpacing: 0.5, marginTop: 10 },
+    vidQR: { width: 96, height: 96, backgroundColor: "#fff", borderRadius: radius.md, alignItems: "center", justifyContent: "center", marginLeft: 14, overflow: "hidden" },
+    qrImg: { width: 92, height: 92 },
 
-    card: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: 18, marginHorizontal: spacing.xl, marginTop: 14, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
-    cardHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-    cardTitle: { ...font.h4, color: colors.textPrimary, marginBottom: 12 },
-    badge: { backgroundColor: colors.surfaceAlt, color: colors.primary, fontSize: 11, fontWeight: "800", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, overflow: "hidden" },
+    dualRow: { flexDirection: "row", gap: 12, marginHorizontal: spacing.xl, marginTop: 14 },
+    dualCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    dualTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    dualIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    dualLbl: { fontSize: 11, color: colors.textSecondary, fontWeight: "700", letterSpacing: 0.5, marginTop: 12 },
+    dualVal: { fontSize: 15, color: colors.textPrimary, fontWeight: "800", marginTop: 3 },
+
+    card: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: 16, marginHorizontal: spacing.xl, marginTop: 14, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    cardHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+    cardHeadLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+    cardHeadIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    cardTitle: { ...font.h4, color: colors.textPrimary },
+    badge: { backgroundColor: colors.surfaceAlt, color: colors.primary, fontSize: 11, fontWeight: "800", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, overflow: "hidden" },
+    divider: { height: 1, backgroundColor: colors.border, marginVertical: 2 },
 
     themeRow: { flexDirection: "row", gap: 12, alignItems: "center" },
     themeIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
-    themeTitle: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
-    themeSub: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+    themeTitle: { fontSize: 16, fontWeight: "700", color: colors.textPrimary },
+    themeSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 
-    settingRow: { flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 12 },
-    settingIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
-    settingLbl: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: "600" },
-    settingBadge: { backgroundColor: colors.danger, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, marginRight: 6 },
-    settingBadgeTxt: { color: "#fff", fontSize: 10, fontWeight: "800" },
-    settingMeta: { color: colors.textSecondary, fontSize: 11, fontWeight: "600", marginRight: 4 },
+    actionRow: { flexDirection: "row", gap: 14, alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, padding: 16, marginHorizontal: spacing.xl, marginTop: 12, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    actionIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    actionLbl: { flex: 1, fontSize: 16, color: colors.textPrimary, fontWeight: "700" },
 
-    logout: { flexDirection: "row", gap: 8, alignSelf: "center", paddingVertical: 14, paddingHorizontal: 24, marginTop: 16, borderRadius: radius.md, alignItems: "center" },
-    logoutTxt: { color: colors.danger, fontWeight: "700", fontSize: 14 },
-    version: { textAlign: "center", color: colors.textMuted, fontSize: 11, marginTop: 8 },
+    logout: { flexDirection: "row", gap: 8, alignSelf: "center", paddingVertical: 14, paddingHorizontal: 24, marginTop: 20, borderRadius: radius.md, alignItems: "center" },
+    logoutTxt: { color: colors.danger, fontWeight: "700", fontSize: 15 },
+    version: { textAlign: "center", color: colors.textMuted, fontSize: 11, marginTop: 6 },
+
+    modalBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: "flex-end" },
+    modalSheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingHorizontal: spacing.xl, paddingTop: 12, paddingBottom: 36 },
+    modalHandle: { alignSelf: "center", width: 44, height: 5, borderRadius: 3, backgroundColor: colors.border, marginBottom: 14 },
+    modalTitle: { fontSize: 18, fontWeight: "800", color: colors.textPrimary, marginBottom: 8 },
+    modalEmpty: { color: colors.textSecondary, fontSize: 14, paddingVertical: 16, textAlign: "center" },
+    pickRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+    pickLbl: { color: colors.textPrimary, fontSize: 15, fontWeight: "600", flex: 1 },
+    pickActive: { color: colors.primary, fontSize: 12, fontWeight: "700" },
   });
 }

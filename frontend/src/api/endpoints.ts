@@ -49,6 +49,17 @@ export const api = {
     http.post<ReportRow[]>("/Reports/GradingSchedule", body),
   tournamentSummary: (body: ReportRequest) =>
     http.post<ReportRow[]>("/Reports/TournamentSummary", body),
+  purchaseRequests: (body: ReportRequest) =>
+    http.post<ReportRow[]>("/Reports/PurchaseRequests", body),
+  // structured training schedule rows (dayOfWeek, tTimeFrom/tTimeTo, instructor)
+  studentDetails: (body: ReportRequest) =>
+    http.post<ReportRow[]>("/Reports/StudentDetails", body),
+  paymentSlips: (body: ReportRequest) =>
+    http.post<ReportRow[]>("/Reports/PaymentSlips", body),
+
+  // ── Help desk ──
+  send2ClubHelpDesk: (body: { text?: string; value?: string; notificationType?: string }) =>
+    http.post<any>("/Profile/Send2ClubHelpDesk", body),
 
   // ── Outstanding (fees) ──
   outstanding: (body: OutstandingRequest) => http.post<Invoice[]>("/Outstanding/Fetch", body),

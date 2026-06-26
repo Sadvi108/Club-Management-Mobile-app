@@ -1,32 +1,47 @@
-import { useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
+import { useMemo, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import { radius, spacing, font, useTheme } from "../../src/theme";
-import { api } from "../../src/api/endpoints";
+import { LinearGradient } from "expo-linear-gradient";
+import { radius, spacing, font, useTheme, LOGO_URL } from "../../src/theme";
+import { api, defaultRange } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
 
+const DOW_SHORT = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const DOW_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const SESSION_COLORS = ["#4F46E5", "#F59E0B", "#10B981", "#EF4444", "#9333EA", "#0EA5E9", "#DB2777"];
 
 export default function Schedule() {
   const { colors, shadow, mode } = useTheme();
-  const router = useRouter();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
 
-  const info = useApi(() => api.myInfo(), []);
-  const next = useApi(() => api.nextBookings(), []);
+  // 10 days starting today
+  const days = useMemo(() => {
+    const base = new Date();
+    return [...Array(10)].map((_, i) => {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      return d;
+    });
+  }, []);
+  const [active, setActive] = useState(0);
+  const selected = days[active];
+  const selectedDow = DOW_FULL[selected.getDay()];
+  const monthLabel = days[0].toLocaleDateString("en-GB", { month: "short", year: "numeric" });
 
-  // Parse the free-text training-time string into individual session lines.
-  const sessions = useMemo(() => {
-    const raw = info.data?.trainingTme || "";
-    return raw
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
-  }, [info.data?.trainingTme]);
+  const range = useMemo(() => defaultRange(), []);
+  const details = useApi(() => api.studentDetails({ fromDate: range.fromDate, toDate: range.toDate }), []);
+  const rows = details.data ?? [];
 
-  const bookings = next.data ?? [];
+  // training rows matching the selected weekday
+  const classes = rows.filter(
+    (r: any) => String(r.dayOfWeek || "").toLowerCase() === selectedDow.toLowerCase()
+  );
+  // weekdays that have any training (to show a dot on the pill)
+  const trainingDows = useMemo(
+    () => new Set(rows.map((r: any) => String(r.dayOfWeek || "").toLowerCase())),
+    [rows]
+  );
 
   return (
     <View style={styles.root}>
@@ -34,72 +49,77 @@ export default function Schedule() {
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Schedule</Text>
-            <Text style={styles.sub}>{info.data?.tCenterName || "Your training times"}</Text>
+            <Text style={styles.sub}>{monthLabel}</Text>
           </View>
-          <TouchableOpacity style={styles.iconBtn} testID="schedule-reschedule-btn" onPress={() => info.reload()}>
-            <Ionicons name="refresh" size={20} color={colors.primary} />
-          </TouchableOpacity>
+          <Image source={{ uri: LOGO_URL }} style={styles.logo} />
         </View>
       </SafeAreaView>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        <Text style={styles.section}>My Training Times</Text>
+      <View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daysRow}>
+          {days.map((d, i) => {
+            const on = i === active;
+            const hasTraining = trainingDows.has(DOW_FULL[d.getDay()].toLowerCase());
+            return (
+              <TouchableOpacity key={i} onPress={() => setActive(i)} testID={`schedule-day-${i}`} style={[styles.dayChip, on && styles.dayChipActive]} activeOpacity={0.85}>
+                <Text style={[styles.dayLbl, on && styles.dayLblActive]}>{DOW_SHORT[d.getDay()]}</Text>
+                <Text style={[styles.dayNum, on && styles.dayNumActive]}>{d.getDate()}</Text>
+                {hasTraining && <View style={[styles.dayDot, on && { backgroundColor: "#fff" }]} />}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
-        {info.loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
+        {details.loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 40 }} />}
 
-        {!info.loading && sessions.length === 0 && (
-          <View style={styles.emptyCard}>
-            <Ionicons name="bed-outline" size={40} color={colors.textMuted} />
-            <Text style={styles.emptyTxt}>No training time set</Text>
-            <Text style={styles.emptySub}>Contact your academy to schedule</Text>
-          </View>
+        {!details.loading && classes.length === 0 && (
+          <>
+            <Text style={styles.restTitle}>Rest Day</Text>
+            <View style={styles.emptyCard}>
+              <Ionicons name="bed-outline" size={44} color={colors.textMuted} />
+              <Text style={styles.emptyTxt}>No classes scheduled</Text>
+              <Text style={styles.emptySub}>Recovery is part of the journey</Text>
+            </View>
+          </>
         )}
 
-        {sessions.map((s, i) => (
-          <View key={i} style={styles.sessionCard}>
-            <View style={styles.timeCol}>
-              <Ionicons name="time-outline" size={20} color={colors.primary} />
-            </View>
-            <View style={[styles.verticalBar, { backgroundColor: SESSION_COLORS[i % SESSION_COLORS.length] }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sessionTitle}>{s}</Text>
-              <View style={styles.metaRow}>
-                <Ionicons name="location-outline" size={12} color={colors.textSecondary} />
-                <Text style={styles.metaTxt}>{info.data?.tCenterName}</Text>
-                <Ionicons name="person-outline" size={12} color={colors.textSecondary} style={{ marginLeft: 6 }} />
-                <Text style={styles.metaTxt}>{info.data?.instructorName}</Text>
+        {!details.loading && classes.length > 0 && (
+          <>
+            <Text style={styles.section}>{classes.length} session{classes.length > 1 ? "s" : ""} · {selectedDow}</Text>
+            {classes.map((c: any, i: number) => (
+              <View key={i} style={styles.sessionCard}>
+                <View style={styles.timeCol}>
+                  <Text style={styles.timeTxt}>{c.tTimeFrom || "—"}</Text>
+                  <Text style={styles.timeAmPm}>to {c.tTimeTo || "—"}</Text>
+                </View>
+                <View style={[styles.verticalBar, { backgroundColor: SESSION_COLORS[i % SESSION_COLORS.length] }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sessionTitle}>{c.tCenterName || "Training"}</Text>
+                  <View style={styles.metaRow}>
+                    <Ionicons name="person-outline" size={12} color={colors.textSecondary} />
+                    <Text style={styles.metaTxt}>{c.instructorName || "Instructor"}</Text>
+                    {!!c.currentGrade && (
+                      <>
+                        <Ionicons name="ribbon-outline" size={12} color={colors.textSecondary} style={{ marginLeft: 6 }} />
+                        <Text style={styles.metaTxt}>{c.currentGrade}</Text>
+                      </>
+                    )}
+                  </View>
+                </View>
               </View>
-            </View>
-          </View>
-        ))}
-
-        <Text style={styles.section}>Upcoming Bookings</Text>
-        {next.loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />}
-        {!next.loading && bookings.length === 0 && (
-          <View style={styles.emptyCardSmall}>
-            <Ionicons name="calendar-outline" size={28} color={colors.textMuted} />
-            <Text style={styles.emptySub}>No upcoming class bookings</Text>
-          </View>
+            ))}
+          </>
         )}
-        {bookings.map((b: any, i: number) => (
-          <View key={i} style={styles.sessionCard}>
-            <View style={styles.timeCol}><Ionicons name="calendar" size={18} color={colors.primary} /></View>
-            <View style={[styles.verticalBar, { backgroundColor: colors.primary }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sessionTitle}>{b.title || b.className || b.name || "Class Booking"}</Text>
-              <Text style={styles.metaTxt}>{b.date || b.bookingDate || b.trainingDate || ""}</Text>
-            </View>
-          </View>
-        ))}
-
-        <View style={styles.holidayCard}>
-          <View style={styles.holidayIcon}><Ionicons name="information-circle" size={20} color={colors.warning} /></View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.holidayTitle}>Grade</Text>
-            <Text style={styles.holidayItem}>{info.data?.currentGrade || "—"}</Text>
-          </View>
-        </View>
       </ScrollView>
+
+      <TouchableOpacity style={styles.bookBtn} testID="schedule-book" onPress={() => Alert.alert("Book a class", "Class booking is coming soon.")} activeOpacity={0.9}>
+        <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.bookInner, shadow.strong]}>
+          <Ionicons name="add" size={20} color="#fff" />
+          <Text style={styles.bookTxt}>Book a class</Text>
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -109,25 +129,35 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     root: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: 14 },
     title: { ...font.h1, color: colors.textPrimary, fontSize: 26 },
-    sub: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
-    iconBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    sub: { color: colors.textSecondary, fontSize: 13, marginTop: 2 },
+    logo: { width: 40, height: 40, borderRadius: 12 },
 
-    section: { ...font.h4, color: colors.textSecondary, marginTop: 16, marginBottom: 14 },
-    emptyCard: { alignItems: "center", paddingVertical: 50 },
-    emptyCardSmall: { alignItems: "center", paddingVertical: 24, gap: 6 },
-    emptyTxt: { ...font.h3, color: colors.textPrimary, marginTop: 12 },
-    emptySub: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+    daysRow: { paddingHorizontal: spacing.xl, gap: 10, paddingVertical: 12 },
+    dayChip: { width: 62, paddingVertical: 12, backgroundColor: colors.surface, borderRadius: radius.lg, alignItems: "center", ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    dayChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    dayLbl: { fontSize: 11, fontWeight: "700", color: colors.textSecondary, letterSpacing: 1 },
+    dayLblActive: { color: "rgba(255,255,255,0.85)" },
+    dayNum: { fontSize: 20, fontWeight: "800", color: colors.textPrimary, marginTop: 4 },
+    dayNumActive: { color: "#fff" },
+    dayDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.primary, marginTop: 6 },
+
+    section: { ...font.h4, color: colors.textSecondary, marginTop: 8, marginBottom: 14 },
+    restTitle: { ...font.h2, color: colors.textPrimary, marginTop: 8 },
+    emptyCard: { alignItems: "center", paddingVertical: 70 },
+    emptyTxt: { ...font.h2, color: colors.textPrimary, marginTop: 16, fontSize: 22 },
+    emptySub: { fontSize: 14, color: colors.textSecondary, marginTop: 6 },
 
     sessionCard: { flexDirection: "row", backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, marginBottom: 12, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border, alignItems: "center" },
-    timeCol: { width: 40, alignItems: "center", justifyContent: "center" },
-    verticalBar: { width: 4, alignSelf: "stretch", borderRadius: 2, marginHorizontal: 10 },
-    sessionTitle: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
+    timeCol: { width: 64, alignItems: "center", justifyContent: "center" },
+    timeTxt: { fontSize: 15, fontWeight: "800", color: colors.textPrimary },
+    timeAmPm: { fontSize: 10, color: colors.textSecondary, fontWeight: "700", marginTop: 2 },
+    verticalBar: { width: 4, alignSelf: "stretch", borderRadius: 2, marginHorizontal: 12 },
+    sessionTitle: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
     metaRow: { flexDirection: "row", gap: 4, alignItems: "center", marginTop: 6, flexWrap: "wrap" },
     metaTxt: { fontSize: 11, color: colors.textSecondary, fontWeight: "500" },
 
-    holidayCard: { flexDirection: "row", gap: 12, backgroundColor: mode === "dark" ? "#2D1A0A" : "#FEF3C7", borderRadius: radius.lg, padding: 16, marginTop: 16 },
-    holidayIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: mode === "dark" ? "#3F2410" : "#FDE68A", alignItems: "center", justifyContent: "center" },
-    holidayTitle: { fontSize: 14, fontWeight: "800", color: mode === "dark" ? "#FDBA74" : "#92400E" },
-    holidayItem: { fontSize: 12, color: mode === "dark" ? "#FED7AA" : "#92400E", marginTop: 4 },
+    bookBtn: { position: "absolute", right: spacing.xl, bottom: 90 },
+    bookInner: { flexDirection: "row", gap: 8, alignItems: "center", paddingHorizontal: 22, paddingVertical: 15, borderRadius: radius.full },
+    bookTxt: { color: "#fff", fontWeight: "800", fontSize: 15 },
   });
 }
