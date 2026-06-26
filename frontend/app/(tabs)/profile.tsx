@@ -37,10 +37,8 @@ export default function Profile() {
   const unread = useApi(() => api.unreadNotificationCount(), []);
 
   const [qrError, setQrError] = useState(false);
-  const qrUrl =
-    user && user.clubId && user.branchId && user.id
-      ? api.studentQRCodeUrl(user.clubId, user.branchId, user.id)
-      : null;
+  // Public PNG QR of the student id (StudentQRCode endpoint returns a PDF, unusable in <Image>).
+  const qrUrl = user?.id ? api.qrCodeUrl(user.id) : null;
 
   const grade = (info.data?.currentGrade || user?.currentGrade || "—").replace(/Grade\s*/i, "");
 

@@ -147,8 +147,8 @@ export default function Payments() {
         contentContainerStyle={{ padding: spacing.xl, paddingBottom: tabBarHeight + 140 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Account switcher chips — shared by Pay + Prepay (siblings for this id) */}
-        {seg !== "history" && (
+        {/* Account switcher chips — Pay segment (Prepay has its own siblings checklist) */}
+        {seg === "pay" && (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -259,9 +259,8 @@ export default function Payments() {
 
         {seg === "prepay" && (
           <PrepaySegment
-            accountId={accountId!}
-            accountName={activeAccount?.name || user!.name}
-            cart={cart}
+            user={user!}
+            siblings={siblings.data ?? []}
             styles={styles}
             colors={colors}
           />
@@ -322,7 +321,7 @@ export default function Payments() {
       </ScrollView>
 
       {/* Bottom Pay bar — shown when cart has items */}
-      {cart.items.length > 0 && (
+      {seg === "pay" && cart.items.length > 0 && (
         <View style={[styles.payBar, { bottom: tabBarHeight }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.payBarLbl}>{cart.items.length} selected</Text>
@@ -444,86 +443,98 @@ function termMonth(t: any): number {
 }
 
 function PrepaySegment({
-  accountId,
-  accountName,
-  cart,
+  user,
+  siblings,
   styles,
   colors,
 }: {
-  accountId: number;
-  accountName: string;
-  cart: ReturnType<typeof usePaymentCart>;
+  user: { id: number; name: string };
+  siblings: { id: number; value: string; text: string }[];
   styles: ReturnType<typeof createStyles>;
   colors: any;
 }) {
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
-  const terms = useApi(
-    () => api.fetchTermPayments({ studentIds: [accountId], year, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }),
-    [accountId, year]
+
+  const accounts = useMemo(
+    () =>
+      [{ id: user.id, name: user.name }, ...siblings.map((s) => ({ id: s.id, name: s.text }))].filter(
+        (a, i, arr) => arr.findIndex((x) => x.id === a.id) === i
+      ),
+    [user.id, siblings]
   );
-  const data = terms.data ?? [];
-  const byMonth = useMemo(() => {
-    const map: Record<number, any> = {};
-    for (const t of data) {
-      const m = termMonth(t);
-      if (m) map[m] = t;
-    }
-    return map;
-  }, [data]);
+  const [selAccts, setSelAccts] = useState<Set<number>>(new Set([user.id]));
+  const [selMonths, setSelMonths] = useState<Set<number>>(new Set());
+
+  const acctKey = [...selAccts].sort((a, b) => a - b).join(",");
+  const terms = useApi(
+    () =>
+      selAccts.size
+        ? api.fetchTermPayments({ studentIds: [...selAccts], year, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] })
+        : Promise.resolve([] as any[]),
+    [year, acctKey]
+  );
+  const rows = terms.data ?? [];
+  const availMonths = useMemo(() => new Set(rows.map((r) => termMonth(r))), [rows]);
+  const chosen = rows.filter((r) => selMonths.has(termMonth(r)));
+  const totalInvoices = chosen.length;
+  const dueAmount = chosen.reduce((s, r) => s + (r.dueAmount || 0), 0);
+
+  const toggleMonth = (m: number) => {
+    if (!availMonths.has(m)) return;
+    setSelMonths((prev) => {
+      const n = new Set(prev);
+      n.has(m) ? n.delete(m) : n.add(m);
+      return n;
+    });
+  };
+  const toggleAcct = (id: number) =>
+    setSelAccts((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
 
   return (
     <View>
+      <Text style={styles.tpTitle}>Term Payment</Text>
+
       {/* Year selector */}
-      <View style={styles.calHeader}>
-        <TouchableOpacity
-          disabled={year <= thisYear}
-          onPress={() => setYear((y) => y - 1)}
-          style={styles.calNav}
-          testID="prepay-year-prev"
-        >
-          <Ionicons name="chevron-back" size={20} color={year <= thisYear ? colors.textMuted : colors.primary} />
+      <View style={styles.tpYearRow}>
+        <TouchableOpacity disabled={year <= thisYear} onPress={() => setYear((y) => y - 1)} style={styles.calNav} testID="prepay-year-prev">
+          <Ionicons name="chevron-back" size={18} color={year <= thisYear ? colors.textMuted : colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.calYear}>{year}</Text>
+        <Text style={styles.tpYear}>{year}</Text>
         <TouchableOpacity onPress={() => setYear((y) => y + 1)} style={styles.calNav} testID="prepay-year-next">
-          <Ionicons name="chevron-forward" size={20} color={colors.primary} />
+          <Ionicons name="chevron-forward" size={18} color={colors.primary} />
         </TouchableOpacity>
       </View>
-      <Text style={styles.calHint}>Select months to prepay in advance</Text>
 
+      <Text style={styles.tpLabel}>Select Month(s) to PAY</Text>
       {terms.loading ? (
-        <ActivityIndicator color={colors.primary} style={{ marginVertical: 30 }} />
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />
       ) : (
-        <View style={styles.calGrid}>
+        <View style={styles.tpMonthGrid}>
           {MONTH_ABBR.map((abbr, i) => {
-            const month = i + 1;
-            const t = byMonth[month];
-            const available = !!t;
-            const key = available ? `term:${accountId}:${t.invoiceId}` : "";
-            const selected = available && cart.has(key);
+            const m = i + 1;
+            const available = availMonths.has(m);
+            const selected = available && selMonths.has(m);
             return (
               <TouchableOpacity
                 key={abbr}
                 disabled={!available}
-                activeOpacity={0.8}
-                testID={`prepay-month-${month}`}
-                onPress={() =>
-                  cart.toggle({
-                    key,
-                    studentId: accountId,
-                    studentName: accountName,
-                    invoice: { ...t, studentId: accountId, studentName: accountName },
-                    isTerm: true,
-                  })
-                }
-                style={[styles.calCell, selected && styles.calCellOn, !available && styles.calCellOff]}
+                onPress={() => toggleMonth(m)}
+                style={styles.tpMonth}
+                testID={`prepay-month-${m}`}
+                activeOpacity={0.7}
               >
-                {selected && <Ionicons name="checkmark-circle" size={15} color="#fff" style={styles.calCheck} />}
-                <Text style={[styles.calMonth, selected && { color: "#fff" }, !available && { color: colors.textMuted }]}>
+                <Ionicons
+                  name={selected ? "radio-button-on" : "radio-button-off"}
+                  size={20}
+                  color={!available ? colors.border : selected ? colors.primary : colors.textMuted}
+                />
+                <Text style={[styles.tpMonthTxt, { color: available ? colors.textPrimary : colors.textMuted, fontWeight: available ? "700" : "500" }]}>
                   {abbr}
-                </Text>
-                <Text style={[styles.calAmt, selected && { color: "#fff" }, !available && { color: colors.textMuted }]}>
-                  {available ? `RM ${t.dueAmount}` : "—"}
                 </Text>
               </TouchableOpacity>
             );
@@ -531,9 +542,25 @@ function PrepaySegment({
         </View>
       )}
 
-      {!terms.loading && data.length === 0 && (
-        <Text style={styles.emptyTxt}>No prepayable months for {year}.</Text>
-      )}
+      <Text style={[styles.tpLabel, { marginTop: 20 }]}>Select Siblings to PAY</Text>
+      {accounts.map((a) => {
+        const on = selAccts.has(a.id);
+        return (
+          <TouchableOpacity key={a.id} onPress={() => toggleAcct(a.id)} style={styles.tpSibRow} testID={`prepay-acct-${a.id}`} activeOpacity={0.7}>
+            <Ionicons name={on ? "checkmark-circle" : "ellipse-outline"} size={24} color={on ? colors.success : colors.textMuted} />
+            <Text style={styles.tpSibName}>{a.name.trim()}</Text>
+          </TouchableOpacity>
+        );
+      })}
+
+      <View style={styles.tpSummary}>
+        <Text style={styles.tpSummaryTxt}>Total Invoice(s) : {totalInvoices}</Text>
+        <Text style={styles.tpSummaryTxt}>Due Amt : {dueAmount.toFixed(2)}</Text>
+      </View>
+
+      <View style={styles.tpPayBtn} testID="prepay-paynow">
+        <Text style={styles.tpPayTxt}>Pay Now (coming soon)</Text>
+      </View>
     </View>
   );
 }
@@ -589,29 +616,21 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     chipTxt: { fontSize: 12, fontWeight: "700", color: colors.textPrimary },
 
-    // Prepay calendar (year + month grid)
-    calHeader: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 24, marginTop: 4 },
+    // Term Payment (prepay)
     calNav: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
-    calYear: { fontSize: 22, fontWeight: "800", color: colors.textPrimary, minWidth: 70, textAlign: "center" },
-    calHint: { fontSize: 12, color: colors.textSecondary, textAlign: "center", marginTop: 6, marginBottom: 16 },
-    calGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
-    calCell: {
-      width: "31.5%",
-      aspectRatio: 1.25,
-      borderRadius: radius.lg,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 12,
-      ...shadow.soft,
-    },
-    calCellOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-    calCellOff: { backgroundColor: colors.surfaceAlt, opacity: 0.6, shadowOpacity: 0, elevation: 0 },
-    calMonth: { fontSize: 16, fontWeight: "800", color: colors.textPrimary },
-    calAmt: { fontSize: 12, fontWeight: "600", color: colors.textSecondary, marginTop: 4 },
-    calCheck: { position: "absolute", top: 8, right: 8 },
+    tpTitle: { ...font.h3, color: colors.textPrimary, marginTop: 4, marginBottom: 14 },
+    tpYearRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 18 },
+    tpYear: { fontSize: 18, fontWeight: "800", color: colors.textPrimary },
+    tpLabel: { fontSize: 15, fontWeight: "800", color: colors.textPrimary, marginBottom: 12 },
+    tpMonthGrid: { flexDirection: "row", flexWrap: "wrap" },
+    tpMonth: { width: "25%", flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 10 },
+    tpMonthTxt: { fontSize: 14 },
+    tpSibRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
+    tpSibName: { fontSize: 15, fontWeight: "600", color: colors.textPrimary, flex: 1 },
+    tpSummary: { flexDirection: "row", justifyContent: "space-between", marginTop: 18, marginBottom: 16 },
+    tpSummaryTxt: { fontSize: 15, fontWeight: "800", color: colors.textPrimary },
+    tpPayBtn: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", opacity: 0.7 },
+    tpPayTxt: { fontSize: 15, fontWeight: "700", color: colors.textMuted },
 
     // Invoice / receipt cards
     invCard: {

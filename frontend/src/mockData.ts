@@ -27,7 +27,7 @@ export const quickCards = [
   { id: "events", label: "Events", icon: "trophy", color: "#F97316", route: "/events" },
   { id: "competition", label: "Competition", icon: "medal", color: "#DB2777", route: "/events" },
   { id: "chat", label: "Chat Academy", icon: "chatbubbles", color: "#22C55E", route: "/(tabs)/profile" },
-  { id: "more", label: "More", icon: "grid", color: "#64748B", route: "/(tabs)/profile" },
+  { id: "more", label: "More", icon: "grid", color: "#64748B", route: "/more" },
 ];
 
 export const programs = [

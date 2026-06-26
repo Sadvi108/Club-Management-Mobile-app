@@ -1,36 +1,15 @@
 import { Platform } from "react-native";
-import { getAuthToken } from "./http";
+import * as WebBrowser from "expo-web-browser";
 
-// Downloads an authed PDF. Web: fetch→blob→open in a new tab (works through the CORS proxy).
-// Native: expo-file-system writes the file with the bearer header, then expo-sharing opens it.
-export async function downloadPdf(url: string, filename: string): Promise<void> {
-  const token = getAuthToken();
-  const headers: Record<string, string> = { accept: "application/pdf" };
-  if (token) headers["Authorization"] = "bearer " + token;
-
+// ReceiptAsPDF / invoice PDFs are PUBLIC (no auth). Opening the URL lets the browser /
+// device PDF viewer render the real document (logo + content) — this avoids the empty-file
+// problem that came from fetching to a blob and saving it manually.
+// Web: open in a new tab (URL points at the local CORS proxy).
+// Native: open in the in-app browser (URL points at the live API directly).
+export async function downloadPdf(url: string, _filename?: string): Promise<void> {
   if (Platform.OS === "web") {
-    const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error(`Download failed (${res.status})`);
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    if (typeof window !== "undefined") {
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.target = "_blank";
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    }
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    if (typeof window !== "undefined") window.open(url, "_blank");
     return;
   }
-
-  // Native
-  const FileSystem = require("expo-file-system");
-  const Sharing = require("expo-sharing");
-  const dest = FileSystem.cacheDirectory + filename;
-  const { uri, status } = await FileSystem.downloadAsync(url, dest, { headers });
-  if (status !== 200) throw new Error(`Download failed (${status})`);
-  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: "application/pdf" });
+  await WebBrowser.openBrowserAsync(url);
 }

@@ -63,9 +63,14 @@ export const api = {
     ),
   paymentCompleted: (status: string) =>
     http.get<any>(`/Payment/Completed/${encodeURIComponent(status)}`),
-  // Authed PDF URL. paymentId for paid receipt, or 0 with invoiceId for an unpaid invoice.
+  // Public PDF URL (no auth). paymentId for paid receipt, or 0 with invoiceId for an unpaid invoice.
   receiptPdfUrl: (clubId: number, paymentId: number, invoiceId: number) =>
     `${require("./config").API_BASE_URL}/Utilities/ReceiptAsPDF/${clubId}/${paymentId}/${invoiceId}`,
+
+  // Public PNG QR (no auth) — usable directly in <Image>. StudentQRCode returns a PDF, so we
+  // render a QRCode PNG of the student's content instead.
+  qrCodeUrl: (content: string | number, size = 300) =>
+    `${require("./config").API_BASE_URL}/Utilities/QRCode/${size}/${size}/${encodeURIComponent(String(content))}`,
 
   // ── Attendance (self check-in via scanned center QR) ──
   addAttendance: (body: { qrCode?: string | null; attendanceType: number; tTimeId?: number | null }) =>
