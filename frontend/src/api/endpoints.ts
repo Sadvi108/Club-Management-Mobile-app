@@ -66,12 +66,22 @@ export const api = {
   // Returns full invoice-shaped rows (real invoiceId + dueAmount) for upcoming months.
   fetchTermPayments: (body: { studentIds: number[]; year: number; months: number[] }) =>
     http.post<Invoice[]>("/Outstanding/FetchTermPayments", body),
-  // shape UNRESOLVED — all probed bodies returned 400; needs gateway inspection
-  payInvoices: (invoices: any[], opts?: { payTermPayments?: boolean }) =>
-    http.post<import("./types").PayInvoicesResult>(
-      `/Outstanding/PayInvoices?PayTermPayments=${opts?.payTermPayments ? "true" : "false"}`,
-      invoices
-    ),
+  // PayInvoices is multipart/form-data: repeated InvoiceIds + PaymentMethod (2=Online, 1=Bank-In).
+  // Online → returns a Billplz bill URL string to open in the browser.
+  payInvoicesOnline: (invoiceIds: number[]) => {
+    const form = new FormData();
+    invoiceIds.forEach((id) => form.append("InvoiceIds", String(id)));
+    form.append("PaymentMethod", "2");
+    return http.postForm<string>("/Outstanding/PayInvoices?PayTermPayments=false&PurchaseItems=false", form);
+  },
+  // Direct Bank-In → upload the payment slip image (`files`). slip = RN {uri,name,type} or a web File/Blob.
+  payInvoicesBankIn: (invoiceIds: number[], slip: any) => {
+    const form = new FormData();
+    invoiceIds.forEach((id) => form.append("InvoiceIds", String(id)));
+    form.append("PaymentMethod", "1");
+    form.append("files", slip);
+    return http.postForm<any>("/Outstanding/PayInvoices?PayTermPayments=false&PurchaseItems=false", form);
+  },
   paymentCompleted: (status: string) =>
     http.get<any>(`/Payment/Completed/${encodeURIComponent(status)}`),
   // Public PDF URL (no auth). paymentId for paid receipt, or 0 with invoiceId for an unpaid invoice.

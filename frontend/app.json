@@ -34,7 +34,14 @@
           "backgroundColor": "#000"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to attach a payment slip from your photos.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to take a photo of your payment slip."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

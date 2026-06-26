@@ -82,6 +82,35 @@ export const http = {
     request<T>(path, { ...opts, method: "GET" }),
   post: <T>(path: string, body?: unknown, opts?: Omit<Options, "method" | "body">) =>
     request<T>(path, { ...opts, method: "POST", body }),
+  // multipart/form-data POST. Do NOT set Content-Type — fetch adds the boundary.
+  // Unwraps the standard { status, meta, data } envelope and returns `data`.
+  postForm: async <T>(path: string, form: FormData): Promise<T> => {
+    const headers: Record<string, string> = { accept: "*/*" };
+    if (authToken) headers["Authorization"] = "bearer " + authToken;
+    let res: Response;
+    try {
+      res = await fetch(API_BASE_URL + path, { method: "POST", headers, body: form });
+    } catch (e: any) {
+      throw new ApiError(`Network error: ${e?.message || "request failed"}`, 0, null);
+    }
+    const text = await res.text();
+    let parsed: any = text;
+    try {
+      parsed = text ? JSON.parse(text) : null;
+    } catch {}
+    if (res.status === 401) {
+      onUnauthorized?.();
+      throw new ApiError("Session expired. Please sign in again.", 401, parsed);
+    }
+    // Backend returns HTTP 200 with an inner envelope; surface inner errors too.
+    const inner = parsed?.meta?.code ?? parsed?.status;
+    if (!res.ok || (inner && inner !== 200)) {
+      const msg = parsed?.meta?.error || parsed?.meta?.message || parsed?.title || `Request failed (${inner || res.status})`;
+      throw new ApiError(String(msg).trim(), inner || res.status, parsed);
+    }
+    if (parsed && typeof parsed === "object" && "data" in parsed) return parsed.data as T;
+    return parsed as T;
+  },
   // Returns the full envelope (used by auth, which needs status + data together).
   raw: async (path: string, opts: Options = {}): Promise<ApiEnvelope<any>> => {
     const { method = "GET", body, auth = true } = opts;

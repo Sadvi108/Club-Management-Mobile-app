@@ -8,11 +8,14 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Image,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as WebBrowser from "expo-web-browser";
+import * as ImagePicker from "expo-image-picker";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { radius, spacing, font, useTheme } from "../../src/theme";
 import { useAuth } from "../../src/api/auth";
@@ -57,24 +60,22 @@ export default function Payments() {
 
   const invoices = dues.data ?? [];
 
-  // Pay sheet state (Task 6)
+  // Pay sheet state
   const [sheet, setSheet] = useState(false);
-  const [method, setMethod] = useState("card");
+  const [method, setMethod] = useState<"online" | "bankin">("online");
+  const [slip, setSlip] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [paying, setPaying] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(120);
 
-  // 2-minute countdown while the pay sheet is processing a bill
-  useEffect(() => {
-    if (!paying) return;
-    if (secondsLeft <= 0) {
-      setPaying(false);
-      setSheet(false);
-      Alert.alert("Session expired", "Payment session timed out. Please try again.");
-      return;
-    }
-    const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [paying, secondsLeft]);
+  const invoiceIds = useMemo(
+    () => cart.items.map((i) => i.invoice.invoiceId).filter((id) => id > 0),
+    [cart.items]
+  );
+
+  function openSheet() {
+    setMethod("online");
+    setSlip(null);
+    setSheet(true);
+  }
 
   async function openPdf(label: string, url: string, filename: string) {
     setBusyPdf(label);
@@ -87,31 +88,72 @@ export default function Payments() {
     }
   }
 
-  async function confirmPay() {
-    setPaying(true);
-    setSecondsLeft(120);
+  // Build a FormData-appendable file from a picked asset (web → File/Blob, native → {uri,name,type}).
+  async function toUploadFile(asset: ImagePicker.ImagePickerAsset): Promise<any> {
+    const name = asset.fileName || `slip_${Date.now()}.jpg`;
+    const type = asset.mimeType || "image/jpeg";
+    if (Platform.OS === "web") {
+      const blob = await (await fetch(asset.uri)).blob();
+      return new File([blob], name, { type: blob.type || type });
+    }
+    return { uri: asset.uri, name, type };
+  }
+
+  async function pickSlip(from: "camera" | "gallery") {
     try {
-      const body = cart.items.map((i) => i.invoice); // shape confirmed in Task 1, Step 4
-      const res: any = await api.payInvoices(body, { payTermPayments: cart.hasTerm });
-      const billUrl = typeof res === "string" ? res : res?.url;
-      if (!billUrl) throw new Error("Gateway did not return a payment URL.");
-      const result = await WebBrowser.openBrowserAsync(billUrl);
-      // After the browser closes, confirm status (best-effort) and refresh.
-      try { await api.paymentCompleted("paid"); } catch {}
-      setPaying(false);
-      setSheet(false);
-      cart.clear();
-      dues.reload();
-      history.reload();
-      Alert.alert(
-        "Payment",
-        result?.type === "cancel"
-          ? "Returned from gateway. Refreshing your invoices."
-          : "Thank you. Refreshing your invoices."
-      );
+      const perm =
+        from === "camera"
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission needed", `Allow ${from} access to attach a payment slip.`);
+        return;
+      }
+      const res =
+        from === "camera"
+          ? await ImagePicker.launchCameraAsync({ quality: 0.6 })
+          : await ImagePicker.launchImageLibraryAsync({ quality: 0.6, mediaTypes: ImagePicker.MediaTypeOptions.Images });
+      if (!res.canceled && res.assets?.[0]) setSlip(res.assets[0]);
+    } catch (e: any) {
+      Alert.alert("Could not pick image", e?.message || "Try again.");
+    }
+  }
+
+  async function proceedToPay() {
+    if (invoiceIds.length === 0) {
+      Alert.alert("Select invoices", "Choose at least one invoice to pay.");
+      return;
+    }
+    setPaying(true);
+    try {
+      if (method === "online") {
+        const url = await api.payInvoicesOnline(invoiceIds);
+        if (!url || typeof url !== "string") throw new Error("No payment link returned.");
+        await WebBrowser.openBrowserAsync(url); // Billplz gateway
+        setPaying(false);
+        setSheet(false);
+        cart.clear();
+        dues.reload();
+        history.reload();
+        Alert.alert("Payment", "Returned from the payment gateway. Refreshing your invoices.");
+      } else {
+        if (!slip) {
+          setPaying(false);
+          Alert.alert("Payment slip required", "Attach your bank-in slip first.");
+          return;
+        }
+        const file = await toUploadFile(slip);
+        await api.payInvoicesBankIn(invoiceIds, file);
+        setPaying(false);
+        setSheet(false);
+        cart.clear();
+        dues.reload();
+        history.reload();
+        Alert.alert("Submitted", "Your payment slip has been submitted for verification.");
+      }
     } catch (e: any) {
       setPaying(false);
-      Alert.alert("Payment failed", e?.message || "Could not start the payment.");
+      Alert.alert("Payment failed", e?.message || "Could not complete the payment.");
     }
   }
 
@@ -330,7 +372,7 @@ export default function Payments() {
           <TouchableOpacity
             style={styles.payBarBtnWrap}
             testID="pay-open-sheet"
-            onPress={() => { setSecondsLeft(120); setSheet(true); }}
+            onPress={openSheet}
           >
             <LinearGradient
               colors={colors.gradient}
@@ -345,83 +387,84 @@ export default function Payments() {
         </View>
       )}
 
-      {/* Pay sheet modal (Task 6) */}
-      <Modal
-        visible={sheet}
-        transparent
-        animationType="slide"
-        onRequestClose={() => !paying && setSheet(false)}
-      >
+      {/* Make Payment sheet — Online (Billplz) or Direct Bank-In (slip upload) */}
+      <Modal visible={sheet} transparent animationType="slide" onRequestClose={() => !paying && setSheet(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHandle} />
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={styles.modalTitle}>Complete Payment</Text>
-              {paying && (
-                <Text style={styles.countdown}>
-                  {String(Math.floor(secondsLeft / 60)).padStart(1, "0")}:
-                  {String(secondsLeft % 60).padStart(2, "0")}
-                </Text>
-              )}
-            </View>
-            <Text style={styles.modalAmt}>RM {cart.total.toLocaleString()}</Text>
-            {[
-              { id: "card", label: "Credit / Debit Card", icon: "card" },
-              { id: "fpx", label: "FPX / eWallet", icon: "phone-portrait" },
-              { id: "bank", label: "Bank Transfer", icon: "business" },
-            ].map((m) => (
-              <TouchableOpacity
-                key={m.id}
-                disabled={paying}
-                onPress={() => setMethod(m.id)}
-                style={[styles.methodRow, method === m.id && styles.methodRowActive]}
-                testID={`pay-method-${m.id}`}
-              >
-                <View
-                  style={[styles.methodIcon, method === m.id && { backgroundColor: colors.primary }]}
-                >
-                  <Ionicons
-                    name={m.icon as any}
-                    size={18}
-                    color={method === m.id ? "#fff" : colors.primary}
-                  />
-                </View>
-                <Text style={styles.methodLbl}>{m.label}</Text>
-                <Ionicons
-                  name={method === m.id ? "radio-button-on" : "radio-button-off"}
-                  size={20}
-                  color={method === m.id ? colors.primary : colors.textMuted}
-                />
+            <View style={styles.mpHead}>
+              <Text style={styles.modalTitle}>Make Payment</Text>
+              <TouchableOpacity onPress={() => !paying && setSheet(false)} style={styles.mpClose} testID="pay-close">
+                <Ionicons name="close" size={20} color={colors.textPrimary} />
               </TouchableOpacity>
-            ))}
-            <TouchableOpacity
-              onPress={confirmPay}
-              disabled={paying}
-              activeOpacity={0.9}
-              testID="pay-confirm-btn"
-            >
-              <LinearGradient
-                colors={colors.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.confirmBtn, shadow.strong]}
-              >
-                {paying ? (
-                  <ActivityIndicator color="#fff" />
+            </View>
+
+            <View style={styles.mpSummaryRow}>
+              <Text style={styles.mpSummary}>Paying Invoice(s) : <Text style={styles.mpStrong}>{invoiceIds.length}</Text></Text>
+              <Text style={styles.mpSummary}>Paying Amt : <Text style={styles.mpStrong}>{cart.total.toFixed(2)}</Text></Text>
+            </View>
+
+            {/* Method toggles */}
+            <View style={styles.mpMethods}>
+              {([
+                { id: "online", label: "Online" },
+                { id: "bankin", label: "Direct Bank-In" },
+              ] as const).map((m) => {
+                const on = method === m.id;
+                return (
+                  <TouchableOpacity key={m.id} disabled={paying} onPress={() => setMethod(m.id)} style={styles.mpMethod} testID={`pay-method-${m.id}`} activeOpacity={0.7}>
+                    <Ionicons name={on ? "checkmark-circle" : "ellipse-outline"} size={24} color={on ? colors.success : colors.textMuted} />
+                    <Text style={styles.mpMethodLbl}>{m.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Online hint or Bank-In slip picker */}
+            {method === "online" ? (
+              <View style={styles.mpHintRow}>
+                <Ionicons name="globe-outline" size={18} color={colors.textSecondary} />
+                <Text style={styles.mpHint}>You will be redirected to Billplz to securely finalize your payment.</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.mpLabel}>Select Paymentslip</Text>
+                {slip ? (
+                  <View style={styles.slipPreviewWrap}>
+                    <Image source={{ uri: slip.uri }} style={styles.slipPreview} resizeMode="cover" />
+                    <TouchableOpacity style={styles.slipRemove} onPress={() => setSlip(null)} testID="slip-remove">
+                      <Ionicons name="close-circle" size={24} color={colors.danger} />
+                    </TouchableOpacity>
+                  </View>
                 ) : (
+                  <View style={styles.slipBox}>
+                    <Ionicons name="camera" size={36} color={colors.textMuted} />
+                    <View style={styles.slipBtnRow}>
+                      <TouchableOpacity style={styles.slipBtn} onPress={() => pickSlip("gallery")} testID="slip-gallery">
+                        <Ionicons name="images" size={18} color={colors.primary} />
+                        <Text style={styles.slipBtnTxt}>Gallery</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.slipBtn} onPress={() => pickSlip("camera")} testID="slip-camera">
+                        <Ionicons name="camera" size={18} color={colors.primary} />
+                        <Text style={styles.slipBtnTxt}>Camera</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </>
+            )}
+
+            <TouchableOpacity onPress={proceedToPay} disabled={paying} activeOpacity={0.9} testID="pay-proceed">
+              <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.confirmBtn, shadow.strong]}>
+                {paying ? <ActivityIndicator color="#fff" /> : (
                   <>
                     <Ionicons name="lock-closed" size={14} color="#fff" />
-                    <Text style={styles.confirmTxt}>Confirm & Pay Securely</Text>
+                    <Text style={styles.confirmTxt}>{method === "online" ? "Proceed to pay" : "Submit Slip"}</Text>
                   </>
                 )}
               </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => !paying && setSheet(false)}
-              style={{ marginTop: 10, alignSelf: "center" }}
-            >
-              <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Cancel</Text>
-            </TouchableOpacity>
+            <Text style={styles.mpPowered}>Powered by BILLPLZ</Text>
           </View>
         </View>
       </Modal>
@@ -716,28 +759,25 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
       marginBottom: 18,
     },
     modalTitle: { ...font.h2, color: colors.textPrimary },
-    countdown: { fontSize: 18, fontWeight: "800", color: colors.primary },
-    modalAmt: { ...font.h1, color: colors.primary, fontSize: 32, marginTop: 12, marginBottom: 10 },
-    methodRow: {
-      flexDirection: "row",
-      gap: 12,
-      alignItems: "center",
-      padding: 14,
-      borderRadius: radius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: 10,
-    },
-    methodRowActive: { borderColor: colors.primary, backgroundColor: colors.surfaceAlt },
-    methodIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.surfaceAlt,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    methodLbl: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: "600" },
+    mpHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    mpClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    mpSummaryRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 16, marginBottom: 18 },
+    mpSummary: { fontSize: 14, color: colors.textSecondary, fontWeight: "600" },
+    mpStrong: { color: colors.primary, fontWeight: "800" },
+    mpMethods: { flexDirection: "row", gap: 20, marginBottom: 18 },
+    mpMethod: { flexDirection: "row", alignItems: "center", gap: 8 },
+    mpMethodLbl: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
+    mpHintRow: { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 14, marginBottom: 16 },
+    mpHint: { flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
+    mpLabel: { fontSize: 15, fontWeight: "800", color: colors.textPrimary, marginBottom: 12 },
+    slipBox: { borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.border, borderRadius: radius.lg, paddingVertical: 24, alignItems: "center", gap: 16, marginBottom: 16 },
+    slipBtnRow: { flexDirection: "row", gap: 12 },
+    slipBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
+    slipBtnTxt: { color: colors.primary, fontWeight: "700", fontSize: 14 },
+    slipPreviewWrap: { marginBottom: 16, borderRadius: radius.lg, overflow: "hidden", position: "relative" },
+    slipPreview: { width: "100%", height: 180, borderRadius: radius.lg },
+    slipRemove: { position: "absolute", top: 8, right: 8, backgroundColor: "#fff", borderRadius: 12 },
+    mpPowered: { textAlign: "center", color: colors.textMuted, fontSize: 11, fontWeight: "700", letterSpacing: 1, marginTop: 14 },
     confirmBtn: {
       flexDirection: "row",
       gap: 8,
