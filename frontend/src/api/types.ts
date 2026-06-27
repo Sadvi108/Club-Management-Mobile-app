@@ -35,7 +35,13 @@ export type AuthUser = {
   accessToken: string;
   gender?: string;
   handPhone?: string;
+  address1?: string;
+  address2?: string;
+  address3?: string;
+  address4?: string;
+  postalCode?: string;
   currentGrade?: string;
+  profilePic?: string; // student display photo (Files/DP/...); distinct from clubPic
   clubPic?: string;
   clubName?: string;
   status?: string;

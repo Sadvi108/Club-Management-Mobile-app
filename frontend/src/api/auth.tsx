@@ -24,6 +24,7 @@ type AuthCtx = {
   loginStudent: (c: StudentCreds) => Promise<void>;
   loginInstructor: (c: InstructorCreds) => Promise<void>;
   logout: () => void;
+  updateUser: (patch: Partial<AuthUser>) => void; // merge edited profile fields into the session
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -102,6 +103,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         persist(null);
         setSession(null);
       },
+      updateUser: (patch) =>
+        setSession((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, user: { ...prev.user, ...patch } };
+          persist(next);
+          return next;
+        }),
     }),
     [ready, session]
   );

@@ -18,7 +18,6 @@ export default function Profile() {
   const info = useApi(() => api.myInfo(), []);
   const siblings = useApi(() => api.mySiblings(), []);
 
-  const [qrError, setQrError] = useState(false);
   const [studentModal, setStudentModal] = useState(false);
   const [clubModal, setClubModal] = useState(false);
 
@@ -47,14 +46,14 @@ export default function Profile() {
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerBg}>
             <View style={styles.topRow}>
               <Text style={styles.topTitle}>My Profile</Text>
-              <TouchableOpacity style={styles.topIcon} testID="profile-edit" onPress={() => router.push("/student-details")}>
+              <TouchableOpacity style={styles.topIcon} testID="profile-edit" onPress={() => router.push("/edit-profile")}>
                 <Ionicons name="pencil" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
             <View style={styles.profileTop}>
               <View style={styles.avatarRing}>
-                {user?.clubPic && !qrError ? (
-                  <Image source={{ uri: user.clubPic }} style={styles.avatar} />
+                {user?.profilePic ? (
+                  <Image source={{ uri: user.profilePic }} style={styles.avatar} />
                 ) : (
                   <View style={[styles.avatar, styles.avatarEmpty]}>
                     <Ionicons name="person" size={44} color="rgba(255,255,255,0.5)" />

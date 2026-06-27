@@ -34,6 +34,13 @@ export const api = {
 
   // ── Profile ──
   myInfo: () => http.get<MyInfo>("/Profile/MyInfo"),
+  // Edit profile + optional photo. Multipart (PascalCase fields). Returns the new DP url if a photo was sent.
+  updateProfile: (fields: Record<string, string | number>, photo?: any) => {
+    const form = new FormData();
+    Object.entries(fields).forEach(([k, v]) => form.append(k, v == null ? "" : String(v)));
+    if (photo) form.append("files", photo);
+    return http.postForm<string | null>("/Profile/UpdateProfile", form);
+  },
   studentAddtnlInfo: () => http.get<StudentAddtnlInfo>("/Profile/StudentAddtnlInfo"),
   myClubStats: () => http.get<IdValueText[]>("/Profile/MyClubStats"),
   myNotifications: () => http.get<AppNotification[]>("/Profile/MyNotifications"),
