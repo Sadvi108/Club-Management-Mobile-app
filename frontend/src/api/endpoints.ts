@@ -91,7 +91,9 @@ export const api = {
   },
   paymentCompleted: (status: string) =>
     http.get<any>(`/Payment/Completed/${encodeURIComponent(status)}`),
-  // Public PDF URL (no auth). paymentId for paid receipt, or 0 with invoiceId for an unpaid invoice.
+  // Public PDF URL (no auth). The id from Outstanding/Reports.Receipts is an INVOICE id and goes
+  // in the invoiceId slot (paymentId=0) — that renders the full populated receipt/invoice. Passing
+  // it as paymentId returns a BLANK template.
   receiptPdfUrl: (clubId: number, paymentId: number, invoiceId: number) =>
     `${require("./config").API_BASE_URL}/Utilities/ReceiptAsPDF/${clubId}/${paymentId}/${invoiceId}`,
 

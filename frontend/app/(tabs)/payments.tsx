@@ -341,7 +341,9 @@ export default function Payments() {
                     onPress={() =>
                       openPdf(
                         k,
-                        api.receiptPdfUrl(user!.clubId, p.id, 0),
+                        // p.id is an invoiceId (Reports/Receipts = one row per invoice line).
+                        // ReceiptAsPDF renders the full receipt via the invoiceId slot, not paymentId.
+                        api.receiptPdfUrl(user!.clubId, 0, p.id),
                         `RECEIPT_${p.receiptNo}.pdf`
                       )
                     }
