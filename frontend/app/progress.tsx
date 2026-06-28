@@ -44,7 +44,7 @@ export default function Progress() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="progress-back">
+          <TouchableOpacity style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => router.back()} testID="progress-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Progress</Text>
@@ -56,8 +56,8 @@ export default function Progress() {
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.fitCard, shadow.strong]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.fitLbl}>CURRENT GRADE</Text>
-            <Text style={styles.fitNum}>{beltName}</Text>
-            <Text style={styles.fitMsg}>{grade}</Text>
+            <Text style={styles.fitNum} numberOfLines={1}>{beltName}</Text>
+            <Text style={styles.fitMsg} numberOfLines={2}>{grade}</Text>
           </View>
           <View style={styles.fitIconWrap}><Ionicons name="ribbon" size={48} color="rgba(255,255,255,0.9)" /></View>
         </LinearGradient>
@@ -109,8 +109,8 @@ export default function Progress() {
           <View key={i} style={styles.commentCard}>
             <View style={styles.quoteIcon}><Ionicons name="school" size={16} color={colors.primary} /></View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.commentTxt}>{g.examName || g.name || g.gradeName || g.centerName || "Grading"}</Text>
-              <Text style={styles.commentMeta}>{g.examDate || g.gradeDate || g.date || g.scheduleDate || ""}</Text>
+              <Text style={styles.commentTxt} numberOfLines={2}>{g.examName || g.name || g.gradeName || g.centerName || "Grading"}</Text>
+              <Text style={styles.commentMeta} numberOfLines={1}>{g.examDate || g.gradeDate || g.date || g.scheduleDate || ""}</Text>
             </View>
           </View>
         ))}

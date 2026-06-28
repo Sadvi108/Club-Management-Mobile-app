@@ -55,12 +55,12 @@ export default function Home() {
                   <Text style={styles.avatarInitialsTxt}>{initialsOf(user?.name)}</Text>
                 </View>
               )}
-              <View>
+              <View style={styles.nameCol}>
                 <Text style={styles.hi}>Hello,</Text>
-                <Text style={styles.name} testID="home-student-name">{user?.name?.trim() || "Member"}</Text>
+                <Text style={styles.name} testID="home-student-name" numberOfLines={1}>{user?.name?.trim() || "Member"}</Text>
                 <View style={styles.badgeRow}>
                   <Ionicons name="shield-checkmark" size={12} color="#FFF7ED" />
-                  <Text style={styles.badgeTxt}>{user?.clubName || user?.status || "Member"}</Text>
+                  <Text style={styles.badgeTxt} numberOfLines={1}>{user?.clubName || user?.status || "Member"}</Text>
                 </View>
               </View>
             </View>
@@ -174,7 +174,8 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     root: { flex: 1, backgroundColor: colors.background },
     headerBg: { paddingHorizontal: spacing.xl, paddingBottom: 30, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
     headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },
-    userRow: { flexDirection: "row", gap: 12, alignItems: "center" },
+    userRow: { flexDirection: "row", gap: 12, alignItems: "center", flex: 1, marginRight: 12 },
+    nameCol: { flex: 1 },
     avatar: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: "rgba(255,255,255,0.6)", backgroundColor: "#fff" },
     avatarInitials: { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.25)" },
     avatarInitialsTxt: { color: "#fff", fontWeight: "800", fontSize: 18 },
@@ -217,8 +218,8 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     checkInBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.surfaceAlt, borderRadius: radius.sm },
     checkInTxt: { color: colors.primary, fontWeight: "700", fontSize: 11 },
 
-    grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: spacing.lg, gap: 12 },
-    gridCard: { width: "22.5%", backgroundColor: colors.surface, borderRadius: radius.lg, padding: 12, alignItems: "center", ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: spacing.lg, justifyContent: "space-between", rowGap: 14 },
+    gridCard: { width: "23%", backgroundColor: colors.surface, borderRadius: radius.lg, paddingVertical: 12, paddingHorizontal: 6, alignItems: "center", ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
     gridIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", marginBottom: 6 },
     gridLbl: { fontSize: 10, color: colors.textPrimary, fontWeight: "600", textAlign: "center", lineHeight: 13 },
 

@@ -125,10 +125,10 @@ export default function Login() {
               <Image source={{ uri: LOGO_URL }} style={styles.logoImg} />
               <Text style={styles.brand}>D-CLIX</Text>
               <View style={{ flex: 1 }} />
-              <TouchableOpacity style={styles.themeBtn} onPress={toggle} testID="login-theme-toggle">
+              <TouchableOpacity style={styles.themeBtn} onPress={toggle} testID="login-theme-toggle" hitSlop={8}>
                 <Ionicons name={mode === "dark" ? "sunny" : "moon"} size={16} color={colors.primary} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.helpBtn} testID="login-help">
+              <TouchableOpacity style={styles.helpBtn} testID="login-help" hitSlop={8}>
                 <Ionicons name="help-circle-outline" size={14} color={colors.textSecondary} />
                 <Text style={styles.helpTxt}>Help</Text>
               </TouchableOpacity>
@@ -194,7 +194,7 @@ export default function Login() {
                   <Text style={styles.fieldLabel}>Branch</Text>
                   <TouchableOpacity style={styles.inputLine} onPress={openBranchPicker} testID="login-branch-picker" activeOpacity={0.7}>
                     <Ionicons name="git-branch" size={18} color={branch ? colors.primary : colors.textMuted} />
-                    <Text style={[styles.input, { color: branch ? colors.textPrimary : colors.textMuted, paddingVertical: Platform.OS === "ios" ? 0 : 8 }]}>
+                    <Text numberOfLines={1} style={[styles.input, { color: branch ? colors.textPrimary : colors.textMuted, paddingVertical: Platform.OS === "ios" ? 0 : 8 }]}>
                       {branch ? branch.text : "Select branch"}
                     </Text>
                     <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
@@ -323,7 +323,7 @@ export default function Login() {
                       size={20}
                       color={branch?.id === item.id ? colors.primary : colors.textMuted}
                     />
-                    <Text style={styles.branchTxt}>{item.text}</Text>
+                    <Text numberOfLines={1} style={styles.branchTxt}>{item.text}</Text>
                   </TouchableOpacity>
                 )}
               />

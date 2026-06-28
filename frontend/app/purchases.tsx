@@ -49,10 +49,10 @@ export default function Purchases() {
             <View style={styles.cardIcon}><Ionicons name="bag-handle" size={18} color={colors.primary} /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle} numberOfLines={1}>{p.itemName || p.productName || p.name || p.description || p.invoiceDescription || "Purchase"}</Text>
-              <Text style={styles.cardMeta}>{fmtDate(p.requestDate || p.date || p.invoiceDate)} {p.status || p.paymentStatus ? `· ${p.status || p.paymentStatus}` : ""}</Text>
+              <Text style={styles.cardMeta} numberOfLines={1}>{fmtDate(p.requestDate || p.date || p.invoiceDate)} {p.status || p.paymentStatus ? `· ${p.status || p.paymentStatus}` : ""}</Text>
             </View>
             {(p.amount != null || p.dueAmount != null || p.totalAmount != null) && (
-              <Text style={styles.cardAmt}>RM {(p.amount ?? p.totalAmount ?? p.dueAmount ?? 0).toLocaleString()}</Text>
+              <Text style={styles.cardAmt} numberOfLines={1}>RM {(p.amount ?? p.totalAmount ?? p.dueAmount ?? 0).toLocaleString()}</Text>
             )}
           </View>
         ))}
@@ -71,10 +71,10 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     empty: { alignItems: "center", paddingVertical: 60, gap: 6 },
     emptyTxt: { ...font.h4, color: colors.textPrimary, marginTop: 10 },
     emptySub: { fontSize: 13, color: colors.textSecondary },
-    card: { flexDirection: "row", gap: 12, alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, marginBottom: 10, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    card: { flexDirection: "row", gap: spacing.md, alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
     cardIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
     cardTitle: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
     cardMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
-    cardAmt: { fontSize: 14, fontWeight: "800", color: colors.textPrimary },
+    cardAmt: { fontSize: 14, fontWeight: "800", color: colors.textPrimary, marginLeft: spacing.sm, flexShrink: 0 },
   });
 }

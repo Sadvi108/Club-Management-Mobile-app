@@ -42,7 +42,7 @@ export default function StudentDetails() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="sd-back">
+          <TouchableOpacity style={styles.backBtn} hitSlop={8} onPress={() => router.back()} testID="sd-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Student Details</Text>
@@ -58,8 +58,8 @@ export default function StudentDetails() {
                 <View style={styles.row}>
                   <View style={styles.iconWrap}><Ionicons name={f.icon as any} size={18} color={colors.primary} /></View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.lbl}>{f.label}</Text>
-                    <Text style={styles.val}>{f.value}</Text>
+                    <Text style={styles.lbl} numberOfLines={1}>{f.label}</Text>
+                    <Text style={styles.val} numberOfLines={2}>{f.value}</Text>
                   </View>
                 </View>
                 {i < fields.length - 1 && <View style={styles.divider} />}

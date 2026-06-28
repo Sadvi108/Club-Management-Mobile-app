@@ -32,7 +32,7 @@ export default function More() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="more-back">
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="more-back" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>All Features</Text>
@@ -66,7 +66,7 @@ export default function More() {
 function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: 10 },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingVertical: 10 },
     backBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
     title: { ...font.h3, color: colors.textPrimary },
     sub: { color: colors.textSecondary, fontSize: 13, marginBottom: 16 },

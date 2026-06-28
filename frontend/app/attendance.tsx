@@ -57,8 +57,8 @@ export default function Attendance() {
             </View>
           </View>
           <View style={styles.heroRight}>
-            <Text style={styles.heroTitle}>{percentage >= 80 ? "Great Discipline!" : "Keep Going!"}</Text>
-            <Text style={styles.heroSub}>Keep it above 80% to qualify for events</Text>
+            <Text style={styles.heroTitle} numberOfLines={1}>{percentage >= 80 ? "Great Discipline!" : "Keep Going!"}</Text>
+            <Text style={styles.heroSub} numberOfLines={2}>Keep it above 80% to qualify for events</Text>
             <View style={styles.miniStats}>
               <View style={styles.mStat}><Text style={styles.mNum}>{present}</Text><Text style={styles.mLbl}>Present</Text></View>
               <View style={styles.mStat}><Text style={styles.mNum}>{missed}</Text><Text style={styles.mLbl}>Absent</Text></View>
@@ -71,8 +71,8 @@ export default function Attendance() {
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.qrInner, shadow.strong]}>
             <Ionicons name="qr-code" size={22} color="#fff" />
             <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.qrTitle}>Scan QR to Check In</Text>
-              <Text style={styles.qrSub}>Mark attendance for today&apos;s class</Text>
+              <Text style={styles.qrTitle} numberOfLines={1}>Scan QR to Check In</Text>
+              <Text style={styles.qrSub} numberOfLines={1}>Mark attendance for today&apos;s class</Text>
             </View>
             <Ionicons name="arrow-forward" size={18} color="#fff" />
           </LinearGradient>
@@ -90,10 +90,10 @@ export default function Attendance() {
                 <Ionicons name={ok ? "checkmark-circle" : "close-circle"} size={20} color={ok ? colors.success : colors.danger} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.recTitle}>{r.trainingCenter || r.sCenterName || "Class"}</Text>
-                <Text style={styles.recMeta}>{fmtDate(r.recordedTime)}</Text>
+                <Text style={styles.recTitle} numberOfLines={1}>{r.trainingCenter || r.sCenterName || "Class"}</Text>
+                <Text style={styles.recMeta} numberOfLines={1}>{fmtDate(r.recordedTime)}</Text>
               </View>
-              <Text style={[styles.recStatus, { color: ok ? colors.success : colors.danger }]}>{r.attendanceType || (ok ? "Present" : "Absent")}</Text>
+              <Text style={[styles.recStatus, { color: ok ? colors.success : colors.danger }]} numberOfLines={1}>{r.attendanceType || (ok ? "Present" : "Absent")}</Text>
             </View>
           );
         })}
@@ -105,8 +105,8 @@ export default function Attendance() {
               <View key={i} style={styles.missedCard}>
                 <View style={styles.missedIcon}><Ionicons name="close-circle" size={20} color={colors.danger} /></View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.missedTitle}>{m.trainingCenter || m.sCenterName || "Class"}</Text>
-                  <Text style={styles.missedMeta}>{fmtDate(m.recordedTime)} · {m.attendanceType}</Text>
+                  <Text style={styles.missedTitle} numberOfLines={1}>{m.trainingCenter || m.sCenterName || "Class"}</Text>
+                  <Text style={styles.missedMeta} numberOfLines={1}>{fmtDate(m.recordedTime)} · {m.attendanceType}</Text>
                 </View>
               </View>
             ))}
@@ -120,7 +120,7 @@ export default function Attendance() {
 function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: 10 },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingVertical: 10 },
     backBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
     title: { ...font.h3, color: colors.textPrimary },
 
@@ -151,7 +151,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     recIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
     recTitle: { fontSize: 13, fontWeight: "700", color: colors.textPrimary },
     recMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
-    recStatus: { fontSize: 12, fontWeight: "700" },
+    recStatus: { fontSize: 12, fontWeight: "700", marginLeft: spacing.sm },
 
     missedCard: { flexDirection: "row", gap: 12, alignItems: "center", backgroundColor: colors.surface, padding: 14, borderRadius: radius.md, marginBottom: 10, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
     missedIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: mode === "dark" ? "#3F1212" : "#FEE2E2", alignItems: "center", justifyContent: "center" },

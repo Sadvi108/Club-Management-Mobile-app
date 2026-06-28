@@ -46,7 +46,7 @@ export default function Profile() {
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerBg}>
             <View style={styles.topRow}>
               <Text style={styles.topTitle}>My Profile</Text>
-              <TouchableOpacity style={styles.topIcon} testID="profile-edit" onPress={() => router.push("/edit-profile")}>
+              <TouchableOpacity style={styles.topIcon} testID="profile-edit" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => router.push("/edit-profile")}>
                 <Ionicons name="pencil" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
@@ -60,11 +60,11 @@ export default function Profile() {
                   </View>
                 )}
               </View>
-              <Text style={styles.name}>{user?.name?.trim() || "Member"}</Text>
-              <Text style={styles.id}>{user?.code || user?.icNo}</Text>
+              <Text style={styles.name} numberOfLines={1}>{user?.name?.trim() || "Member"}</Text>
+              <Text style={styles.id} numberOfLines={1}>{user?.code || user?.icNo}</Text>
               <View style={styles.memberRow}>
                 <Ionicons name="shield-checkmark" size={14} color="#FFF7ED" />
-                <Text style={styles.memberTxt}>{clubName}</Text>
+                <Text style={styles.memberTxt} numberOfLines={1}>{clubName}</Text>
               </View>
             </View>
           </LinearGradient>
@@ -77,9 +77,9 @@ export default function Profile() {
               <Image source={{ uri: LOGO_URL }} style={styles.vidLogo} />
               <Text style={styles.vidBrand}>D-CLIX</Text>
             </View>
-            <Text style={styles.vidName}>{user?.name?.trim()}</Text>
-            <Text style={styles.vidLbl}>· {grade}</Text>
-            <Text style={styles.vidId}>{user?.code || user?.icNo}</Text>
+            <Text style={styles.vidName} numberOfLines={1}>{user?.name?.trim()}</Text>
+            <Text style={styles.vidLbl} numberOfLines={1}>· {grade}</Text>
+            <Text style={styles.vidId} numberOfLines={1}>{user?.code || user?.icNo}</Text>
           </View>
           <View style={styles.vidQR}>
             {qrUrl ? (
@@ -194,7 +194,7 @@ function PickerModal({ visible, title, onClose, items, styles, colors }: any) {
           {items.map((it: any) => (
             <View key={it.id} style={styles.pickRow}>
               <Ionicons name={it.active ? "radio-button-on" : "radio-button-off"} size={20} color={it.active ? colors.primary : colors.textMuted} />
-              <Text style={styles.pickLbl}>{it.label}</Text>
+              <Text style={styles.pickLbl} numberOfLines={1}>{it.label}</Text>
               {it.active && <Text style={styles.pickActive}>Active</Text>}
             </View>
           ))}
@@ -212,7 +212,7 @@ function Row({ icon, label, value, colors }: { icon: string; label: string; valu
       </View>
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: "600" }}>{label}</Text>
-        <Text style={{ fontSize: 15, color: colors.textPrimary, fontWeight: "700", marginTop: 1 }}>{value}</Text>
+        <Text style={{ fontSize: 15, color: colors.textPrimary, fontWeight: "700", marginTop: 1 }} numberOfLines={1}>{value}</Text>
       </View>
     </View>
   );
@@ -231,8 +231,8 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     avatarEmpty: { alignItems: "center", justifyContent: "center" },
     name: { color: "#fff", fontSize: 24, fontWeight: "800", marginTop: 14, textAlign: "center", paddingHorizontal: 10 },
     id: { color: "rgba(255,255,255,0.9)", fontSize: 13, marginTop: 4 },
-    memberRow: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 10, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16 },
-    memberTxt: { color: "#FFF7ED", fontSize: 12, fontWeight: "700" },
+    memberRow: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 10, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, maxWidth: "90%" },
+    memberTxt: { color: "#FFF7ED", fontSize: 12, fontWeight: "700", flexShrink: 1 },
 
     virtualId: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -34, borderRadius: radius.xl, padding: 18, ...shadow.card, overflow: "hidden", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border, alignItems: "center" },
     vidLeft: { flex: 1 },

@@ -37,10 +37,10 @@ export default function QRScan() {
       <LinearGradient colors={["#000000", "#0A0A0B", "#1F1610"]} style={StyleSheet.absoluteFillObject} />
 
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.close} onPress={() => router.back()} testID="qr-close">
+        <TouchableOpacity style={styles.close} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => router.back()} testID="qr-close">
           <Ionicons name="close" size={22} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.title}>Scan to Check-in</Text>
+        <Text style={styles.title} numberOfLines={1}>Scan to Check-in</Text>
         <View style={styles.close} />
       </View>
 
@@ -64,7 +64,7 @@ export default function QRScan() {
           {scanned && (
             <View style={styles.successBubble}>
               <Ionicons name="checkmark-circle" size={70} color={colors.success} />
-              <Text style={styles.successTxt}>{info.data?.tCenterName || "Training Center"}</Text>
+              <Text style={styles.successTxt} numberOfLines={1}>{info.data?.tCenterName || "Training Center"}</Text>
               <Text style={styles.successMeta}>{now}</Text>
             </View>
           )}
@@ -107,7 +107,7 @@ function createStyles(colors: any) {
     br: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 12 },
     laser: { position: "absolute", top: 10, width: 220 },
     successBubble: { alignItems: "center" },
-    successTxt: { color: "#fff", fontSize: 16, fontWeight: "800", marginTop: 12 },
+    successTxt: { color: "#fff", fontSize: 16, fontWeight: "800", marginTop: 12, maxWidth: 220, textAlign: "center" },
     successMeta: { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 4 },
     hint: { color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 26, textAlign: "center" },
     doneBtnWrap: { marginTop: 28 },

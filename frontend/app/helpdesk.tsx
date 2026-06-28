@@ -39,7 +39,7 @@ export default function HelpDesk() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="hd-back">
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} testID="hd-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Help Desk</Text>
@@ -51,8 +51,8 @@ export default function HelpDesk() {
           <View style={styles.banner}>
             <View style={styles.bannerIcon}><Ionicons name="headset" size={24} color={colors.primary} /></View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.bannerTitle}>{user?.clubName || "Club"} Help Desk</Text>
-              <Text style={styles.bannerSub}>Send a message and the club will get back to you.</Text>
+              <Text style={styles.bannerTitle} numberOfLines={1}>{user?.clubName || "Club"} Help Desk</Text>
+              <Text style={styles.bannerSub} numberOfLines={2}>Send a message and the club will get back to you.</Text>
             </View>
           </View>
 
@@ -96,7 +96,7 @@ export default function HelpDesk() {
 function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: 10 },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingVertical: 10 },
     backBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
     title: { ...font.h3, color: colors.textPrimary },
     banner: { flexDirection: "row", gap: 14, alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.xl, padding: 16, marginBottom: 20, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },

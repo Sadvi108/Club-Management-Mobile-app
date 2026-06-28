@@ -107,7 +107,7 @@ export default function EditProfile() {
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="ep-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.title}>Edit Profile</Text>
+          <Text style={styles.title} numberOfLines={1}>Edit Profile</Text>
           <View style={styles.backBtn} />
         </View>
       </SafeAreaView>
@@ -218,9 +218,9 @@ function Field({ label, value, onChange, icon, styles, colors, multiline, keyboa
 
 function ReadRow({ label, value, colors }: any) {
   return (
-    <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 8 }}>
-      <Text style={{ fontSize: 13, color: colors.textSecondary }}>{label}</Text>
-      <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: "600" }}>{value || "—"}</Text>
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8, gap: spacing.md }}>
+      <Text style={{ fontSize: 13, color: colors.textSecondary }} numberOfLines={1}>{label}</Text>
+      <Text style={{ flex: 1, fontSize: 13, color: colors.textPrimary, fontWeight: "600", textAlign: "right" }} numberOfLines={1}>{value || "—"}</Text>
     </View>
   );
 }
@@ -228,7 +228,7 @@ function ReadRow({ label, value, colors }: any) {
 function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
-    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: 10 },
+    header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xl, paddingVertical: 10 },
     backBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
     title: { ...font.h3, color: colors.textPrimary },
 

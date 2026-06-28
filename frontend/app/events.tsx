@@ -35,7 +35,7 @@ export default function Events() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="events-back">
+          <TouchableOpacity style={styles.backBtn} hitSlop={8} onPress={() => router.back()} testID="events-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Events & Offers</Text>
@@ -65,7 +65,7 @@ export default function Events() {
                     <View style={styles.catPill}><Text style={styles.catTxt}>{(e.code || "OFFER").toUpperCase()}</Text></View>
                   </ImageBackground>
                   <View style={styles.eventBody}>
-                    <Text style={styles.eventTitle}>{e.name}</Text>
+                    <Text style={styles.eventTitle} numberOfLines={2}>{e.name}</Text>
                     {!!e.description && <Text style={styles.eventDesc} numberOfLines={3}>{e.description.replace(/\s+/g, " ").trim()}</Text>}
                     <View style={styles.eventMetaRow}>
                       <Ionicons name="calendar-outline" size={14} color={colors.textSecondary} />
@@ -86,7 +86,7 @@ export default function Events() {
               <View key={i} style={styles.tourneyCard}>
                 <View style={styles.tourneyHead}>
                   <Ionicons name="trophy" size={20} color={colors.warning} />
-                  <Text style={styles.tourneyName}>{t.name?.trim() || "Tournament Summary"}</Text>
+                  <Text style={styles.tourneyName} numberOfLines={1}>{t.name?.trim() || "Tournament Summary"}</Text>
                   <View style={styles.genderPill}><Text style={styles.genderTxt}>{t.gender}</Text></View>
                 </View>
                 <View style={styles.medalRow}>
@@ -142,9 +142,9 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
 
     tourneyCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: 16, marginBottom: 14, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
     tourneyHead: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
-    tourneyName: { flex: 1, fontSize: 15, fontWeight: "800", color: colors.textPrimary },
+    tourneyName: { flex: 1, fontSize: 15, fontWeight: "800", color: colors.textPrimary, marginRight: spacing.xs },
     genderPill: { backgroundColor: colors.surfaceAlt, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
     genderTxt: { fontSize: 10, fontWeight: "700", color: colors.textSecondary },
-    medalRow: { flexDirection: "row" },
+    medalRow: { flexDirection: "row", gap: spacing.xs },
   });
 }

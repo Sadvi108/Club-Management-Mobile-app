@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { radius, spacing, font, useTheme, LOGO_URL } from "../../src/theme";
 import { api, defaultRange } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
@@ -14,6 +15,7 @@ const SESSION_COLORS = ["#4F46E5", "#F59E0B", "#10B981", "#EF4444", "#9333EA", "
 export default function Schedule() {
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
+  const tabBarHeight = useBottomTabBarHeight(); // offset fixed Book button above the tab bar
 
   // 10 days starting today
   const days = useMemo(() => {
@@ -96,10 +98,10 @@ export default function Schedule() {
                 </View>
                 <View style={[styles.verticalBar, { backgroundColor: SESSION_COLORS[i % SESSION_COLORS.length] }]} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.sessionTitle}>{c.tCenterName || "Training"}</Text>
+                  <Text style={styles.sessionTitle} numberOfLines={1}>{c.tCenterName || "Training"}</Text>
                   <View style={styles.metaRow}>
                     <Ionicons name="person-outline" size={12} color={colors.textSecondary} />
-                    <Text style={styles.metaTxt}>{c.instructorName || "Instructor"}</Text>
+                    <Text style={styles.metaTxt} numberOfLines={1}>{c.instructorName || "Instructor"}</Text>
                     {!!c.currentGrade && (
                       <>
                         <Ionicons name="ribbon-outline" size={12} color={colors.textSecondary} style={{ marginLeft: 6 }} />
@@ -114,7 +116,7 @@ export default function Schedule() {
         )}
       </ScrollView>
 
-      <TouchableOpacity style={styles.bookBtn} testID="schedule-book" onPress={() => Alert.alert("Book a class", "Class booking is coming soon.")} activeOpacity={0.9}>
+      <TouchableOpacity style={[styles.bookBtn, { bottom: tabBarHeight + spacing.md }]} testID="schedule-book" onPress={() => Alert.alert("Book a class", "Class booking is coming soon.")} activeOpacity={0.9}>
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.bookInner, shadow.strong]}>
           <Ionicons name="add" size={20} color="#fff" />
           <Text style={styles.bookTxt}>Book a class</Text>
@@ -156,7 +158,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     metaRow: { flexDirection: "row", gap: 4, alignItems: "center", marginTop: 6, flexWrap: "wrap" },
     metaTxt: { fontSize: 11, color: colors.textSecondary, fontWeight: "500" },
 
-    bookBtn: { position: "absolute", right: spacing.xl, bottom: 90 },
+    bookBtn: { position: "absolute", right: spacing.xl },
     bookInner: { flexDirection: "row", gap: 8, alignItems: "center", paddingHorizontal: 22, paddingVertical: 15, borderRadius: radius.full },
     bookTxt: { color: "#fff", fontWeight: "800", fontSize: 15 },
   });

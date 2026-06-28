@@ -38,9 +38,9 @@ export default function Training() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>My Training</Text>
-            <Text style={styles.sub}>{info.data?.tCenterName || user?.clubName || "Keep pushing!"}</Text>
+          <View style={styles.headerLeft}>
+            <Text style={styles.title} numberOfLines={1}>My Training</Text>
+            <Text style={styles.sub} numberOfLines={1}>{info.data?.tCenterName || user?.clubName || "Keep pushing!"}</Text>
           </View>
           <TouchableOpacity style={styles.filterBtn} testID="training-filter-btn" onPress={() => att.reload()}>
             <Ionicons name="refresh" size={20} color={colors.primary} />
@@ -75,18 +75,18 @@ export default function Training() {
           <View style={styles.programCard} testID="program-current">
             <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.programBanner}>
               <Ionicons name="medal" size={40} color="#FFF7ED" />
-              <Text style={styles.bannerTxt}>{user?.clubName || "Martial Arts"}</Text>
+              <Text style={styles.bannerTxt} numberOfLines={1}>{user?.clubName || "Martial Arts"}</Text>
             </LinearGradient>
             <View style={styles.programBody}>
               <View style={styles.programTop}>
-                <Text style={styles.programSport}>{info.data?.tCenterName || "Training"}</Text>
+                <Text style={styles.programSport} numberOfLines={1}>{info.data?.tCenterName || "Training"}</Text>
                 <View style={[styles.levelPill, { backgroundColor: accent + (mode === "dark" ? "33" : "18") }]}>
-                  <Text style={[styles.levelTxt, { color: accent }]}>{beltName}</Text>
+                  <Text style={[styles.levelTxt, { color: accent }]} numberOfLines={1}>{beltName}</Text>
                 </View>
               </View>
               <View style={styles.trainerRow}>
                 <Ionicons name="person-circle-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.trainerTxt}>{info.data?.instructorName || "Instructor"}</Text>
+                <Text style={styles.trainerTxt} numberOfLines={1}>{info.data?.instructorName || "Instructor"}</Text>
               </View>
               <View style={styles.progressHead}>
                 <Text style={styles.progLbl}>Current grade: {grade}</Text>
@@ -114,6 +114,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: 14 },
+    headerLeft: { flex: 1, marginRight: spacing.md },
     title: { ...font.h1, color: colors.textPrimary, fontSize: 26 },
     sub: { color: colors.textSecondary, fontSize: 12, marginTop: 2 },
     filterBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
@@ -134,12 +135,12 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     programBanner: { height: 120, alignItems: "center", justifyContent: "center", gap: 8 },
     bannerTxt: { color: "#fff", fontWeight: "800", fontSize: 16 },
     programBody: { padding: 16 },
-    programTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    programTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.sm },
     programSport: { fontSize: 18, fontWeight: "800", color: colors.textPrimary, flex: 1 },
-    levelPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+    levelPill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, flexShrink: 0 },
     levelTxt: { fontSize: 11, fontWeight: "700" },
     trainerRow: { flexDirection: "row", gap: 4, alignItems: "center", marginTop: 6 },
-    trainerTxt: { color: colors.textSecondary, fontSize: 13, fontWeight: "500" },
+    trainerTxt: { color: colors.textSecondary, fontSize: 13, fontWeight: "500", flex: 1 },
     progressHead: { flexDirection: "row", justifyContent: "space-between", marginTop: 14, marginBottom: 6 },
     progLbl: { color: colors.textSecondary, fontSize: 11, fontWeight: "600" },
     progVal: { fontSize: 13, fontWeight: "800" },

@@ -164,6 +164,7 @@ export default function Payments() {
           <Text style={styles.title}>Fees & Payments</Text>
           <TouchableOpacity
             style={styles.iconBtn}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={() => { dues.reload(); history.reload(); }}
           >
             <Ionicons name="refresh-outline" size={20} color={colors.primary} />
@@ -261,7 +262,7 @@ export default function Payments() {
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <View style={styles.invTopRow}>
                         <Text style={styles.invNo}>#{inv.invoiceId}</Text>
-                        <Text style={styles.invType}>{inv.transactionType}</Text>
+                        <Text style={styles.invType} numberOfLines={1}>{inv.transactionType}</Text>
                       </View>
                       <Text style={styles.invDesc} numberOfLines={1}>
                         {inv.invoiceDescription || inv.period}
@@ -270,7 +271,7 @@ export default function Payments() {
                         {inv.period} · {fmtDate(inv.invoiceDate)} · {inv.paymentStatus}
                       </Text>
                     </View>
-                    <Text style={styles.invAmt}>RM {(inv.dueAmount || 0).toLocaleString()}</Text>
+                    <Text style={styles.invAmt} numberOfLines={1}>RM {(inv.dueAmount || 0).toLocaleString()}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.invDownload}
@@ -332,7 +333,7 @@ export default function Payments() {
                         {fmtDate(p.receiptDate)} · {p.tcName} · #{p.receiptNo}
                       </Text>
                     </View>
-                    <Text style={styles.invAmt}>RM {(p.receiptAmount || 0).toLocaleString()}</Text>
+                    <Text style={styles.invAmt} numberOfLines={1}>RM {(p.receiptAmount || 0).toLocaleString()}</Text>
                   </View>
                   <TouchableOpacity
                     style={styles.invDownload}
@@ -396,7 +397,7 @@ export default function Payments() {
             <View style={styles.modalHandle} />
             <View style={styles.mpHead}>
               <Text style={styles.modalTitle}>Make Payment</Text>
-              <TouchableOpacity onPress={() => !paying && setSheet(false)} style={styles.mpClose} testID="pay-close">
+              <TouchableOpacity onPress={() => !paying && setSheet(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.mpClose} testID="pay-close">
                 <Ionicons name="close" size={20} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
@@ -434,7 +435,7 @@ export default function Payments() {
                 {slip ? (
                   <View style={styles.slipPreviewWrap}>
                     <Image source={{ uri: slip.uri }} style={styles.slipPreview} resizeMode="cover" />
-                    <TouchableOpacity style={styles.slipRemove} onPress={() => setSlip(null)} testID="slip-remove">
+                    <TouchableOpacity style={styles.slipRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => setSlip(null)} testID="slip-remove">
                       <Ionicons name="close-circle" size={24} color={colors.danger} />
                     </TouchableOpacity>
                   </View>
@@ -546,11 +547,11 @@ function PrepaySegment({
 
       {/* Year selector */}
       <View style={styles.tpYearRow}>
-        <TouchableOpacity disabled={year <= thisYear} onPress={() => setYear((y) => y - 1)} style={styles.calNav} testID="prepay-year-prev">
+        <TouchableOpacity disabled={year <= thisYear} onPress={() => setYear((y) => y - 1)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} style={styles.calNav} testID="prepay-year-prev">
           <Ionicons name="chevron-back" size={18} color={year <= thisYear ? colors.textMuted : colors.primary} />
         </TouchableOpacity>
         <Text style={styles.tpYear}>{year}</Text>
-        <TouchableOpacity onPress={() => setYear((y) => y + 1)} style={styles.calNav} testID="prepay-year-next">
+        <TouchableOpacity onPress={() => setYear((y) => y + 1)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }} style={styles.calNav} testID="prepay-year-next">
           <Ionicons name="chevron-forward" size={18} color={colors.primary} />
         </TouchableOpacity>
       </View>
@@ -593,7 +594,7 @@ function PrepaySegment({
         return (
           <TouchableOpacity key={a.id} onPress={() => toggleAcct(a.id)} style={styles.tpSibRow} testID={`prepay-acct-${a.id}`} activeOpacity={0.7}>
             <Ionicons name={on ? "checkmark-circle" : "ellipse-outline"} size={24} color={on ? colors.success : colors.textMuted} />
-            <Text style={styles.tpSibName}>{a.name.trim()}</Text>
+            <Text style={styles.tpSibName} numberOfLines={1}>{a.name.trim()}</Text>
           </TouchableOpacity>
         );
       })}
