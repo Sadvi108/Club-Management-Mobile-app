@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../src/theme";
+import { safeBack } from "../src/ui/dialogs";
 
 // Full quick-access menu — every section of the app in one place.
 const ALL_OPTIONS: { id: string; label: string; icon: string; color: string; route: string }[] = [
@@ -32,7 +33,7 @@ export default function More() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="more-back" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => safeBack(router)} testID="more-back" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>All Features</Text>

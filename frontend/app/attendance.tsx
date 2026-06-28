@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../src/theme";
+import { safeBack } from "../src/ui/dialogs";
 import { api, defaultRange } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
 
@@ -36,7 +37,7 @@ export default function Attendance() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="att-back">
+          <TouchableOpacity style={styles.backBtn} onPress={() => safeBack(router)} testID="att-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Attendance</Text>

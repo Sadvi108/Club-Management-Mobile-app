@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../src/theme";
+import { notify, safeBack } from "../src/ui/dialogs";
 import { useAuth } from "../src/api/auth";
 import { api } from "../src/api/endpoints";
 
@@ -19,19 +20,18 @@ export default function HelpDesk() {
 
   const submit = async () => {
     if (!message.trim()) {
-      Alert.alert("Help Desk", "Please type your message.");
+      notify("Help Desk", "Please type your message.");
       return;
     }
     setSending(true);
     try {
       await api.send2ClubHelpDesk({ text: subject.trim() || "Help Desk", value: message.trim(), notificationType: "HelpDesk" });
       setSending(false);
-      Alert.alert("Sent", "Your message has been sent to the club help desk.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      await notify("Sent", "Your message has been sent to the club help desk.");
+      safeBack(router);
     } catch (e: any) {
       setSending(false);
-      Alert.alert("Failed", e?.message || "Could not send your message. Try again.");
+      notify("Failed", e?.message || "Could not send your message. Try again.");
     }
   };
 
@@ -39,7 +39,7 @@ export default function HelpDesk() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} testID="hd-back">
+          <TouchableOpacity style={styles.backBtn} onPress={() => safeBack(router)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} testID="hd-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Help Desk</Text>

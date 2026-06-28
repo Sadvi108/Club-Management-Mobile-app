@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Modal,
   Image,
   Platform,
@@ -18,6 +17,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as ImagePicker from "expo-image-picker";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { radius, spacing, font, useTheme } from "../../src/theme";
+import { notify } from "../../src/ui/dialogs";
 import { useAuth } from "../../src/api/auth";
 import { api, defaultRange } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
@@ -82,7 +82,7 @@ export default function Payments() {
     try {
       await downloadPdf(url, filename);
     } catch (e: any) {
-      Alert.alert("Download failed", e?.message || "Could not open the PDF.");
+      notify("Download failed", e?.message || "Could not open the PDF.");
     } finally {
       setBusyPdf(null);
     }
@@ -106,7 +106,7 @@ export default function Payments() {
           ? await ImagePicker.requestCameraPermissionsAsync()
           : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Permission needed", `Allow ${from} access to attach a payment slip.`);
+        notify("Permission needed", `Allow ${from} access to attach a payment slip.`);
         return;
       }
       const res =
@@ -115,13 +115,13 @@ export default function Payments() {
           : await ImagePicker.launchImageLibraryAsync({ quality: 0.6, mediaTypes: ImagePicker.MediaTypeOptions.Images });
       if (!res.canceled && res.assets?.[0]) setSlip(res.assets[0]);
     } catch (e: any) {
-      Alert.alert("Could not pick image", e?.message || "Try again.");
+      notify("Could not pick image", e?.message || "Try again.");
     }
   }
 
   async function proceedToPay() {
     if (invoiceIds.length === 0) {
-      Alert.alert("Select invoices", "Choose at least one invoice to pay.");
+      notify("Select invoices", "Choose at least one invoice to pay.");
       return;
     }
     setPaying(true);
@@ -135,11 +135,11 @@ export default function Payments() {
         cart.clear();
         dues.reload();
         history.reload();
-        Alert.alert("Payment", "Returned from the payment gateway. Refreshing your invoices.");
+        notify("Payment", "Returned from the payment gateway. Refreshing your invoices.");
       } else {
         if (!slip) {
           setPaying(false);
-          Alert.alert("Payment slip required", "Attach your bank-in slip first.");
+          notify("Payment slip required", "Attach your bank-in slip first.");
           return;
         }
         const file = await toUploadFile(slip);
@@ -149,11 +149,11 @@ export default function Payments() {
         cart.clear();
         dues.reload();
         history.reload();
-        Alert.alert("Submitted", "Your payment slip has been submitted for verification.");
+        notify("Submitted", "Your payment slip has been submitted for verification.");
       }
     } catch (e: any) {
       setPaying(false);
-      Alert.alert("Payment failed", e?.message || "Could not complete the payment.");
+      notify("Payment failed", e?.message || "Could not complete the payment.");
     }
   }
 

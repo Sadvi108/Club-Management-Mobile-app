@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image, Alert,
+  View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image,
   ActivityIndicator, KeyboardAvoidingView, Platform, Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,6 +9,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { radius, spacing, font, useTheme } from "../src/theme";
+import { notify, safeBack } from "../src/ui/dialogs";
 import { useAuth } from "../src/api/auth";
 import { api } from "../src/api/endpoints";
 
@@ -50,19 +51,19 @@ export default function EditProfile() {
       const perm = from === "camera"
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) { Alert.alert("Permission needed", `Allow ${from} access to set a photo.`); return; }
+      if (!perm.granted) { notify("Permission needed", `Allow ${from} access to set a photo.`); return; }
       const res = from === "camera"
         ? await ImagePicker.launchCameraAsync({ quality: 0.6, allowsEditing: true, aspect: [1, 1] })
         : await ImagePicker.launchImageLibraryAsync({ quality: 0.6, allowsEditing: true, aspect: [1, 1], mediaTypes: ImagePicker.MediaTypeOptions.Images });
       if (!res.canceled && res.assets?.[0]) setPhoto(res.assets[0]);
     } catch (e: any) {
-      Alert.alert("Could not pick image", e?.message || "Try again.");
+      notify("Could not pick image", e?.message || "Try again.");
     }
   }
 
   async function save() {
     if (!user) return;
-    if (!name.trim()) { Alert.alert("Name required", "Please enter your name."); return; }
+    if (!name.trim()) { notify("Name required", "Please enter your name."); return; }
     setSaving(true);
     try {
       const fields: Record<string, string | number> = {
@@ -93,10 +94,11 @@ export default function EditProfile() {
         ...(dpUrl && typeof dpUrl === "string" ? { profilePic: dpUrl } : {}),
       });
       setSaving(false);
-      Alert.alert("Saved", "Your profile has been updated.", [{ text: "OK", onPress: () => router.back() }]);
+      await notify("Saved", "Your profile has been updated.");
+      safeBack(router);
     } catch (e: any) {
       setSaving(false);
-      Alert.alert("Update failed", e?.message || "Could not save your profile.");
+      notify("Update failed", e?.message || "Could not save your profile.");
     }
   }
 
@@ -104,7 +106,7 @@ export default function EditProfile() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="ep-back">
+          <TouchableOpacity style={styles.backBtn} onPress={() => safeBack(router)} testID="ep-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title} numberOfLines={1}>Edit Profile</Text>

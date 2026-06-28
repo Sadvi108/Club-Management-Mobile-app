@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, Switch, Modal } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Switch, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme, LOGO_URL } from "../../src/theme";
+import { confirmDialog } from "../../src/ui/dialogs";
 import { useAuth } from "../../src/api/auth";
 import { api } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
@@ -25,11 +26,15 @@ export default function Profile() {
   const grade = info.data?.currentGrade || user?.currentGrade || "—";
   const clubName = user?.clubName || user?.clubList?.[0]?.text || "—";
 
-  const onLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Logout", style: "destructive", onPress: () => { logout(); router.replace("/login"); } },
-    ]);
+  const onLogout = async () => {
+    const ok = await confirmDialog("Logout", "Are you sure you want to logout?", {
+      confirmLabel: "Logout",
+      destructive: true,
+    });
+    if (ok) {
+      logout();
+      router.replace("/login");
+    }
   };
 
   const ROWS = [

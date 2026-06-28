@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { radius, spacing, useTheme } from "../src/theme";
+import { safeBack } from "../src/ui/dialogs";
 import { api } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
 import { useAuth } from "../src/api/auth";
@@ -119,7 +120,7 @@ export default function QRScan() {
         <TouchableOpacity
           style={styles.close}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          onPress={() => router.back()}
+          onPress={() => safeBack(router)}
           testID="qr-close"
         >
           <Ionicons name="close" size={22} color="#fff" />
@@ -212,7 +213,7 @@ export default function QRScan() {
 
         {result && (
           <TouchableOpacity
-            onPress={result.ok ? () => router.back() : rescan}
+            onPress={result.ok ? () => safeBack(router) : rescan}
             activeOpacity={0.9}
             style={styles.doneBtnWrap}
             testID={result.ok ? "qr-done" : "qr-rescan"}

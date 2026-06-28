@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../src/theme";
+import { safeBack } from "../src/ui/dialogs";
 import { useAuth } from "../src/api/auth";
 import { api, defaultRange } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
@@ -44,7 +45,7 @@ export default function Progress() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => router.back()} testID="progress-back">
+          <TouchableOpacity style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => safeBack(router)} testID="progress-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Progress</Text>

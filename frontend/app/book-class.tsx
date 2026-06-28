@@ -6,13 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../src/theme";
+import { notify, safeBack } from "../src/ui/dialogs";
 import { api } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
 import { useAuth } from "../src/api/auth";
@@ -130,12 +130,12 @@ export default function BookClass() {
       });
       setSelectedSlot(null);
       bookings.reload();
-      Alert.alert(
+      notify(
         "Class booked",
         `${chosen.name}\n${date.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "short" })} · ${chosen.centerName}`
       );
     } catch (e: any) {
-      Alert.alert("Booking failed", e?.message || "Please try again.");
+      notify("Booking failed", e?.message || "Please try again.");
     } finally {
       setBooking(false);
     }
@@ -145,7 +145,7 @@ export default function BookClass() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()} testID="book-back">
+          <TouchableOpacity style={styles.iconBtn} onPress={() => safeBack(router)} testID="book-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Book a Class</Text>

@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../src/theme";
+import { safeBack } from "../src/ui/dialogs";
 import { api } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
 import type { AppNotification } from "../src/api/types";
@@ -72,7 +73,7 @@ export default function Notifications() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} hitSlop={8} onPress={() => router.back()} testID="ntf-back">
+          <TouchableOpacity style={styles.backBtn} hitSlop={8} onPress={() => safeBack(router)} testID="ntf-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <View style={styles.titleWrap}>
