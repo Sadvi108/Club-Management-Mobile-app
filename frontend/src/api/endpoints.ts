@@ -2,16 +2,21 @@ import { http } from "./http";
 import type {
   AppNotification,
   AttendanceRecord,
+  AttendanceResult,
   AuthRequest,
+  BookClassRequest,
+  BookingInfo,
   HomePageStats,
   IdValueText,
   Invoice,
   MyInfo,
   OutstandingRequest,
+  PackageInfo,
   Receipt,
   ReportRequest,
   ReportRow,
   StudentAddtnlInfo,
+  TrainingSlot,
 } from "./types";
 
 // Default report window: last 18 months → end of next year (covers receipts/attendance).
@@ -106,13 +111,31 @@ export const api = {
   qrCodeUrl: (content: string | number, size = 300) =>
     `${require("./config").API_BASE_URL}/Utilities/QRCode/${size}/${size}/${encodeURIComponent(String(content))}`,
 
+  // ── Listings (for class booking) ──
+  trainingCenters: () => http.get<IdValueText[]>("/Listing/TrainingCenters"),
+  studentCenters: () => http.get<IdValueText[]>("/Listing/StudentCenters"),
+  instructors: () => http.get<IdValueText[]>("/Listing/Instructors"),
+
   // ── Attendance (self check-in via scanned center QR) ──
+  // Returns AttendanceResult; data.status === -1 means the QR isn't a valid D-CLIX center QR.
   addAttendance: (body: { qrCode?: string | null; attendanceType: number; tTimeId?: number | null }) =>
-    http.post<any>("/Attendance/Add", body),
+    http.post<AttendanceResult>("/Attendance/Add", body),
 
   // ── Class booking ──
-  nextBookings: () => http.get<ReportRow[]>("/ClassBooking/NextBookings"),
-  getBookings: () => http.get<ReportRow[]>("/ClassBooking/GetBookings"),
+  // Bookable time slots for a center+instructor in a given month.
+  trainingSlots: (month: number, year: number, tCenterId: number, instructorId: number) =>
+    http.get<TrainingSlot[]>(
+      `/ClassBooking/TrainingTimeWithDateAndInstructor/${month}/${year}/${tCenterId}/${instructorId}`
+    ),
+  packageInfo: (studentId: number, month: number, year: number) =>
+    http.get<PackageInfo>(`/ClassBooking/PackageInfo/${studentId}?month=${month}&year=${year}`),
+  // Creates a booking; returns the new booking id. Body = BookClassViewModel.
+  bookNow: (body: BookClassRequest) => http.post<{ id: number }>("/ClassBooking/BookNow", body),
+  nextBookings: () => http.get<BookingInfo[]>("/ClassBooking/NextBookings"),
+  getBookings: (studentId?: number) =>
+    http.get<BookingInfo[]>(
+      `/ClassBooking/GetBookings${studentId ? `?studentId=${studentId}` : ""}`
+    ),
 
   // ── Utilities ──
   studentQRCodeUrl: (clubId: number, branchId: number, studentIds: number | string) =>

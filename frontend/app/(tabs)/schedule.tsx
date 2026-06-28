@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Image } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { radius, spacing, font, useTheme, LOGO_URL } from "../../src/theme";
 import { api, defaultRange } from "../../src/api/endpoints";
@@ -13,6 +14,7 @@ const DOW_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 const SESSION_COLORS = ["#4F46E5", "#F59E0B", "#10B981", "#EF4444", "#9333EA", "#0EA5E9", "#DB2777"];
 
 export default function Schedule() {
+  const router = useRouter();
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const tabBarHeight = useBottomTabBarHeight(); // offset fixed Book button above the tab bar
@@ -116,7 +118,7 @@ export default function Schedule() {
         )}
       </ScrollView>
 
-      <TouchableOpacity style={[styles.bookBtn, { bottom: tabBarHeight + spacing.md }]} testID="schedule-book" onPress={() => Alert.alert("Book a class", "Class booking is coming soon.")} activeOpacity={0.9}>
+      <TouchableOpacity style={[styles.bookBtn, { bottom: tabBarHeight + spacing.md }]} testID="schedule-book" onPress={() => router.push("/book-class")} activeOpacity={0.9}>
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.bookInner, shadow.strong]}>
           <Ionicons name="add" size={20} color="#fff" />
           <Text style={styles.bookTxt}>Book a class</Text>

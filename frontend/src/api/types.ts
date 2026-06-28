@@ -191,3 +191,55 @@ export type TermPayment = {
 
 // POST /Outstanding/PayInvoices → returns a Billplz bill URL (string) or { url }
 export type PayInvoicesResult = { url?: string } | string;
+
+// ── Class booking ──────────────────────────────────────────────────────────
+// GET /ClassBooking/TrainingTimeWithDateAndInstructor/{month}/{year}/{tCenterId}/{instructorId}
+export type TrainingSlot = {
+  id: number; // = timeId, used as BookNow.timeSlots[].timeId
+  name: string; // "18:00 To 19:00 (Monday) - Normal training"
+  dayOfWeek: string; // "Monday"
+  classLimit: number; // 0 = no seats / unavailable
+  centerName: string;
+  instructorId: number;
+  instructorName: string;
+};
+
+// GET /ClassBooking/GetBookings + /NextBookings → BookingInfoViewModel[]
+export type BookingInfo = {
+  bookingId: number;
+  timeId: number;
+  trainingDate: string;
+  status: string; // "Pending", ...
+  title: string; // slot label
+  name: string; // student name
+  centerName: string;
+  instructorName: string;
+};
+
+// GET /ClassBooking/PackageInfo/{studentId}?month&year
+export type PackageInfo = {
+  packageType: string; // "Monthly"
+  packageId: number;
+  packageName: string;
+  noOfClasses: number;
+};
+
+// POST /ClassBooking/BookNow body (BookClassViewModel)
+export type BookClassRequest = {
+  id: number;
+  tCenterId: number;
+  instructorId: number;
+  studentId: number;
+  packageType?: string | null;
+  sessionId: number;
+  remarks?: string | null;
+  timeSlots: Partial<BookingInfo>[];
+};
+
+// data of POST /Attendance/Add — inner status is the real result flag (-1 = invalid QR).
+export type AttendanceResult = {
+  status: number; // -1 = "Invalid QR Code"; >= 0 = checked in
+  message: string;
+  attendance: any[];
+  tTimeSession: any[];
+};

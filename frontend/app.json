@@ -41,6 +41,12 @@
           "photosPermission": "Allow $(PRODUCT_NAME) to attach a payment slip from your photos.",
           "cameraPermission": "Allow $(PRODUCT_NAME) to take a photo of your payment slip."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to scan the D-CLIX check-in QR code at your training center."
+        }
       ]
     ],
     "experiments": {
