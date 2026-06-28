@@ -66,9 +66,13 @@ export default function Home() {
             </View>
             <View style={styles.headerActions}>
               <Image source={{ uri: LOGO_URL }} style={styles.headerLogo} />
-              <TouchableOpacity style={styles.bell} testID="home-notification-btn" onPress={() => router.push("/(tabs)/profile")}>
+              <TouchableOpacity style={styles.bell} testID="home-notification-btn" onPress={() => router.push("/notifications")}>
                 <Ionicons name="notifications-outline" size={20} color="#fff" />
-                {hasUnread && <View style={styles.dot} />}
+                {hasUnread && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeNum}>{(unread.data ?? 0) > 99 ? "99+" : unread.data}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -187,6 +191,8 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     headerLogo: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#fff" },
     bell: { width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" },
     dot: { position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: "#FDE68A", borderWidth: 2, borderColor: colors.primary },
+    badge: { position: "absolute", top: -3, right: -3, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: "#EF4444", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.primary },
+    badgeNum: { color: "#fff", fontSize: 10, fontWeight: "800" },
     statRow: { flexDirection: "row", marginTop: 22, backgroundColor: "rgba(255,255,255,0.18)", borderRadius: radius.lg, paddingVertical: 14 },
     stat: { flex: 1, alignItems: "center" },
     statNum: { color: "#fff", fontSize: 18, fontWeight: "800" },

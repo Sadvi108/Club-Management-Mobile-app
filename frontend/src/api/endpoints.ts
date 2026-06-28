@@ -45,6 +45,10 @@ export const api = {
   myClubStats: () => http.get<IdValueText[]>("/Profile/MyClubStats"),
   myNotifications: () => http.get<AppNotification[]>("/Profile/MyNotifications"),
   unreadNotificationCount: () => http.get<number>("/Profile/MyUnreadNotificationCount"),
+  notificationDetails: (groupId: string) =>
+    http.get<AppNotification[]>(`/Profile/NotificationDetails/${encodeURIComponent(groupId)}`),
+  markNotificationRead: (id: number) =>
+    http.get<any>(`/Profile/UpdateNotification2Read?id=${id}`),
   mySiblings: () => http.get<IdValueText[]>("/Listing/MySiblings"),
 
   // ── Home / Reports ──
