@@ -48,6 +48,14 @@
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to scan the D-CLIX check-in QR code at your training center."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
       ]
     ],
     "experiments": {
