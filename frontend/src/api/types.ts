@@ -155,6 +155,31 @@ export type AppNotification = {
 // POST /Reports/GradingSchedule, TournamentSummary, etc. — generic rows
 export type ReportRow = Record<string, any>;
 
+// ── Instructor report row shapes (from live /Reports/* + /Listing/*) ──
+// GET /Reports/TrainingCenters
+export type TrainingCenterRow = {
+  id: number; code: string; name: string; address: string;
+  totalClasses: number; totalStudents: number; studentAssigned: number;
+  studentNotAssigned: number; examCentersAssignedStudents: number; advanceTrainingStudents: number;
+};
+// GET /Reports/ExamCenters
+export type ExamCenterRow = { id: number; shortid: string; centername: string; activeStudents: number; inactveStudents: number };
+// GET /Reports/StudentCenters
+export type StudentCenterRow = { id: number; shortid: string; centertype: string; centername: string; activeStudents: number; inactveStudents: number };
+// POST /Reports/GradingSchedule
+export type GradingRow = { resultId: number; ecName: string; examDate: string; closingDate: string; examTime: string; id: number };
+// POST /Reports/PaymentSlips
+export type PaymentSlipRow = { id: number; tcName: string; receiptNo: number; receiptDate: string; receiptAmount: number; status: string; attachment: string; icNo: string; name: string };
+// POST /Reports/TournamentSummary
+export type TournamentRow = { id: number; name: string; ageGroup: string; gender: string; category: string; playerCount: number; medalGold: number; medalSilver: number; medalBronze: number };
+// POST /Reports/StudentDetails — training schedule rows
+export type StudentScheduleRow = { tCenterName: string; dayOfWeek: string; tTimeFrom: string; tTimeTo: string; instructorName: string; instructorId: number; id: number };
+// POST /PurchaseRequest/FetchProducts — student purchasable products
+export type PurchaseProduct = {
+  productId: number; categoryId: number; name: string; category: string; code: string;
+  qty: number; cost: number; price: number; hightFrom?: number; hightTo?: number; isRegistration: boolean;
+};
+
 // Request body shared by /Reports/* and used loosely by Outstanding
 export type ReportRequest = {
   sCenterId?: number | null;

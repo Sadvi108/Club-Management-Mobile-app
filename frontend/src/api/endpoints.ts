@@ -10,12 +10,16 @@ import type {
   IdValueText,
   Invoice,
   MyInfo,
+  ExamCenterRow,
   OutstandingRequest,
   PackageInfo,
+  PurchaseProduct,
   Receipt,
   ReportRequest,
   ReportRow,
   StudentAddtnlInfo,
+  StudentCenterRow,
+  TrainingCenterRow,
   TrainingSlot,
 } from "./types";
 
@@ -143,10 +147,26 @@ export const api = {
   collectionCountList: (typeId: number) =>
     http.get<ReportRow[]>(`/Outstanding/CollectionCountList/${typeId}`),
 
-  // ── Instructor: Reports (POST ReportRequest; detail screens added later) ──
+  // ── Instructor: Reports ──
+  // GET (no body): center summary reports.
+  reportTrainingCenters: () => http.get<TrainingCenterRow[]>("/Reports/TrainingCenters"),
+  reportExamCenters: () => http.get<ExamCenterRow[]>("/Reports/ExamCenters"),
+  reportStudentCenters: () => http.get<StudentCenterRow[]>("/Reports/StudentCenters"),
+  // POST ReportRequest: filtered list reports (rows are Record<string,any>; screens read known fields).
   reimbursementReport: (body: ReportRequest) => http.post<ReportRow[]>("/Reports/Reimbursement", body),
   activityReport: (body: ReportRequest) => http.post<ReportRow[]>("/Reports/Activity", body),
   contributionReport: (body: ReportRequest) => http.post<ReportRow[]>("/Reports/Contribution", body),
+
+  // ── Instructor: filter dropdown sources ──
+  // DropdownListByType: 2=exam centers, 3=training centers, 4=student centers, 1=branches/academies.
+  dropdownListByType: (typeId: number | string) =>
+    http.get<IdValueText[]>(`/Listing/DropdownListByType/${encodeURIComponent(String(typeId))}`),
+  studentListByTcId: (tCenterId: number) => http.get<IdValueText[]>(`/Listing/StudentListByTcId/${tCenterId}`),
+  trainingTimeByTcId: (tCenterId: number) => http.get<IdValueText[]>(`/Listing/TrainingTimeByTcId/${tCenterId}`),
+  invoiceTypes: () => http.get<{ id: string; text: string }[]>("/Listing/InvoceTypes"),
+
+  // ── Student: purchase request ──
+  purchaseProducts: () => http.post<PurchaseProduct[]>("/PurchaseRequest/FetchProducts", {}),
 
   // ── Utilities ──
   studentQRCodeUrl: (clubId: number, branchId: number, studentIds: number | string) =>
