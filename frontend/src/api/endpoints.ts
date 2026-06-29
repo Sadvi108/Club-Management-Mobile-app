@@ -144,8 +144,12 @@ export const api = {
   // ── Instructor: Collections ──
   // { cash, fpx (online), dbt (bank-in slips) } counts for the Collections screen.
   collectionCount: () => http.get<{ cash: number; fpx: number; dbt: number }>("/Outstanding/CollectionCount"),
+  // Detail list for a collection type (1=cash, 2=online/fpx, 3=bank-in slip).
   collectionCountList: (typeId: number) =>
     http.get<ReportRow[]>(`/Outstanding/CollectionCountList/${typeId}`),
+  // Recalculates/syncs the collection count for a type server-side; returns "OK".
+  updateCollectionCount: (typeId: number) =>
+    http.get<string>(`/Outstanding/UpdateCollectionCount/${typeId}`),
 
   // ── Instructor: Reports ──
   // GET (no body): center summary reports.

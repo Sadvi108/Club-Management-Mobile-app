@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../../src/theme";
 import { api } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
@@ -13,16 +14,37 @@ import { notify } from "../../src/ui/dialogs";
 type CollectionCounts = { cash: number; fpx: number; dbt: number };
 
 export default function Collections() {
+  const router = useRouter();
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { token } = useAuth();
+  const [updating, setUpdating] = useState(false);
 
   const counts = useApi<CollectionCounts | null>(
     () => (token ? api.collectionCount() : Promise.resolve(null)),
     [token]
   );
 
-  const fmtCount = (n?: number) => (counts.loading ? "…" : String(n ?? 0));
+  const fmtCount = (n?: number) => (counts.loading || updating ? "…" : String(n ?? 0));
+
+  // Open a type's live detail list (typeId 1=cash, 2=online/fpx, 3=bank-in slip).
+  const openList = (typeId: number, label: string) =>
+    router.push(`/collection-list?typeId=${typeId}&label=${encodeURIComponent(label)}` as any);
+
+  // Recalc all collection counts server-side, then refresh.
+  const onUpdate = async () => {
+    if (updating) return;
+    setUpdating(true);
+    try {
+      await Promise.all([api.updateCollectionCount(1), api.updateCollectionCount(2), api.updateCollectionCount(3)]);
+      counts.reload();
+      notify("Collections updated", "Counts refreshed from the server.");
+    } catch (e: any) {
+      notify("Update failed", e?.message || "Could not refresh collections.");
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const cards: {
     id: string;
@@ -36,27 +58,27 @@ export default function Collections() {
       label: "Cash Payments",
       icon: "cash-outline",
       count: fmtCount(counts.data?.cash),
-      onPress: () => notify("Cash Payments", "Detailed list is coming soon."),
+      onPress: () => openList(1, "Cash Payments"),
     },
     {
       id: "online",
       label: "Online Payments",
       icon: "card-outline",
       count: fmtCount(counts.data?.fpx),
-      onPress: () => notify("Online Payments", "Detailed list is coming soon."),
+      onPress: () => openList(2, "Online Payments"),
     },
     {
       id: "slips",
       label: "Payment Slips",
       icon: "document-attach-outline",
       count: fmtCount(counts.data?.dbt),
-      onPress: () => notify("Payment Slips", "Detailed list is coming soon."),
+      onPress: () => openList(3, "Payment Slips"),
     },
     {
       id: "update",
-      label: "Update Collection",
+      label: updating ? "Updating…" : "Update Collection",
       icon: "sync-outline",
-      onPress: () => notify("Update Collection", "Coming soon."),
+      onPress: onUpdate,
     },
   ];
 

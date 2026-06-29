@@ -31,7 +31,8 @@ export default function Notifications() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const items: AppNotification[] = notif.data ?? [];
+  // Instructor MyNotifications can come back without a `data` array — guard so .filter never throws.
+  const items: AppNotification[] = Array.isArray(notif.data) ? notif.data : [];
   const isRead = (n: AppNotification) => n.isRead || readIds.has(n.id);
   const unreadCount = items.filter((n) => !isRead(n)).length;
 

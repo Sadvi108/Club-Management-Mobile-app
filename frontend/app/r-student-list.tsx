@@ -10,13 +10,21 @@ import type { IdValueText } from "../src/api/types";
 
 type Student = IdValueText & { centerName: string; centerId: number | string };
 
+const STATUS_OPTIONS: Option[] = [
+  { id: "Active", text: "Active" },
+  { id: "Inactive", text: "Inactive" },
+];
+
 export default function StudentList() {
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { token } = useAuth();
 
   const [centerId, setCenterId] = useState<number | string>(""); // "" = All Centers
+  const [status, setStatus] = useState<number | string>("Active");
   const [name, setName] = useState("");
+  const [ic, setIc] = useState("");
+  const [qr, setQr] = useState("");
 
   const centers = useApi<IdValueText[]>(
     () => (token ? api.dropdownListByType(3) : Promise.resolve([])),
@@ -27,7 +35,7 @@ export default function StudentList() {
     ...(centers.data ?? []).map((o) => ({ id: o.id, text: o.text })),
   ];
 
-  // Load every center's students up-front (parallel), so the full list shows without searching.
+  // Load every center's students up-front (parallel) so the full roster shows without searching.
   const students = useApi<Student[]>(
     () => {
       const list = centers.data;
@@ -44,16 +52,21 @@ export default function StudentList() {
     [token, centers.data]
   );
 
-  // Center + name are pure client-side filters over the already-loaded list.
+  // All controls filter the already-loaded list client-side (live).
   const rows = useMemo(() => {
     let all = students.data ?? [];
     if (centerId !== "") all = all.filter((s) => String(s.centerId) === String(centerId));
-    const q = name.trim().toLowerCase();
-    if (q) all = all.filter((s) => (s.text || "").toLowerCase().includes(q) || (s.value || "").toLowerCase().includes(q));
+    const n = name.trim().toLowerCase();
+    if (n) all = all.filter((s) => (s.text || "").toLowerCase().includes(n));
+    const i = ic.trim().toLowerCase();
+    if (i) all = all.filter((s) => (s.value || "").toLowerCase().includes(i));
+    const q = qr.trim().toLowerCase();
+    if (q) all = all.filter((s) => (s.value || "").toLowerCase() === q || (s.text || "").toLowerCase() === q || String(s.id) === q);
     return all;
-  }, [students.data, centerId, name]);
+  }, [students.data, centerId, name, ic, qr]);
 
   const loading = centers.loading || students.loading;
+  const anyFilter = centerId !== "" || !!name || !!ic || !!qr;
 
   return (
     <View style={styles.root} testID="rep-student-list">
@@ -69,21 +82,13 @@ export default function StudentList() {
           onChange={(id) => setCenterId(id)}
           testID="sl-center"
         />
-        <View style={styles.searchWrap}>
-          <Ionicons name="search" size={16} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by name or reg no"
-            placeholderTextColor={colors.textMuted}
-            value={name}
-            onChangeText={setName}
-            autoCorrect={false}
-            autoCapitalize="none"
-            testID="sl-name"
-          />
-          {name.length > 0 && (
-            <Ionicons name="close-circle" size={18} color={colors.textMuted} onPress={() => setName("")} />
-          )}
+        <View style={styles.row}>
+          <SelectField label="Status" value={status} options={STATUS_OPTIONS} onChange={(id) => setStatus(id)} compact testID="sl-status" />
+          <Field label="Name" value={name} onChange={setName} placeholder="Search name" colors={colors} testID="sl-name" />
+        </View>
+        <View style={styles.row}>
+          <Field label="IC No." value={ic} onChange={setIc} placeholder="IC / Reg no" colors={colors} testID="sl-ic" />
+          <Field label="QR Code" value={qr} onChange={setQr} placeholder="Scan / paste code" colors={colors} icon="qr-code-outline" testID="sl-qr" />
         </View>
       </View>
 
@@ -97,7 +102,7 @@ export default function StudentList() {
       ) : rows.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="people-outline" size={44} color={colors.textMuted} />
-          <Text style={styles.emptyTxt}>{name || centerId !== "" ? "No students match your filters." : "No students found."}</Text>
+          <Text style={styles.emptyTxt}>{anyFilter ? "No students match your filters." : "No students found."}</Text>
         </View>
       ) : (
         <FlatList
@@ -116,13 +121,38 @@ export default function StudentList() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle} numberOfLines={1}>{item.text || "—"}</Text>
-                <Text style={styles.cardMeta} numberOfLines={1}>Reg No: {item.value || "—"}</Text>
+                <Text style={styles.cardMeta} numberOfLines={1}>Reg / IC No: {item.value || "—"}</Text>
                 <Text style={styles.cardMeta} numberOfLines={1}>Center: {item.centerName || "—"}</Text>
               </View>
             </View>
           )}
         />
       )}
+    </View>
+  );
+}
+
+function Field({ label, value, onChange, placeholder, colors, icon, testID }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder: string; colors: any;
+  icon?: keyof typeof Ionicons.glyphMap; testID?: string;
+}) {
+  return (
+    <View style={{ flex: 1 }}>
+      <Text style={{ fontSize: 11, fontWeight: "600", letterSpacing: 0.5, color: colors.textSecondary, marginBottom: 6, textTransform: "uppercase" }}>{label}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.full, paddingHorizontal: 14, minHeight: 46 }}>
+        {icon && <Ionicons name={icon} size={15} color={colors.textMuted} />}
+        <TextInput
+          style={{ flex: 1, fontSize: 14, fontWeight: "600", color: colors.textPrimary, paddingVertical: 10 }}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          value={value}
+          onChangeText={onChange}
+          autoCorrect={false}
+          autoCapitalize="characters"
+          testID={testID}
+        />
+        {value.length > 0 && <Ionicons name="close-circle" size={16} color={colors.textMuted} onPress={() => onChange("")} />}
+      </View>
     </View>
   );
 }
@@ -139,18 +169,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
       padding: 14,
       gap: 10,
     },
-    searchWrap: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.full,
-      paddingHorizontal: 16,
-      minHeight: 46,
-    },
-    searchInput: { flex: 1, fontSize: 14, fontWeight: "600", color: colors.textPrimary, paddingVertical: 10 },
+    row: { flexDirection: "row", alignItems: "flex-end", gap: 10 },
     center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 10 },
     emptyTxt: { color: colors.textSecondary, fontSize: 14, textAlign: "center" },
     errTxt: { color: colors.danger, fontSize: 14, textAlign: "center" },
