@@ -10,14 +10,42 @@ import { useAuth } from "../../src/api/auth";
 import { api } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
 
+// Pick an icon for a MyClubStats row by its label.
+function statIcon(text: string): any {
+  const t = (text || "").toLowerCase();
+  if (t.includes("student")) return "people";
+  if (t.includes("training")) return "time";
+  if (t.includes("grading")) return "ribbon";
+  if (t.includes("tournament")) return "trophy";
+  if (t.includes("slip")) return "receipt";
+  if (t.includes("payment")) return "card";
+  if (t.includes("purchase")) return "bag-handle";
+  if (t.includes("whatsapp")) return "logo-whatsapp";
+  if (t.includes("registration")) return "person-add";
+  return "stats-chart";
+}
+
 export default function Profile() {
   const router = useRouter();
   const { colors, shadow, mode, toggle } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
-  const { user, logout } = useAuth();
+  const { user, token, isInstructor, logout } = useAuth();
 
-  const info = useApi(() => api.myInfo(), []);
-  const siblings = useApi(() => api.mySiblings(), []);
+  // MyInfo works for both roles (grade / center / reg no). Siblings are student-only; club stats +
+  // branch names are instructor-only — gate each so we never fire a call that returns nothing useful.
+  const info = useApi(() => (token ? api.myInfo() : Promise.resolve(null)), [token]);
+  const siblings = useApi(
+    () => (token && !isInstructor ? api.mySiblings() : Promise.resolve([])),
+    [token, isInstructor]
+  );
+  const clubStats = useApi(
+    () => (token && isInstructor ? api.myClubStats() : Promise.resolve([])),
+    [token, isInstructor]
+  );
+  const branches = useApi(
+    () => (token && isInstructor && user?.clubCode ? api.branchesByClubCode(user.clubCode) : Promise.resolve([])),
+    [token, isInstructor, user?.clubCode]
+  );
 
   const [studentModal, setStudentModal] = useState(false);
   const [clubModal, setClubModal] = useState(false);
@@ -25,6 +53,24 @@ export default function Profile() {
   const qrUrl = user?.id ? api.qrCodeUrl(user.id) : null;
   const grade = info.data?.currentGrade || user?.currentGrade || "—";
   const clubName = user?.clubName || user?.clubList?.[0]?.text || "—";
+
+  // Instructor's assigned branches, resolved to names.
+  const myBranches = useMemo(
+    () => (branches.data ?? []).filter((b) => (user?.branchIds ?? []).includes(b.id)),
+    [branches.data, user?.branchIds]
+  );
+  // MyClubStats rows: id = count, text = label, value = display order.
+  const stats = useMemo(
+    () => (clubStats.data ?? []).slice().sort((a, b) => Number(a.value) - Number(b.value)),
+    [clubStats.data]
+  );
+
+  const personalFields = [
+    { icon: "call-outline", label: "Phone", value: user?.handPhone || "—" },
+    { icon: "ribbon-outline", label: "Belt / Grade", value: grade },
+    { icon: "business-outline", label: "Center", value: info.data?.eCenterName || info.data?.tCenterName || "—" },
+    { icon: "card-outline", label: "Registration No", value: info.data?.registrationNo || "—" },
+  ].filter((f) => f.value && f.value !== "—" ? true : f.label === "Phone" || f.label === "Belt / Grade");
 
   const onLogout = async () => {
     const ok = await confirmDialog("Logout", "Are you sure you want to logout?", {
@@ -37,12 +83,14 @@ export default function Profile() {
     }
   };
 
-  const ROWS = [
-    { id: "scan", icon: "qr-code-outline", label: "Scan QR to Check In", onPress: () => router.push("/qr-scan") },
-    { id: "help", icon: "headset-outline", label: "Help Desk", onPress: () => router.push("/helpdesk") },
-    { id: "details", icon: "id-card-outline", label: "Student Details", onPress: () => router.push("/student-details") },
-    { id: "purchases", icon: "bag-handle-outline", label: "My Purchases", onPress: () => router.push("/purchases") },
-  ];
+  const ROWS = isInstructor
+    ? [{ id: "help", icon: "headset-outline", label: "Help Desk", onPress: () => router.push("/helpdesk") }]
+    : [
+        { id: "scan", icon: "qr-code-outline", label: "Scan QR to Check In", onPress: () => router.push("/qr-scan") },
+        { id: "help", icon: "headset-outline", label: "Help Desk", onPress: () => router.push("/helpdesk") },
+        { id: "details", icon: "id-card-outline", label: "Student Details", onPress: () => router.push("/student-details") },
+        { id: "purchases", icon: "bag-handle-outline", label: "My Purchases", onPress: () => router.push("/purchases") },
+      ];
 
   return (
     <View style={styles.root}>
@@ -61,21 +109,21 @@ export default function Profile() {
                   <Image source={{ uri: user.profilePic }} style={styles.avatar} />
                 ) : (
                   <View style={[styles.avatar, styles.avatarEmpty]}>
-                    <Ionicons name="person" size={44} color="rgba(255,255,255,0.5)" />
+                    <Ionicons name={isInstructor ? "school" : "person"} size={44} color="rgba(255,255,255,0.5)" />
                   </View>
                 )}
               </View>
               <Text style={styles.name} numberOfLines={1}>{user?.name?.trim() || "Member"}</Text>
               <Text style={styles.id} numberOfLines={1}>{user?.code || user?.icNo}</Text>
               <View style={styles.memberRow}>
-                <Ionicons name="shield-checkmark" size={14} color="#FFF7ED" />
-                <Text style={styles.memberTxt} numberOfLines={1}>{clubName}</Text>
+                <Ionicons name={isInstructor ? "school" : "shield-checkmark"} size={14} color="#FFF7ED" />
+                <Text style={styles.memberTxt} numberOfLines={1}>{isInstructor ? `Instructor · ${clubName}` : clubName}</Text>
               </View>
             </View>
           </LinearGradient>
         </SafeAreaView>
 
-        {/* Virtual ID with QR */}
+        {/* Virtual ID with QR (staff ID for instructors) */}
         <View style={styles.virtualId}>
           <View style={styles.vidLeft}>
             <View style={styles.vidBrandRow}>
@@ -95,25 +143,75 @@ export default function Profile() {
           </View>
         </View>
 
-        {/* Active Student + Club */}
-        <View style={styles.dualRow}>
-          <TouchableOpacity style={styles.dualCard} testID="profile-active-student" onPress={() => setStudentModal(true)} activeOpacity={0.85}>
-            <View style={styles.dualTop}>
-              <View style={styles.dualIcon}><Ionicons name="swap-horizontal" size={18} color={colors.primary} /></View>
-              <Ionicons name="chevron-expand" size={16} color={colors.textMuted} />
+        {/* ── Instructor: Club Overview dashboard ── */}
+        {isInstructor && (
+          <View style={styles.card}>
+            <View style={styles.cardHeadRow}>
+              <View style={styles.cardHeadLeft}>
+                <View style={styles.cardHeadIcon}><Ionicons name="speedometer" size={18} color={colors.primary} /></View>
+                <Text style={styles.cardTitle}>Club Overview</Text>
+              </View>
+              {clubStats.loading && <Text style={styles.badge}>…</Text>}
             </View>
-            <Text style={styles.dualLbl}>ACTIVE STUDENT</Text>
-            <Text style={styles.dualVal} numberOfLines={1}>{user?.name?.trim()}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.dualCard} testID="profile-club" onPress={() => setClubModal(true)} activeOpacity={0.85}>
-            <View style={styles.dualTop}>
-              <View style={styles.dualIcon}><Ionicons name="business" size={18} color={colors.primary} /></View>
-              <Ionicons name="chevron-expand" size={16} color={colors.textMuted} />
+            {clubStats.error && <Text style={styles.errTxt}>{clubStats.error}</Text>}
+            <View style={styles.statGrid}>
+              {stats.map((s) => (
+                <View key={`${s.value}-${s.text}`} style={styles.statCard}>
+                  <View style={styles.statIconWrap}><Ionicons name={statIcon(s.text)} size={16} color={colors.primary} /></View>
+                  <Text style={styles.statNum}>{s.id}</Text>
+                  <Text style={styles.statLbl} numberOfLines={2}>{s.text}</Text>
+                </View>
+              ))}
             </View>
-            <Text style={styles.dualLbl}>CLUB</Text>
-            <Text style={styles.dualVal} numberOfLines={1}>{clubName}</Text>
-          </TouchableOpacity>
-        </View>
+          </View>
+        )}
+
+        {/* ── Instructor: Branches ── */}
+        {isInstructor && (
+          <View style={styles.card}>
+            <View style={styles.cardHeadRow}>
+              <View style={styles.cardHeadLeft}>
+                <View style={styles.cardHeadIcon}><Ionicons name="business" size={18} color={colors.primary} /></View>
+                <Text style={styles.cardTitle}>Branches</Text>
+              </View>
+              <Text style={styles.badge}>{myBranches.length || user?.branchIds?.length || 0}</Text>
+            </View>
+            {branches.loading && <Text style={styles.emptyTxt}>Loading branches…</Text>}
+            {!branches.loading && myBranches.length === 0 && (
+              <Text style={styles.emptyTxt}>{user?.branchIds?.length ? `${user.branchIds.length} assigned branch(es)` : "No branches assigned."}</Text>
+            )}
+            <View style={styles.branchWrap}>
+              {myBranches.map((b) => (
+                <View key={b.id} style={styles.branchChip}>
+                  <Ionicons name="location" size={12} color={colors.primary} />
+                  <Text style={styles.branchChipTxt} numberOfLines={1}>{b.text}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ── Student: Active Student + Club switchers ── */}
+        {!isInstructor && (
+          <View style={styles.dualRow}>
+            <TouchableOpacity style={styles.dualCard} testID="profile-active-student" onPress={() => setStudentModal(true)} activeOpacity={0.85}>
+              <View style={styles.dualTop}>
+                <View style={styles.dualIcon}><Ionicons name="swap-horizontal" size={18} color={colors.primary} /></View>
+                <Ionicons name="chevron-expand" size={16} color={colors.textMuted} />
+              </View>
+              <Text style={styles.dualLbl}>ACTIVE STUDENT</Text>
+              <Text style={styles.dualVal} numberOfLines={1}>{user?.name?.trim()}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.dualCard} testID="profile-club" onPress={() => setClubModal(true)} activeOpacity={0.85}>
+              <View style={styles.dualTop}>
+                <View style={styles.dualIcon}><Ionicons name="business" size={18} color={colors.primary} /></View>
+                <Ionicons name="chevron-expand" size={16} color={colors.textMuted} />
+              </View>
+              <Text style={styles.dualLbl}>CLUB</Text>
+              <Text style={styles.dualVal} numberOfLines={1}>{clubName}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Personal Info */}
         <View style={styles.card}>
@@ -122,14 +220,17 @@ export default function Profile() {
               <View style={styles.cardHeadIcon}><Ionicons name="id-card" size={18} color={colors.primary} /></View>
               <Text style={styles.cardTitle}>Personal Info</Text>
             </View>
-            <Text style={styles.badge}>2 fields</Text>
+            <Text style={styles.badge}>{personalFields.length} fields</Text>
           </View>
-          <Row icon="call-outline" label="Phone" value={user?.handPhone || "—"} colors={colors} />
-          <View style={styles.divider} />
-          <Row icon="ribbon-outline" label="Belt / Grade" value={grade} colors={colors} />
+          {personalFields.map((f, i) => (
+            <View key={f.label}>
+              {i > 0 && <View style={styles.divider} />}
+              <Row icon={f.icon} label={f.label} value={f.value} colors={colors} />
+            </View>
+          ))}
         </View>
 
-        {/* Light Mode */}
+        {/* Light / Dark Mode */}
         <View style={styles.card}>
           <View style={styles.themeRow}>
             <View style={styles.themeIcon}>
@@ -166,24 +267,27 @@ export default function Profile() {
         <Text style={styles.version}>D-Clix · v1.0.0</Text>
       </ScrollView>
 
-      {/* Active Student picker */}
-      <PickerModal
-        visible={studentModal}
-        title="Switch Student"
-        onClose={() => setStudentModal(false)}
-        items={(siblings.data ?? []).map((s) => ({ id: s.id, label: s.text, active: s.id === user?.id }))}
-        styles={styles}
-        colors={colors}
-      />
-      {/* Club picker */}
-      <PickerModal
-        visible={clubModal}
-        title="Switch Club"
-        onClose={() => setClubModal(false)}
-        items={(user?.clubList ?? []).map((c) => ({ id: c.id, label: c.text, active: c.id === user?.clubId }))}
-        styles={styles}
-        colors={colors}
-      />
+      {/* Student-only switchers */}
+      {!isInstructor && (
+        <>
+          <PickerModal
+            visible={studentModal}
+            title="Switch Student"
+            onClose={() => setStudentModal(false)}
+            items={(siblings.data ?? []).map((s) => ({ id: s.id, label: s.text, active: s.id === user?.id }))}
+            styles={styles}
+            colors={colors}
+          />
+          <PickerModal
+            visible={clubModal}
+            title="Switch Club"
+            onClose={() => setClubModal(false)}
+            items={(user?.clubList ?? []).map((c) => ({ id: c.id, label: c.text, active: c.id === user?.clubId }))}
+            styles={styles}
+            colors={colors}
+          />
+        </>
+      )}
     </View>
   );
 }
@@ -264,6 +368,18 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     cardTitle: { ...font.h4, color: colors.textPrimary },
     badge: { backgroundColor: colors.surfaceAlt, color: colors.primary, fontSize: 11, fontWeight: "800", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, overflow: "hidden" },
     divider: { height: 1, backgroundColor: colors.border, marginVertical: 2 },
+    errTxt: { color: colors.danger, fontSize: 13, marginVertical: 6 },
+    emptyTxt: { color: colors.textSecondary, fontSize: 13, marginVertical: 6 },
+
+    statGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 6 },
+    statCard: { width: "47%", backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 12 },
+    statIconWrap: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", marginBottom: 8 },
+    statNum: { fontSize: 22, fontWeight: "800", color: colors.textPrimary },
+    statLbl: { fontSize: 11, color: colors.textSecondary, fontWeight: "600", marginTop: 2 },
+
+    branchWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
+    branchChip: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.surfaceAlt, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.full, maxWidth: "100%" },
+    branchChipTxt: { fontSize: 12, fontWeight: "700", color: colors.textPrimary, flexShrink: 1 },
 
     themeRow: { flexDirection: "row", gap: 12, alignItems: "center" },
     themeIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },

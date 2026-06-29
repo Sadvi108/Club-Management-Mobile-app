@@ -46,6 +46,7 @@ export type AuthUser = {
   clubName?: string;
   status?: string;
   permissions?: Record<string, boolean>;
+  clubCode?: string; // not from the API — the code the user logged in with (instructors), kept to resolve branch names
 };
 
 // GET /Reports/HomePageStats

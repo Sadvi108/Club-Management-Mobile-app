@@ -63,12 +63,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, []);
 
-  async function authenticate(body: any) {
+  async function authenticate(body: any, extra?: Partial<AuthUser>) {
     const env = await api.authenticate(body);
-    const user: AuthUser | undefined = env?.data;
-    if (env?.status !== 200 || !user?.accessToken) {
+    const data: AuthUser | undefined = env?.data;
+    if (env?.status !== 200 || !data?.accessToken) {
       throw new Error(env?.meta?.message || "Invalid credentials. Please try again.");
     }
+    const user: AuthUser = { ...data, ...extra };
     setAuthToken(user.accessToken);
     const s: Session = { token: user.accessToken, user };
     persist(s);
@@ -90,14 +91,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           branchId: 0,
         }),
       loginInstructor: (c) =>
-        authenticate({
-          userType: 0,
-          clubCode: c.clubCode.trim(),
-          branchId: c.branchId,
-          username: c.username.trim(),
-          password: c.password,
-          accessMethod: 0,
-        }),
+        authenticate(
+          {
+            userType: 0,
+            clubCode: c.clubCode.trim(),
+            branchId: c.branchId,
+            username: c.username.trim(),
+            password: c.password,
+            accessMethod: 0,
+          },
+          { clubCode: c.clubCode.trim() } // kept on the session to resolve branch names later
+        ),
       logout: () => {
         setAuthToken(null);
         persist(null);
