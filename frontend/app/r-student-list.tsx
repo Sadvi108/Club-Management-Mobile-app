@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TextInput, FlatList, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { radius, spacing, useTheme } from "../src/theme";
 import { ScreenHeader, SelectField, Option } from "../src/ui/reportkit";
@@ -8,117 +8,96 @@ import { api } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
 import type { IdValueText } from "../src/api/types";
 
-const STATUS_OPTIONS: Option[] = [
-  { id: "Active", text: "Active" },
-  { id: "Inactive", text: "Inactive" },
-];
+type Student = IdValueText & { centerName: string; centerId: number | string };
 
 export default function StudentList() {
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { token } = useAuth();
 
-  const [centerId, setCenterId] = useState<number | string | null>(null);
-  const [centerName, setCenterName] = useState<string>("");
-  const [status, setStatus] = useState<number | string>("Active");
+  const [centerId, setCenterId] = useState<number | string>(""); // "" = All Centers
   const [name, setName] = useState("");
-
-  // Search is explicit: a query token bumps on Search press; the fetch is gated on it (and the session token).
-  const [query, setQuery] = useState<{ centerId: number | string; nonce: number } | null>(null);
 
   const centers = useApi<IdValueText[]>(
     () => (token ? api.dropdownListByType(3) : Promise.resolve([])),
     [token]
   );
-  const centerOptions: Option[] = (centers.data ?? []).map((o) => ({ id: o.id, text: o.text }));
+  const centerOptions: Option[] = [
+    { id: "", text: "All Centers" },
+    ...(centers.data ?? []).map((o) => ({ id: o.id, text: o.text })),
+  ];
 
-  const students = useApi<IdValueText[]>(
-    () => (token && query ? api.studentListByTcId(Number(query.centerId)) : Promise.resolve([])),
-    [token, query?.centerId, query?.nonce]
+  // Load every center's students up-front (parallel), so the full list shows without searching.
+  const students = useApi<Student[]>(
+    () => {
+      const list = centers.data;
+      if (!token || !list?.length) return Promise.resolve([]);
+      return Promise.all(
+        list.map((c) =>
+          api
+            .studentListByTcId(Number(c.id))
+            .then((rows) => (rows ?? []).map((s) => ({ ...s, centerName: c.text, centerId: c.id })))
+            .catch(() => [] as Student[])
+        )
+      ).then((arr) => arr.flat());
+    },
+    [token, centers.data]
   );
 
+  // Center + name are pure client-side filters over the already-loaded list.
   const rows = useMemo(() => {
-    const all = students.data ?? [];
+    let all = students.data ?? [];
+    if (centerId !== "") all = all.filter((s) => String(s.centerId) === String(centerId));
     const q = name.trim().toLowerCase();
-    return q ? all.filter((s) => (s.text || "").toLowerCase().includes(q)) : all;
-  }, [students.data, name]);
+    if (q) all = all.filter((s) => (s.text || "").toLowerCase().includes(q) || (s.value || "").toLowerCase().includes(q));
+    return all;
+  }, [students.data, centerId, name]);
 
-  const onSearch = () => {
-    if (centerId == null) return;
-    setQuery({ centerId, nonce: Date.now() });
-  };
-
-  const loading = !!query && students.loading;
-  const searched = !!query;
+  const loading = centers.loading || students.loading;
 
   return (
     <View style={styles.root} testID="rep-student-list">
-      <ScreenHeader title="Student List" />
+      <ScreenHeader title="Student List" subtitle={loading ? "Loading…" : `${rows.length} student${rows.length === 1 ? "" : "s"}`} />
 
       <View style={styles.filterCard}>
         <SelectField
           label="Training Center"
-          placeholder="Select a center"
+          placeholder="All Centers"
           value={centerId}
           options={centerOptions}
           loading={centers.loading}
-          onChange={(id, opt) => {
-            setCenterId(id);
-            setCenterName(opt.text);
-          }}
+          onChange={(id) => setCenterId(id)}
           testID="sl-center"
         />
-
-        <View style={styles.row}>
-          <SelectField
-            label="Status"
-            value={status}
-            options={STATUS_OPTIONS}
-            onChange={(id) => setStatus(id)}
-            compact
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={16} color={colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name or reg no"
+            placeholderTextColor={colors.textMuted}
+            value={name}
+            onChangeText={setName}
+            autoCorrect={false}
+            autoCapitalize="none"
+            testID="sl-name"
           />
-          <View style={styles.nameWrap}>
-            <Text style={styles.fieldLabel}>NAME</Text>
-            <TextInput
-              style={styles.nameInput}
-              placeholder="Search name"
-              placeholderTextColor={colors.textMuted}
-              value={name}
-              onChangeText={setName}
-              autoCorrect={false}
-            />
-          </View>
+          {name.length > 0 && (
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} onPress={() => setName("")} />
+          )}
         </View>
-
-        <TouchableOpacity
-          style={styles.searchBtn}
-          onPress={onSearch}
-          activeOpacity={0.9}
-          disabled={loading}
-          testID="sl-search"
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.searchTxt}>Search</Text>}
-        </TouchableOpacity>
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} size="large" />
-        </View>
+        <View style={styles.center}><ActivityIndicator color={colors.primary} size="large" /></View>
       ) : students.error ? (
         <View style={styles.center}>
           <Ionicons name="alert-circle-outline" size={44} color={colors.danger} />
           <Text style={styles.errTxt}>{students.error}</Text>
         </View>
-      ) : !searched ? (
-        <View style={styles.center}>
-          <Ionicons name="search-outline" size={44} color={colors.textMuted} />
-          <Text style={styles.emptyTxt}>Choose a center and search.</Text>
-        </View>
       ) : rows.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="people-outline" size={44} color={colors.textMuted} />
-          <Text style={styles.emptyTxt}>No students found.</Text>
+          <Text style={styles.emptyTxt}>{name || centerId !== "" ? "No students match your filters." : "No students found."}</Text>
         </View>
       ) : (
         <FlatList
@@ -127,17 +106,18 @@ export default function StudentList() {
           contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 }}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-          initialNumToRender={12}
+          initialNumToRender={14}
           removeClippedSubviews
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.avatar}>
                 <Ionicons name="person" size={22} color={colors.primary} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle} numberOfLines={1}>{item.text}</Text>
+                <Text style={styles.cardTitle} numberOfLines={1}>{item.text || "—"}</Text>
                 <Text style={styles.cardMeta} numberOfLines={1}>Reg No: {item.value || "—"}</Text>
-                <Text style={styles.cardMeta} numberOfLines={1}>Center: {centerName || "—"}</Text>
+                <Text style={styles.cardMeta} numberOfLines={1}>Center: {item.centerName || "—"}</Text>
               </View>
             </View>
           )}
@@ -159,22 +139,18 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
       padding: 14,
       gap: 10,
     },
-    row: { flexDirection: "row", alignItems: "flex-end", gap: 10 },
-    nameWrap: { flex: 1 },
-    fieldLabel: { fontSize: 11, fontWeight: "600", letterSpacing: 0.5, color: colors.textSecondary, marginBottom: 6, textTransform: "uppercase" },
-    nameInput: {
+    searchWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: radius.full,
       paddingHorizontal: 16,
       minHeight: 46,
-      fontSize: 14,
-      fontWeight: "600",
-      color: colors.textPrimary,
     },
-    searchBtn: { backgroundColor: colors.primary, borderRadius: radius.full, paddingVertical: 13, alignItems: "center", justifyContent: "center", minHeight: 46 },
-    searchTxt: { color: "#fff", fontWeight: "800", fontSize: 15 },
+    searchInput: { flex: 1, fontSize: 14, fontWeight: "600", color: colors.textPrimary, paddingVertical: 10 },
     center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 10 },
     emptyTxt: { color: colors.textSecondary, fontSize: 14, textAlign: "center" },
     errTxt: { color: colors.danger, fontSize: 14, textAlign: "center" },
