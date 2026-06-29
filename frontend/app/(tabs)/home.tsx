@@ -11,6 +11,7 @@ import { quickCards } from "../../src/mockData";
 import { useAuth } from "../../src/api/auth";
 import { api } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
+import InstructorHome from "../../src/screens/InstructorHome";
 
 function initialsOf(name?: string) {
   return (name || "?")
@@ -22,7 +23,13 @@ function initialsOf(name?: string) {
     .toUpperCase();
 }
 
+// Role dispatcher: instructors get the management dashboard, students the training home.
 export default function Home() {
+  const { isInstructor } = useAuth();
+  return isInstructor ? <InstructorHome /> : <StudentHome />;
+}
+
+function StudentHome() {
   const router = useRouter();
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);

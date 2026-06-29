@@ -16,10 +16,18 @@ function FabQR({ onPress, gradient }: { onPress: () => void; gradient: readonly 
   );
 }
 
+// filled icon when focused, outline otherwise
+const tabIcon =
+  (name: string) =>
+  ({ color, focused }: { color: string; focused: boolean }) =>
+    <Ionicons name={(focused ? name : `${name}-outline`) as any} size={22} color={color} />;
+
+const HIDDEN = { href: null } as const;
+
 export default function TabsLayout() {
   const router = useRouter();
   const { colors, shadow } = useTheme();
-  const { ready, user } = useAuth();
+  const { ready, user, isInstructor } = useAuth();
 
   // Protect the tab group: wait for session restore, then gate on auth.
   if (!ready) {
@@ -51,14 +59,19 @@ export default function TabsLayout() {
         },
       }}
     >
-      <Tabs.Screen name="home" options={{ title: "Home", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} /> }} />
-      {/* Training moved into Home → Quick Access; keep the route reachable but off the tab bar (≤5 tabs) */}
-      <Tabs.Screen name="training" options={{ href: null }} />
-      <Tabs.Screen name="schedule" options={{ title: "Schedule", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "calendar" : "calendar-outline"} size={22} color={color} /> }} />
-      {/* Scan sits in the visual middle (3rd of 5) */}
+      {/* Declaration order keeps the Scan FAB visually 3rd-of-5 for BOTH roles. Each non-shared
+          tab is shown for its role and hidden (href:null) for the other. */}
+      <Tabs.Screen name="home" options={{ title: "Home", tabBarIcon: tabIcon("home") }} />
+      {/* Training lives inside the student Home → Quick Access; keep it routable, off the bar */}
+      <Tabs.Screen name="training" options={HIDDEN} />
+      <Tabs.Screen name="schedule" options={isInstructor ? HIDDEN : { title: "Schedule", tabBarIcon: tabIcon("calendar") }} />
+      <Tabs.Screen name="collections" options={isInstructor ? { title: "Collections", tabBarIcon: tabIcon("cash") } : HIDDEN} />
+      {/* Scan sits in the visual middle (3rd of 5) for both roles */}
       <Tabs.Screen name="qr" options={{ title: "", tabBarButton: () => <FabQR onPress={() => router.push("/qr-scan")} gradient={colors.gradient} /> }} />
-      <Tabs.Screen name="payments" options={{ title: "Payments", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "wallet" : "wallet-outline"} size={22} color={color} /> }} />
-      <Tabs.Screen name="profile" options={{ title: "Profile", tabBarIcon: ({ color, focused }) => <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} /> }} />
+      <Tabs.Screen name="payments" options={isInstructor ? HIDDEN : { title: "Payments", tabBarIcon: tabIcon("wallet") }} />
+      <Tabs.Screen name="reports" options={isInstructor ? { title: "Reports", tabBarIcon: tabIcon("document-text") } : HIDDEN} />
+      <Tabs.Screen name="profile" options={isInstructor ? HIDDEN : { title: "Profile", tabBarIcon: tabIcon("person") }} />
+      <Tabs.Screen name="settings" options={isInstructor ? { title: "Settings", tabBarIcon: tabIcon("settings") } : HIDDEN} />
     </Tabs>
   );
 }

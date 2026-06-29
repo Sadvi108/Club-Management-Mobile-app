@@ -137,7 +137,20 @@ export const api = {
       `/ClassBooking/GetBookings${studentId ? `?studentId=${studentId}` : ""}`
     ),
 
+  // ── Instructor: Collections ──
+  // { cash, fpx (online), dbt (bank-in slips) } counts for the Collections screen.
+  collectionCount: () => http.get<{ cash: number; fpx: number; dbt: number }>("/Outstanding/CollectionCount"),
+  collectionCountList: (typeId: number) =>
+    http.get<ReportRow[]>(`/Outstanding/CollectionCountList/${typeId}`),
+
+  // ── Instructor: Reports (POST ReportRequest; detail screens added later) ──
+  reimbursementReport: (body: ReportRequest) => http.post<ReportRow[]>("/Reports/Reimbursement", body),
+  activityReport: (body: ReportRequest) => http.post<ReportRow[]>("/Reports/Activity", body),
+  contributionReport: (body: ReportRequest) => http.post<ReportRow[]>("/Reports/Contribution", body),
+
   // ── Utilities ──
   studentQRCodeUrl: (clubId: number, branchId: number, studentIds: number | string) =>
     `${require("./config").API_BASE_URL}/Utilities/StudentQRCode/${clubId}/${branchId}/${studentIds}`,
+  trainingCenterQRCodeUrl: (clubId: number, tcid: number) =>
+    `${require("./config").API_BASE_URL}/Utilities/TrainingCenterQRCode/${clubId}/${tcid}`,
 };
