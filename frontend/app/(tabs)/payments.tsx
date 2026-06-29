@@ -543,7 +543,7 @@ function PrepaySegment({
 
   return (
     <View>
-      <Text style={styles.tpTitle}>Term Payment</Text>
+      <Text style={styles.tpTitle}>Advance Payment</Text>
 
       {/* Year selector */}
       <View style={styles.tpYearRow}>
