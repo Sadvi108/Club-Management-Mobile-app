@@ -58,9 +58,20 @@ export default function InstructorHome() {
     [clubStats.data]
   );
 
+  // Tiles that have a built detail screen; the rest show a "coming soon" notice.
+  const TILE_ROUTES: Record<string, string> = {
+    "training-time": "/r-training-schedule",
+    receipt: "/r-receipts",
+    "grading-schedule": "/r-grading",
+    "tournament-schedule": "/r-tournament-upcoming",
+    collections: "/(tabs)/collections",
+    "missing-invoice": "/r-outstanding",
+    "payment-slip": "/r-payment-slips",
+    more: "/(tabs)/reports",
+  };
   const onTile = (t: Tile) => {
-    if (t.id === "collections") return router.push("/(tabs)/collections");
-    if (t.id === "more") return router.push("/(tabs)/reports");
+    const route = TILE_ROUTES[t.id];
+    if (route) return router.push(route as any);
     notify(t.label, "This feature is coming soon.");
   };
 
@@ -121,7 +132,7 @@ export default function InstructorHome() {
         <TouchableOpacity
           style={styles.dueCard}
           testID="instr-dues-card"
-          onPress={() => router.push("/notifications")}
+          onPress={() => router.push("/pay-dues" as any)}
           activeOpacity={0.9}
         >
           <LinearGradient
