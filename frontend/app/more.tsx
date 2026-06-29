@@ -16,7 +16,7 @@ const ALL_OPTIONS: { id: string; label: string; icon: string; color: string; rou
   { id: "feesdue", label: "Fees Due", icon: "wallet", color: "#EF4444", route: "/(tabs)/payments" },
   { id: "receipt", label: "Receipts", icon: "receipt", color: "#14B8A6", route: "/(tabs)/payments" },
   { id: "outstanding", label: "Outstanding", icon: "document-text", color: "#F97316", route: "/(tabs)/payments" },
-  { id: "prepay", label: "Prepay", icon: "card", color: "#8B5CF6", route: "/(tabs)/payments" },
+  { id: "prepay", label: "Advance Payment", icon: "card", color: "#8B5CF6", route: "/(tabs)/payments" },
   { id: "grading", label: "Grading", icon: "school", color: "#DB2777", route: "/progress" },
   { id: "events", label: "Events", icon: "trophy", color: "#F59E0B", route: "/events" },
   { id: "tournaments", label: "Tournaments", icon: "medal", color: "#DB2777", route: "/events" },

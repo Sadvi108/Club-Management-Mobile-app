@@ -178,8 +178,8 @@ export default function Payments() {
               onPress={() => setSeg(s)}
               testID={`pay-seg-${s}`}
             >
-              <Text style={[styles.segTxt, seg === s && styles.segTxtActive]}>
-                {s === "pay" ? "Pay" : s === "prepay" ? "Prepay" : "History"}
+              <Text style={[styles.segTxt, seg === s && styles.segTxtActive]} numberOfLines={1}>
+                {s === "pay" ? "Pay" : s === "prepay" ? "Advance Payment" : "History"}
               </Text>
             </TouchableOpacity>
           ))}
@@ -636,12 +636,13 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     seg: {
       flex: 1,
       paddingVertical: 9,
+      paddingHorizontal: 4,
       borderRadius: radius.md,
       backgroundColor: colors.surfaceAlt,
       alignItems: "center",
     },
     segActive: { backgroundColor: colors.primary },
-    segTxt: { fontSize: 13, fontWeight: "700", color: colors.textSecondary },
+    segTxt: { fontSize: 11, fontWeight: "700", color: colors.textSecondary },
     segTxtActive: { color: "#fff" },
     emptyTxt: { color: colors.textSecondary, fontSize: 13, textAlign: "center", marginVertical: 30 },
 
