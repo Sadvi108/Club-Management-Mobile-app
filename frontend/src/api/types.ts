@@ -47,6 +47,7 @@ export type AuthUser = {
   status?: string;
   permissions?: Record<string, boolean>;
   clubCode?: string; // not from the API — the code the user logged in with (instructors), kept to resolve branch names
+  role?: "student" | "instructor"; // not from the API — set from the login flow used; the reliable role discriminator
 };
 
 // GET /Reports/HomePageStats

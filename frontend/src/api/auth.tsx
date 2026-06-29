@@ -81,15 +81,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ready,
       user: session?.user ?? null,
       token: session?.token ?? null,
-      isInstructor: session?.user?.userType === 0,
+      // Role is decided by which login flow was used (student tab vs instructor tab), not the
+      // response userType — instructors come back with varying userTypes (0, 2, ...) while only
+      // students are userType 3. Fall back to userType for any older session without a role tag.
+      isInstructor: session?.user
+        ? session.user.role
+          ? session.user.role === "instructor"
+          : session.user.userType !== 3
+        : false,
       loginStudent: (c) =>
-        authenticate({
-          userType: 3,
-          username: c.username.trim(),
-          password: c.password,
-          accessMethod: 0,
-          branchId: 0,
-        }),
+        authenticate(
+          {
+            userType: 3,
+            username: c.username.trim(),
+            password: c.password,
+            accessMethod: 0,
+            branchId: 0,
+          },
+          { role: "student" }
+        ),
       loginInstructor: (c) =>
         authenticate(
           {
@@ -100,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             password: c.password,
             accessMethod: 0,
           },
-          { clubCode: c.clubCode.trim() } // kept on the session to resolve branch names later
+          { role: "instructor", clubCode: c.clubCode.trim() } // role + clubCode kept on the session
         ),
       logout: () => {
         setAuthToken(null);
