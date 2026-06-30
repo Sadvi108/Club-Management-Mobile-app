@@ -62,7 +62,8 @@ export default function Payments() {
 
   // Pay sheet state
   const [sheet, setSheet] = useState(false);
-  const [method, setMethod] = useState<"online" | "bankin">("online");
+  // "online" = Billplz (FPX/card), "boost" = Boost e-wallet via the same Billplz gateway, "bankin" = slip upload.
+  const [method, setMethod] = useState<"online" | "boost" | "bankin">("online");
   const [slip, setSlip] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [paying, setPaying] = useState(false);
 
@@ -126,10 +127,12 @@ export default function Payments() {
     }
     setPaying(true);
     try {
-      if (method === "online") {
+      if (method !== "bankin") {
+        // Online + Boost both go through the Billplz gateway (PaymentMethod 2). Boost is selectable
+        // as a channel on the Billplz hosted page — the backend has no separate Boost endpoint.
         const url = await api.payInvoicesOnline(invoiceIds);
         if (!url || typeof url !== "string") throw new Error("No payment link returned.");
-        await WebBrowser.openBrowserAsync(url); // Billplz gateway
+        await WebBrowser.openBrowserAsync(url); // Billplz gateway (FPX / card / Boost & e-wallets)
         setPaying(false);
         setSheet(false);
         cart.clear();
@@ -410,24 +413,30 @@ export default function Payments() {
             {/* Method toggles */}
             <View style={styles.mpMethods}>
               {([
-                { id: "online", label: "Online" },
-                { id: "bankin", label: "Direct Bank-In" },
+                { id: "online", label: "Online (FPX / Card)", icon: "globe-outline" },
+                { id: "boost", label: "Boost", icon: "wallet-outline" },
+                { id: "bankin", label: "Direct Bank-In", icon: "receipt-outline" },
               ] as const).map((m) => {
                 const on = method === m.id;
                 return (
                   <TouchableOpacity key={m.id} disabled={paying} onPress={() => setMethod(m.id)} style={styles.mpMethod} testID={`pay-method-${m.id}`} activeOpacity={0.7}>
                     <Ionicons name={on ? "checkmark-circle" : "ellipse-outline"} size={24} color={on ? colors.success : colors.textMuted} />
+                    <Ionicons name={m.icon as any} size={18} color={on ? colors.primary : colors.textMuted} style={{ marginLeft: 2 }} />
                     <Text style={styles.mpMethodLbl}>{m.label}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
 
-            {/* Online hint or Bank-In slip picker */}
-            {method === "online" ? (
+            {/* Online/Boost hint or Bank-In slip picker */}
+            {method !== "bankin" ? (
               <View style={styles.mpHintRow}>
-                <Ionicons name="globe-outline" size={18} color={colors.textSecondary} />
-                <Text style={styles.mpHint}>You will be redirected to Billplz to securely finalize your payment.</Text>
+                <Ionicons name={method === "boost" ? "wallet-outline" : "globe-outline"} size={18} color={colors.textSecondary} />
+                <Text style={styles.mpHint}>
+                  {method === "boost"
+                    ? "You'll be redirected to the secure Billplz gateway — pick Boost to pay with your e-wallet."
+                    : "You will be redirected to Billplz to securely finalize your payment (FPX, card, Boost & e-wallets)."}
+                </Text>
               </View>
             ) : (
               <>
@@ -462,7 +471,7 @@ export default function Payments() {
                 {paying ? <ActivityIndicator color="#fff" /> : (
                   <>
                     <Ionicons name="lock-closed" size={14} color="#fff" />
-                    <Text style={styles.confirmTxt}>{method === "online" ? "Proceed to pay" : "Submit Slip"}</Text>
+                    <Text style={styles.confirmTxt}>{method !== "bankin" ? "Proceed to pay" : "Submit Slip"}</Text>
                   </>
                 )}
               </LinearGradient>

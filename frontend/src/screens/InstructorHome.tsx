@@ -61,6 +61,7 @@ export default function InstructorHome() {
   // Tiles that have a built detail screen; the rest show a "coming soon" notice.
   const TILE_ROUTES: Record<string, string> = {
     "training-time": "/r-training-schedule",
+    "update-attendance": "/update-attendance",
     receipt: "/r-receipts",
     "grading-schedule": "/r-grading",
     "tournament-schedule": "/r-tournament-upcoming",
