@@ -581,7 +581,17 @@ function PrepaySegment({
   const dueAmount = chosen.reduce((s, r) => s + (r.dueAmount || 0), 0);
 
   const toggleMonth = (m: number) => {
-    if (!availMonths.has(m)) return;
+    if (!availMonths.has(m)) {
+      // Not a UI choice: the payment API charges only months whose invoice exists.
+      // (Verified live — the gateway bill always contains just the real invoiceIds.)
+      if (upcomingMonths.has(m)) {
+        notify(
+          `${MONTH_ABBR[m - 1]} ${year} — not billed yet`,
+          "Your academy hasn't issued this month's invoice yet, so it can't be charged. It becomes payable here automatically the moment the invoice is issued."
+        );
+      }
+      return;
+    }
     setSelMonths((prev) => {
       const n = new Set(prev);
       n.has(m) ? n.delete(m) : n.add(m);
@@ -624,7 +634,8 @@ function PrepaySegment({
               return (
                 <TouchableOpacity
                   key={abbr}
-                  disabled={!available}
+                  // upcoming months stay tappable so the tap explains why they can't be paid yet
+                  disabled={!available && !upcoming}
                   onPress={() => toggleMonth(m)}
                   style={styles.tpMonth}
                   testID={`prepay-month-${m}`}
