@@ -97,19 +97,23 @@ export const api = {
     http.post<Invoice[]>("/Outstanding/FetchTermPayments", body),
   // PayInvoices is multipart/form-data: repeated InvoiceIds + PaymentMethod (2=Online, 1=Bank-In).
   // Online → returns a Billplz bill URL string to open in the browser.
-  payInvoicesOnline: (invoiceIds: number[]) => {
+  // payTermPayments=true is used for advance (term) payments. NOTE (probed 2026-07-03): the server
+  // only ever bills the real InvoiceIds — FetchTermPayments rows with invoiceId 0 (months the
+  // academy hasn't invoiced yet) cannot be paid; no binding of the PayTermPayments query model
+  // (prefixed/bare/JSON/indexed) makes the backend create those invoices.
+  payInvoicesOnline: (invoiceIds: number[], payTermPayments = false) => {
     const form = new FormData();
     invoiceIds.forEach((id) => form.append("InvoiceIds", String(id)));
     form.append("PaymentMethod", "2");
-    return http.postForm<string>("/Outstanding/PayInvoices?PayTermPayments=false&PurchaseItems=false", form);
+    return http.postForm<string>(`/Outstanding/PayInvoices?PayTermPayments=${payTermPayments}&PurchaseItems=false`, form);
   },
   // Direct Bank-In → upload the payment slip image (`files`). slip = RN {uri,name,type} or a web File/Blob.
-  payInvoicesBankIn: (invoiceIds: number[], slip: any) => {
+  payInvoicesBankIn: (invoiceIds: number[], slip: any, payTermPayments = false) => {
     const form = new FormData();
     invoiceIds.forEach((id) => form.append("InvoiceIds", String(id)));
     form.append("PaymentMethod", "1");
     form.append("files", slip);
-    return http.postForm<any>("/Outstanding/PayInvoices?PayTermPayments=false&PurchaseItems=false", form);
+    return http.postForm<any>(`/Outstanding/PayInvoices?PayTermPayments=${payTermPayments}&PurchaseItems=false`, form);
   },
   paymentCompleted: (status: string) =>
     http.get<any>(`/Payment/Completed/${encodeURIComponent(status)}`),

@@ -67,13 +67,29 @@ export default function Payments() {
   const [method, setMethod] = useState<"online" | "boost" | "bankin">("online");
   const [slip, setSlip] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [paying, setPaying] = useState(false);
+  // Advance (term) payment context — when set, the sheet pays these ids with PayTermPayments=true
+  // instead of the cart. Bumping prepayRefresh makes PrepaySegment refetch after a payment.
+  const [termPay, setTermPay] = useState<{ ids: number[]; total: number } | null>(null);
+  const [prepayRefresh, setPrepayRefresh] = useState(0);
 
   const invoiceIds = useMemo(
     () => cart.items.map((i) => i.invoice.invoiceId).filter((id) => id > 0),
     [cart.items]
   );
 
+  // What the sheet is actually paying (cart flow vs advance-payment flow)
+  const payingIds = termPay ? termPay.ids : invoiceIds;
+  const payingTotal = termPay ? termPay.total : cart.total;
+
   function openSheet() {
+    setTermPay(null);
+    setMethod("online");
+    setSlip(null);
+    setSheet(true);
+  }
+
+  function openTermSheet(ids: number[], total: number) {
+    setTermPay({ ids, total });
     setMethod("online");
     setSlip(null);
     setSheet(true);
@@ -121,24 +137,35 @@ export default function Payments() {
     }
   }
 
+  // Shared post-payment cleanup for both the cart and advance-payment flows.
+  function afterPaid() {
+    setSheet(false);
+    if (termPay) {
+      setTermPay(null);
+      setPrepayRefresh((n) => n + 1); // make PrepaySegment refetch its term rows
+    } else {
+      cart.clear();
+    }
+    dues.reload();
+    history.reload();
+  }
+
   async function proceedToPay() {
-    if (invoiceIds.length === 0) {
+    if (payingIds.length === 0) {
       notify("Select invoices", "Choose at least one invoice to pay.");
       return;
     }
+    const isTerm = !!termPay;
     setPaying(true);
     try {
       if (method !== "bankin") {
         // Online + Boost both go through the Billplz gateway (PaymentMethod 2). Boost is selectable
         // as a channel on the Billplz hosted page — the backend has no separate Boost endpoint.
-        const url = await api.payInvoicesOnline(invoiceIds);
+        const url = await api.payInvoicesOnline(payingIds, isTerm);
         if (!url || typeof url !== "string") throw new Error("No payment link returned.");
         await WebBrowser.openBrowserAsync(url); // Billplz gateway (FPX / card / Boost & e-wallets)
         setPaying(false);
-        setSheet(false);
-        cart.clear();
-        dues.reload();
-        history.reload();
+        afterPaid();
         notify("Payment", "Returned from the payment gateway. Refreshing your invoices.");
       } else {
         if (!slip) {
@@ -147,12 +174,9 @@ export default function Payments() {
           return;
         }
         const file = await toUploadFile(slip);
-        await api.payInvoicesBankIn(invoiceIds, file);
+        await api.payInvoicesBankIn(payingIds, file, isTerm);
         setPaying(false);
-        setSheet(false);
-        cart.clear();
-        dues.reload();
-        history.reload();
+        afterPaid();
         notify("Submitted", "Your payment slip has been submitted for verification.");
       }
     } catch (e: any) {
@@ -310,6 +334,8 @@ export default function Payments() {
             siblings={siblings.data ?? []}
             styles={styles}
             colors={colors}
+            onPay={openTermSheet}
+            refreshKey={prepayRefresh}
           />
         )}
 
@@ -407,9 +433,15 @@ export default function Payments() {
             </View>
 
             <View style={styles.mpSummaryRow}>
-              <Text style={styles.mpSummary}>Paying Invoice(s) : <Text style={styles.mpStrong}>{invoiceIds.length}</Text></Text>
-              <Text style={styles.mpSummary}>Paying Amt : <Text style={styles.mpStrong}>{cart.total.toFixed(2)}</Text></Text>
+              <Text style={styles.mpSummary}>Paying Invoice(s) : <Text style={styles.mpStrong}>{payingIds.length}</Text></Text>
+              <Text style={styles.mpSummary}>Paying Amt : <Text style={styles.mpStrong}>{payingTotal.toFixed(2)}</Text></Text>
             </View>
+            {termPay && (
+              <View style={styles.mpHintRow}>
+                <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+                <Text style={styles.mpHint}>Advance payment — settling upcoming months ahead of time.</Text>
+              </View>
+            )}
 
             {/* Method toggles */}
             <View style={styles.mpMethods}>
@@ -503,11 +535,15 @@ function PrepaySegment({
   siblings,
   styles,
   colors,
+  onPay,
+  refreshKey,
 }: {
   user: { id: number; name: string };
   siblings: { id: number; value: string; text: string }[];
   styles: ReturnType<typeof createStyles>;
   colors: any;
+  onPay: (ids: number[], total: number) => void;
+  refreshKey: number;
 }) {
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
@@ -528,11 +564,19 @@ function PrepaySegment({
       selAccts.size
         ? api.fetchTermPayments({ studentIds: [...selAccts], year, months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] })
         : Promise.resolve([] as any[]),
-    [year, acctKey]
+    [year, acctKey, refreshKey]
   );
   const rows = terms.data ?? [];
-  const availMonths = useMemo(() => new Set(rows.map((r) => termMonth(r))), [rows]);
-  const chosen = rows.filter((r) => selMonths.has(termMonth(r)));
+  // Only rows with a real invoiceId are payable — the backend bills exactly the InvoiceIds it's
+  // given and won't create invoices for months the academy hasn't billed yet (probed live:
+  // rows with invoiceId 0 are projections; every PayTermPayments binding leaves them unpaid).
+  const payableRows = useMemo(() => rows.filter((r) => (r.invoiceId ?? 0) > 0), [rows]);
+  const availMonths = useMemo(() => new Set(payableRows.map((r) => termMonth(r))), [payableRows]);
+  const upcomingMonths = useMemo(
+    () => new Set(rows.filter((r) => !((r.invoiceId ?? 0) > 0)).map((r) => termMonth(r))),
+    [rows]
+  );
+  const chosen = payableRows.filter((r) => selMonths.has(termMonth(r)));
   const totalInvoices = chosen.length;
   const dueAmount = chosen.reduce((s, r) => s + (r.dueAmount || 0), 0);
 
@@ -570,32 +614,43 @@ function PrepaySegment({
       {terms.loading ? (
         <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />
       ) : (
-        <View style={styles.tpMonthGrid}>
-          {MONTH_ABBR.map((abbr, i) => {
-            const m = i + 1;
-            const available = availMonths.has(m);
-            const selected = available && selMonths.has(m);
-            return (
-              <TouchableOpacity
-                key={abbr}
-                disabled={!available}
-                onPress={() => toggleMonth(m)}
-                style={styles.tpMonth}
-                testID={`prepay-month-${m}`}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={selected ? "radio-button-on" : "radio-button-off"}
-                  size={20}
-                  color={!available ? colors.border : selected ? colors.primary : colors.textMuted}
-                />
-                <Text style={[styles.tpMonthTxt, { color: available ? colors.textPrimary : colors.textMuted, fontWeight: available ? "700" : "500" }]}>
-                  {abbr}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <>
+          <View style={styles.tpMonthGrid}>
+            {MONTH_ABBR.map((abbr, i) => {
+              const m = i + 1;
+              const available = availMonths.has(m);
+              const upcoming = !available && upcomingMonths.has(m);
+              const selected = available && selMonths.has(m);
+              return (
+                <TouchableOpacity
+                  key={abbr}
+                  disabled={!available}
+                  onPress={() => toggleMonth(m)}
+                  style={styles.tpMonth}
+                  testID={`prepay-month-${m}`}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={selected ? "radio-button-on" : upcoming ? "time-outline" : "radio-button-off"}
+                    size={20}
+                    color={!available ? (upcoming ? colors.textMuted : colors.border) : selected ? colors.primary : colors.textMuted}
+                  />
+                  <Text style={[styles.tpMonthTxt, { color: available ? colors.textPrimary : colors.textMuted, fontWeight: available ? "700" : "500" }]}>
+                    {abbr}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {upcomingMonths.size > 0 && (
+            <View style={styles.mpHintRow}>
+              <Ionicons name="time-outline" size={15} color={colors.textSecondary} />
+              <Text style={styles.mpHint}>
+                Months with a clock haven&apos;t been billed by your academy yet — they become payable once the invoice is issued.
+              </Text>
+            </View>
+          )}
+        </>
       )}
 
       <Text style={[styles.tpLabel, { marginTop: 20 }]}>Select Siblings to PAY</Text>
@@ -614,9 +669,22 @@ function PrepaySegment({
         <Text style={styles.tpSummaryTxt}>Due Amt : {dueAmount.toFixed(2)}</Text>
       </View>
 
-      <View style={styles.tpPayBtn} testID="prepay-paynow">
-        <Text style={styles.tpPayTxt}>Pay Now (coming soon)</Text>
-      </View>
+      {totalInvoices > 0 ? (
+        <TouchableOpacity
+          testID="prepay-paynow"
+          activeOpacity={0.9}
+          onPress={() => onPay(chosen.map((c) => c.invoiceId), dueAmount)}
+        >
+          <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.tpPayBtnActive}>
+            <Ionicons name="lock-closed" size={14} color="#fff" />
+            <Text style={styles.tpPayTxtActive}>Pay Now · RM {dueAmount.toFixed(2)}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.tpPayBtn} testID="prepay-paynow">
+          <Text style={styles.tpPayTxt}>Select month(s) to pay</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -688,6 +756,8 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     tpSummaryTxt: { fontSize: 15, fontWeight: "800", color: colors.textPrimary },
     tpPayBtn: { backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", opacity: 0.7 },
     tpPayTxt: { fontSize: 15, fontWeight: "700", color: colors.textMuted },
+    tpPayBtnActive: { flexDirection: "row", gap: 8, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", justifyContent: "center" },
+    tpPayTxtActive: { fontSize: 15, fontWeight: "800", color: "#fff" },
 
     // Invoice / receipt cards
     invCard: {
