@@ -452,10 +452,10 @@ export default function Payments() {
               ] as const).map((m) => {
                 const on = method === m.id;
                 return (
-                  <TouchableOpacity key={m.id} disabled={paying} onPress={() => setMethod(m.id)} style={styles.mpMethod} testID={`pay-method-${m.id}`} activeOpacity={0.7}>
-                    <Ionicons name={on ? "checkmark-circle" : "ellipse-outline"} size={24} color={on ? colors.success : colors.textMuted} />
-                    <Ionicons name={m.icon as any} size={18} color={on ? colors.primary : colors.textMuted} style={{ marginLeft: 2 }} />
-                    <Text style={styles.mpMethodLbl}>{m.label}</Text>
+                  <TouchableOpacity key={m.id} disabled={paying} onPress={() => setMethod(m.id)} style={[styles.mpMethod, on && styles.mpMethodOn]} testID={`pay-method-${m.id}`} activeOpacity={0.7}>
+                    <Ionicons name={m.icon as any} size={18} color={on ? colors.primary : colors.textMuted} />
+                    <Text style={styles.mpMethodLbl} numberOfLines={1}>{m.label}</Text>
+                    <Ionicons name={on ? "checkmark-circle" : "ellipse-outline"} size={22} color={on ? colors.success : colors.textMuted} />
                   </TouchableOpacity>
                 );
               })}
@@ -859,9 +859,11 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     mpSummaryRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 16, marginBottom: 18 },
     mpSummary: { fontSize: 14, color: colors.textSecondary, fontWeight: "600" },
     mpStrong: { color: colors.primary, fontWeight: "800" },
-    mpMethods: { flexDirection: "row", gap: 20, marginBottom: 18 },
-    mpMethod: { flexDirection: "row", alignItems: "center", gap: 8 },
-    mpMethodLbl: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
+    // Stacked full-width option rows — a horizontal row of three labels overflows a 375px screen.
+    mpMethods: { gap: 10, marginBottom: 18 },
+    mpMethod: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 13, borderWidth: 1.5, borderColor: "transparent" },
+    mpMethodOn: { borderColor: colors.primary, backgroundColor: colors.primary + (mode === "dark" ? "26" : "12") },
+    mpMethodLbl: { flex: 1, fontSize: 14.5, fontWeight: "700", color: colors.textPrimary },
     mpHintRow: { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 14, marginBottom: 16 },
     mpHint: { flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
     mpLabel: { fontSize: 15, fontWeight: "800", color: colors.textPrimary, marginBottom: 12 },
