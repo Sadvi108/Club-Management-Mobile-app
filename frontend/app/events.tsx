@@ -60,7 +60,13 @@ export default function Events() {
             {offers.map((e, idx) => {
               const img = e.attachments?.[0]?.documentUrl || e.previewImages?.[0]?.documentUrl;
               return (
-                <TouchableOpacity key={`${e.code}-${idx}`} activeOpacity={0.92} style={styles.eventCard} testID={`event-${idx}`}>
+                <TouchableOpacity
+                  key={`${e.code}-${idx}`}
+                  activeOpacity={0.92}
+                  style={styles.eventCard}
+                  testID={`event-${idx}`}
+                  onPress={() => router.push(`/offer-detail?code=${encodeURIComponent(e.code || "")}` as any)}
+                >
                   <ImageBackground source={img ? { uri: img } : undefined} style={styles.eventImg} imageStyle={{ borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl }}>
                     <LinearGradient colors={["rgba(15,23,42,0)", "rgba(15,23,42,0.8)"]} style={[StyleSheet.absoluteFillObject, { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl }]} />
                     <View style={styles.catPill}><Text style={styles.catTxt}>{(e.code || "OFFER").toUpperCase()}</Text></View>

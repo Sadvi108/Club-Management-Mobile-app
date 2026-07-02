@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageBackground, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageBackground, ActivityIndicator, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,7 @@ import { quickCards } from "../../src/mockData";
 import { useAuth } from "../../src/api/auth";
 import { api } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
+import { useNotifications } from "../../src/notifications/NotificationsProvider";
 import InstructorHome from "../../src/screens/InstructorHome";
 
 function initialsOf(name?: string) {
@@ -37,17 +38,15 @@ function StudentHome() {
 
   const stats = useApi(() => api.homePageStats(), []);
   const info = useApi(() => api.myInfo(), []);
-  const unread = useApi(() => api.unreadNotificationCount(), []);
+  const { unreadCount } = useNotifications(); // live (60s poll), not a one-shot fetch
 
   const grade = (info.data?.currentGrade || user?.currentGrade || "—").replace(/Grade\s*/i, "");
   const beltShort = grade.split(" ")[0];
   const dueAmount = stats.data?.dueAmount ?? 0;
   const invoiceCount = stats.data?.invoiceCount ?? 0;
-  const offer = stats.data?.myoffers?.[0];
-  const offerImg =
-    offer?.attachments?.[0]?.documentUrl || offer?.previewImages?.[0]?.documentUrl;
+  const offers = stats.data?.myoffers ?? [];
   const trainingFirstLine = (info.data?.trainingTme || "").split(/\r?\n/).find((l) => l.trim());
-  const hasUnread = (unread.data ?? 0) > 0;
+  const hasUnread = unreadCount > 0;
 
   return (
     <View style={styles.root}>
@@ -77,7 +76,7 @@ function StudentHome() {
                 <Ionicons name="notifications-outline" size={20} color="#fff" />
                 {hasUnread && (
                   <View style={styles.badge}>
-                    <Text style={styles.badgeNum}>{(unread.data ?? 0) > 99 ? "99+" : unread.data}</Text>
+                    <Text style={styles.badgeNum}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -157,22 +156,41 @@ function StudentHome() {
           ))}
         </View>
 
-        {offer && (
+        {offers.length > 0 && (
           <>
             <View style={styles.sectionHead}>
-              <Text style={styles.sectionTitle}>Featured Offer</Text>
+              <Text style={styles.sectionTitle}>Featured Offer{offers.length > 1 ? "s" : ""}</Text>
               <TouchableOpacity onPress={() => router.push("/events")}><Text style={styles.sectionLink}>View all</Text></TouchableOpacity>
             </View>
-            <TouchableOpacity activeOpacity={0.9} onPress={() => router.push("/events")} testID="home-event-banner">
-              <ImageBackground source={offerImg ? { uri: offerImg } : undefined} style={styles.eventBanner} imageStyle={{ borderRadius: radius.xl }}>
-                <LinearGradient colors={["rgba(15,23,42,0.05)", "rgba(15,23,42,0.85)"]} style={[StyleSheet.absoluteFillObject, { borderRadius: radius.xl }]} />
-                <View style={styles.eventBottom}>
-                  <Text style={styles.eventCat}>{(offer.code || "OFFER").toUpperCase()}</Text>
-                  <Text style={styles.eventTitle} numberOfLines={2}>{offer.name}</Text>
-                  <Text style={styles.eventMeta} numberOfLines={1}>📍 {user?.clubName || "Your Academy"}</Text>
-                </View>
-              </ImageBackground>
-            </TouchableOpacity>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: spacing.xl, gap: 12 }}
+              // full-width cards when there's one offer, peek the next one when there are more
+              snapToAlignment="start"
+              decelerationRate="fast"
+            >
+              {offers.map((o, idx) => {
+                const img = o.attachments?.[0]?.documentUrl || o.previewImages?.[0]?.documentUrl;
+                return (
+                  <TouchableOpacity
+                    key={`${o.code}-${idx}`}
+                    activeOpacity={0.9}
+                    onPress={() => router.push(`/offer-detail?code=${encodeURIComponent(o.code || "")}` as any)}
+                    testID={`home-offer-${o.code}`}
+                  >
+                    <ImageBackground source={img ? { uri: img } : undefined} style={[styles.eventBanner, offers.length > 1 && styles.eventBannerPeek]} imageStyle={{ borderRadius: radius.xl }}>
+                      <LinearGradient colors={["rgba(15,23,42,0.05)", "rgba(15,23,42,0.85)"]} style={[StyleSheet.absoluteFillObject, { borderRadius: radius.xl }]} />
+                      <View style={styles.eventBottom}>
+                        <Text style={styles.eventCat}>{(o.code || "OFFER").toUpperCase()}</Text>
+                        <Text style={styles.eventTitle} numberOfLines={2}>{o.name}</Text>
+                        <Text style={styles.eventMeta} numberOfLines={1}>📍 {user?.clubName || "Your Academy"}</Text>
+                      </View>
+                    </ImageBackground>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </>
         )}
       </ScrollView>
@@ -236,7 +254,9 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     gridIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", marginBottom: 6 },
     gridLbl: { fontSize: 10, color: colors.textPrimary, fontWeight: "600", textAlign: "center", lineHeight: 13 },
 
-    eventBanner: { height: 180, marginHorizontal: spacing.xl, borderRadius: radius.xl, overflow: "hidden", justifyContent: "space-between", backgroundColor: colors.surfaceAlt },
+    eventBanner: { height: 180, width: Dimensions.get("window").width - spacing.xl * 2, borderRadius: radius.xl, overflow: "hidden", justifyContent: "space-between", backgroundColor: colors.surfaceAlt },
+    // slightly narrower when several offers exist so the next card peeks in
+    eventBannerPeek: { width: Dimensions.get("window").width - spacing.xl * 2 - 36 },
     eventBottom: { padding: 16, marginTop: "auto" },
     eventCat: { color: "#FDBA74", fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
     eventTitle: { color: "#fff", fontSize: 18, fontWeight: "800", marginTop: 4 },

@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider, useTheme } from "../src/theme";
 import { AuthProvider } from "../src/api/auth";
+import { NotificationsProvider } from "../src/notifications/NotificationsProvider";
 
 function ThemedStack() {
   const { mode } = useTheme();
@@ -24,6 +25,9 @@ function ThemedStack() {
         <Stack.Screen name="student-details" />
         <Stack.Screen name="purchases" />
         <Stack.Screen name="helpdesk" />
+        <Stack.Screen name="offer-detail" />
+        <Stack.Screen name="chat" />
+        <Stack.Screen name="chat-thread" />
       </Stack>
     </>
   );
@@ -33,9 +37,11 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <ThemeProvider>
-          <ThemedStack />
-        </ThemeProvider>
+        <NotificationsProvider>
+          <ThemeProvider>
+            <ThemedStack />
+          </ThemeProvider>
+        </NotificationsProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

@@ -58,6 +58,15 @@ export const api = {
     http.get<AppNotification[]>(`/Profile/NotificationDetails/${encodeURIComponent(groupId)}`),
   markNotificationRead: (id: number) =>
     http.get<any>(`/Profile/UpdateNotification2Read?id=${id}`),
+  // Reply into a notification thread (groupId). 200 = delivered to the club admin side;
+  // the API keeps no copy for the sender (chat UI local-echoes it).
+  reply2Notification: (body: { groupId: string; value: string; text?: string }) =>
+    http.post<any>("/Profile/Reply2Notification", {
+      id: 0,
+      notificationType: "",
+      text: "Reply",
+      ...body,
+    }),
   mySiblings: () => http.get<IdValueText[]>("/Listing/MySiblings"),
 
   // ── Home / Reports ──

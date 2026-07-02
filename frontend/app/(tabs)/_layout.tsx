@@ -1,5 +1,6 @@
 import { Tabs, useRouter, Redirect } from "expo-router";
-import { View, Text, StyleSheet, TouchableOpacity, Platform, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../src/theme";
@@ -28,6 +29,7 @@ export default function TabsLayout() {
   const router = useRouter();
   const { colors, shadow } = useTheme();
   const { ready, user, isInstructor } = useAuth();
+  const insets = useSafeAreaInsets();
 
   // Protect the tab group: wait for session restore, then gate on auth.
   if (!ready) {
@@ -51,9 +53,11 @@ export default function TabsLayout() {
           position: "absolute",
           borderTopWidth: 0,
           backgroundColor: colors.surface,
-          height: Platform.OS === "ios" ? 84 : 68,
+          // Size from the device's real bottom inset so the bar clears the Android
+          // system nav (gesture pill or 3-button) and the iOS home indicator alike.
+          height: 62 + insets.bottom,
           paddingTop: 8,
-          paddingBottom: Platform.OS === "ios" ? 24 : 10,
+          paddingBottom: Math.max(insets.bottom, 10),
           paddingHorizontal: 6,
           ...shadow.card,
         },

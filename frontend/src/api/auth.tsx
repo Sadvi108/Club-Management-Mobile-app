@@ -30,8 +30,9 @@ type AuthCtx = {
 const Ctx = createContext<AuthCtx | null>(null);
 
 function persist(session: Session | null) {
-  if (session) storage.set(SESSION_KEY, JSON.stringify(session));
-  else storage.remove(SESSION_KEY);
+  // fire-and-forget: storage is async (AsyncStorage) but callers don't need to wait
+  if (session) void storage.set(SESSION_KEY, JSON.stringify(session));
+  else void storage.remove(SESSION_KEY);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -40,17 +41,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Restore persisted session on mount.
   useEffect(() => {
-    try {
-      const raw = storage.get(SESSION_KEY);
-      if (raw) {
-        const s = JSON.parse(raw) as Session;
-        if (s?.token && s?.user) {
-          setAuthToken(s.token);
-          setSession(s);
+    let alive = true;
+    (async () => {
+      try {
+        const raw = await storage.get(SESSION_KEY);
+        if (alive && raw) {
+          const s = JSON.parse(raw) as Session;
+          if (s?.token && s?.user) {
+            setAuthToken(s.token);
+            setSession(s);
+          }
         }
-      }
-    } catch {}
-    setReady(true);
+      } catch {}
+      if (alive) setReady(true);
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // Wire 401 → auto logout.

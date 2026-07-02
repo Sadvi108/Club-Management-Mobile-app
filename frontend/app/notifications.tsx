@@ -7,6 +7,7 @@ import { radius, spacing, font, useTheme } from "../src/theme";
 import { safeBack } from "../src/ui/dialogs";
 import { api } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
+import { useNotifications } from "../src/notifications/NotificationsProvider";
 import type { AppNotification } from "../src/api/types";
 
 function fmtWhen(iso?: string) {
@@ -27,6 +28,7 @@ export default function Notifications() {
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
 
   const notif = useApi(() => api.myNotifications(), []);
+  const live = useNotifications(); // keeps the home-bell badge in sync when we mark read
   const [readIds, setReadIds] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -42,6 +44,7 @@ export default function Notifications() {
       try {
         await api.markNotificationRead(n.id);
         setReadIds((prev) => new Set(prev).add(n.id));
+        live.markReadLocal([n.id]);
       } catch {
         /* keep showing as unread on failure */
       }
@@ -59,6 +62,7 @@ export default function Notifications() {
         unread.forEach((n) => next.add(n.id));
         return next;
       });
+      live.markReadLocal(unread.map((n) => n.id));
     } finally {
       setBusy(false);
     }

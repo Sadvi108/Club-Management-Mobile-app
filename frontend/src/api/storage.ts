@@ -1,33 +1,29 @@
-// Tiny dependency-free persistence.
-// - Web (localhost preview): uses window.localStorage → survives reloads.
-// - Native: in-memory fallback (session lasts while app is open). Swap for
-//   @react-native-async-storage/async-storage later for real device persistence.
+// Tiny persistence wrapper over AsyncStorage (async API).
+// - Web: AsyncStorage is backed by window.localStorage → survives reloads.
+// - Native: real device storage → session + chat history survive app restarts.
+// A memory fallback keeps everything working if AsyncStorage ever throws (e.g. SSR).
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 const mem = new Map<string, string>();
 
-const hasLocalStorage =
-  typeof globalThis !== "undefined" &&
-  typeof (globalThis as any).localStorage !== "undefined";
-
 export const storage = {
-  get(key: string): string | null {
+  async get(key: string): Promise<string | null> {
     try {
-      if (hasLocalStorage) return (globalThis as any).localStorage.getItem(key);
+      const v = await AsyncStorage.getItem(key);
+      if (v != null) return v;
     } catch {}
     return mem.has(key) ? (mem.get(key) as string) : null;
   },
-  set(key: string, value: string): void {
-    try {
-      if (hasLocalStorage) {
-        (globalThis as any).localStorage.setItem(key, value);
-        return;
-      }
-    } catch {}
+  async set(key: string, value: string): Promise<void> {
     mem.set(key, value);
-  },
-  remove(key: string): void {
     try {
-      if (hasLocalStorage) (globalThis as any).localStorage.removeItem(key);
+      await AsyncStorage.setItem(key, value);
     } catch {}
+  },
+  async remove(key: string): Promise<void> {
     mem.delete(key);
+    try {
+      await AsyncStorage.removeItem(key);
+    } catch {}
   },
 };
