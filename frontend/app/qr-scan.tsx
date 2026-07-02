@@ -10,6 +10,7 @@ import {
   TextInput,
   ActivityIndicator,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -33,6 +34,7 @@ type Result = { ok: boolean; title: string; sub: string };
 export default function QRScan() {
   const router = useRouter();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { token } = useAuth();
   const info = useApi(() => (token ? api.myInfo() : Promise.resolve(null)), [token]);
@@ -116,7 +118,7 @@ export default function QRScan() {
       {/* Scrim for overlay contrast over the camera feed */}
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.35)" }]} pointerEvents="none" />
 
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 56) }]}>
         <TouchableOpacity
           style={styles.close}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -225,7 +227,7 @@ export default function QRScan() {
         )}
       </View>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 20, 40) }]}>
         <Ionicons name="shield-checkmark" size={14} color="rgba(255,255,255,0.6)" />
         <Text style={styles.footerTxt}>Secure · Verified at the academy</Text>
       </View>

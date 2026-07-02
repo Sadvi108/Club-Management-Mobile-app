@@ -75,7 +75,8 @@ export default function Schedule() {
         </ScrollView>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
+      {/* clearance = tab bar + floating Book button zone so the last card is never hidden */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: tabBarHeight + 92 }} showsVerticalScrollIndicator={false}>
         {details.loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 40 }} />}
 
         {!details.loading && classes.length === 0 && (

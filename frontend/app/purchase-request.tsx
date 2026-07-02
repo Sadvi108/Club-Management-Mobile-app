@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { radius, spacing, font, useTheme } from "../src/theme";
@@ -14,6 +15,7 @@ const fmtRM = (x: number) => "RM " + Number(x || 0).toLocaleString(undefined, { 
 
 export default function PurchaseRequest() {
   const { colors, shadow, mode } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { token } = useAuth();
   const products = useApi<PurchaseProduct[]>(() => (token ? api.purchaseProducts() : Promise.resolve([])), [token]);
@@ -55,7 +57,7 @@ export default function PurchaseRequest() {
           <Text style={styles.emptyTxt}>No products available.</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 120 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {rows.map((p) => {
             const n = parseInt(qty[p.productId] || "0", 10) || 0;
             const lineTotal = n * Number(p.price || 0);
@@ -93,7 +95,7 @@ export default function PurchaseRequest() {
         </ScrollView>
       )}
 
-      <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+      <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom + 12, 28) }]}>
         <TouchableOpacity onPress={proceed} activeOpacity={0.9} testID="pr-proceed">
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.proceedBtn, shadow.strong]}>
             <Ionicons name="bag-check" size={20} color="#fff" />

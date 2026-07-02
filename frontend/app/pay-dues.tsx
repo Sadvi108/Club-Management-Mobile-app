@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as WebBrowser from "expo-web-browser";
@@ -17,6 +18,7 @@ const money = (x: any) =>
 export default function PayDues() {
   const { token } = useAuth();
   const { colors, shadow, mode } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
 
   const [type, setType] = useState<string>("");
@@ -156,7 +158,7 @@ export default function PayDues() {
         />
       )}
 
-      <View style={styles.payBar}>
+      <View style={[styles.payBar, { paddingBottom: Math.max(insets.bottom + 12, 28) }]}>
         <TouchableOpacity activeOpacity={0.9} onPress={payNow} disabled={paying} testID="paydues-pay">
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.payBtn, shadow.strong]}>
             {paying ? (

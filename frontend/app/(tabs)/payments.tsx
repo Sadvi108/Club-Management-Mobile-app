@@ -10,7 +10,7 @@ import {
   Image,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as WebBrowser from "expo-web-browser";
@@ -37,6 +37,7 @@ export default function Payments() {
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { user } = useAuth();
   const tabBarHeight = useBottomTabBarHeight(); // offset fixed Pay bar above the tab bar
+  const insets = useSafeAreaInsets();
   const cart = usePaymentCart();
   const [seg, setSeg] = useState<Seg>("pay");
   const [busyPdf, setBusyPdf] = useState<string | null>(null);
@@ -396,7 +397,7 @@ export default function Payments() {
       {/* Make Payment sheet — Online (Billplz) or Direct Bank-In (slip upload) */}
       <Modal visible={sheet} transparent animationType="slide" onRequestClose={() => !paying && setSheet(false)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { paddingBottom: 24 + insets.bottom }]}>
             <View style={styles.modalHandle} />
             <View style={styles.mpHead}>
               <Text style={styles.modalTitle}>Make Payment</Text>

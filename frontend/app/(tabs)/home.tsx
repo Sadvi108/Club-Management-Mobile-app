@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageBackground, ActivityIndicator, Dimensions,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageBackground, ActivityIndicator, useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -33,7 +34,9 @@ export default function Home() {
 function StudentHome() {
   const router = useRouter();
   const { colors, shadow, mode } = useTheme();
-  const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
+  const { width } = useWindowDimensions(); // rotation/resize-safe (vs static Dimensions.get)
+  const tabBarHeight = useBottomTabBarHeight(); // real bar height incl. safe-area inset
+  const styles = useMemo(() => createStyles(colors, shadow, mode, width), [colors, shadow, mode, width]);
   const { user } = useAuth();
 
   const stats = useApi(() => api.homePageStats(), []);
@@ -93,7 +96,7 @@ function StudentHome() {
         </LinearGradient>
       </SafeAreaView>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: tabBarHeight + 24 }} showsVerticalScrollIndicator={false}>
         <View style={styles.topQuick}>
           {[
             { id: "train", label: "Training", icon: "barbell-outline", route: "/(tabs)/training" },
@@ -198,7 +201,7 @@ function StudentHome() {
   );
 }
 
-function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
+function createStyles(colors: any, shadow: any, mode: "light" | "dark", width: number) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
     headerBg: { paddingHorizontal: spacing.xl, paddingBottom: 30, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
@@ -254,9 +257,9 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     gridIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", marginBottom: 6 },
     gridLbl: { fontSize: 10, color: colors.textPrimary, fontWeight: "600", textAlign: "center", lineHeight: 13 },
 
-    eventBanner: { height: 180, width: Dimensions.get("window").width - spacing.xl * 2, borderRadius: radius.xl, overflow: "hidden", justifyContent: "space-between", backgroundColor: colors.surfaceAlt },
+    eventBanner: { height: 180, width: width - spacing.xl * 2, borderRadius: radius.xl, overflow: "hidden", justifyContent: "space-between", backgroundColor: colors.surfaceAlt },
     // slightly narrower when several offers exist so the next card peeks in
-    eventBannerPeek: { width: Dimensions.get("window").width - spacing.xl * 2 - 36 },
+    eventBannerPeek: { width: width - spacing.xl * 2 - 36 },
     eventBottom: { padding: 16, marginTop: "auto" },
     eventCat: { color: "#FDBA74", fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
     eventTitle: { color: "#fff", fontSize: 18, fontWeight: "800", marginTop: 4 },

@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -47,6 +47,7 @@ export default function BookClass() {
   const router = useRouter();
   const { user, token } = useAuth();
   const { colors, shadow, mode } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const studentId = user?.id ?? 0;
 
@@ -153,7 +154,7 @@ export default function BookClass() {
         </View>
       </SafeAreaView>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 150 + insets.bottom }} showsVerticalScrollIndicator={false}>
         {/* Center */}
         <Text style={styles.label}>Training Center</Text>
         {centers.loading ? (
@@ -264,7 +265,7 @@ export default function BookClass() {
       </ScrollView>
 
       {/* Confirm */}
-      <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+      <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom + 12, 28) }]}>
         <TouchableOpacity onPress={confirmBooking} disabled={!chosen || booking} activeOpacity={0.9} testID="book-confirm">
           <LinearGradient
             colors={colors.gradient}

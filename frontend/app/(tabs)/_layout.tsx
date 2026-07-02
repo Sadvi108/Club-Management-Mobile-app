@@ -49,6 +49,8 @@ export default function TabsLayout() {
         tabBarLabelStyle: { fontSize: 10, fontWeight: "600", marginTop: -2 },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
+        // Android: an absolute bar would float above the open keyboard — hide it instead
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           position: "absolute",
           borderTopWidth: 0,

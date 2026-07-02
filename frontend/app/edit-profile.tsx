@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Image,
   ActivityIndicator, KeyboardAvoidingView, Platform, Modal,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -20,6 +20,7 @@ function initialsOf(name?: string) {
 export default function EditProfile() {
   const router = useRouter();
   const { colors, shadow, mode } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { user, updateUser } = useAuth();
 
@@ -177,7 +178,7 @@ export default function EditProfile() {
       {/* Gallery / Camera sheet */}
       <Modal visible={picker} transparent animationType="slide" onRequestClose={() => setPicker(false)}>
         <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={() => setPicker(false)}>
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, { paddingBottom: 24 + insets.bottom }]}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetRow}>
               <TouchableOpacity style={styles.sheetOpt} onPress={() => pick("gallery")} testID="ep-gallery">

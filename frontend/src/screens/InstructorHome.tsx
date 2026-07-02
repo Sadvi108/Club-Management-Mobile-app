@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -16,6 +17,7 @@ import { radius, spacing, font, useTheme } from "../theme";
 import { api } from "../api/endpoints";
 import { useApi } from "../api/useApi";
 import { useAuth } from "../api/auth";
+import { useNotifications } from "../notifications/NotificationsProvider";
 import { notify } from "../ui/dialogs";
 
 // Quick Access tiles — fixed order, each with a distinct accent color (matches the
@@ -41,16 +43,17 @@ export default function InstructorHome() {
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { user, token } = useAuth();
+  const tabBarHeight = useBottomTabBarHeight();
 
   // Gate every authed call on the session token to dodge the cold-load 401 race.
   const stats = useApi(() => (token ? api.homePageStats() : Promise.resolve(null)), [token]);
   const clubStats = useApi(() => (token ? api.myClubStats() : Promise.resolve([])), [token]);
-  const unread = useApi(() => (token ? api.unreadNotificationCount() : Promise.resolve(0)), [token]);
+  const { unreadCount } = useNotifications(); // live (60s poll), same source as the student home
 
   const invoiceCount = stats.data?.invoiceCount ?? 0;
   const dueAmount = stats.data?.dueAmount ?? 0;
   const offers = stats.data?.myoffers ?? [];
-  const hasUnread = (unread.data ?? 0) > 0;
+  const hasUnread = unreadCount > 0;
 
   // MyClubStats rows: id = count, text = label, value = display order ("1".."10").
   const rows = useMemo(
@@ -115,7 +118,7 @@ export default function InstructorHome() {
                 <Ionicons name="notifications-outline" size={20} color="#fff" />
                 {hasUnread && (
                   <View style={styles.badge}>
-                    <Text style={styles.badgeNum}>{(unread.data ?? 0) > 99 ? "99+" : unread.data}</Text>
+                    <Text style={styles.badgeNum}>{unreadCount > 99 ? "99+" : unreadCount}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -126,7 +129,7 @@ export default function InstructorHome() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + 24 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Dues summary card */}

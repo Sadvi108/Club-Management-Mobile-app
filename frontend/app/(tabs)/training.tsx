@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -13,6 +14,7 @@ export default function Training() {
   const { colors, shadow, mode } = useTheme();
   const router = useRouter();
   const { user } = useAuth();
+  const tabBarHeight = useBottomTabBarHeight();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
 
   const info = useApi(() => api.myInfo(), []);
@@ -48,7 +50,7 @@ export default function Training() {
         </View>
       </SafeAreaView>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: tabBarHeight + 24 }} showsVerticalScrollIndicator={false}>
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.heroCard, shadow.strong]}>
           <View style={styles.heroRow}>
             <Ionicons name="trophy" size={22} color="#FFF7ED" />

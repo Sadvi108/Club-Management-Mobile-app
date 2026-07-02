@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Switch, Modal } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -28,6 +29,7 @@ function statIcon(text: string): any {
 export default function Profile() {
   const router = useRouter();
   const { colors, shadow, mode, toggle } = useTheme();
+  const tabBarHeight = useBottomTabBarHeight();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { user, token, isInstructor, logout } = useAuth();
 
@@ -94,7 +96,7 @@ export default function Profile() {
 
   return (
     <View style={styles.root}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: tabBarHeight + 24 }} showsVerticalScrollIndicator={false}>
         <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.primary }}>
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerBg}>
             <View style={styles.topRow}>
@@ -293,10 +295,11 @@ export default function Profile() {
 }
 
 function PickerModal({ visible, title, onClose, items, styles, colors }: any) {
+  const insets = useSafeAreaInsets(); // keep the sheet above the gesture bar / home indicator
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={onClose}>
-        <View style={styles.modalSheet}>
+        <View style={[styles.modalSheet, { paddingBottom: 20 + insets.bottom }]}>
           <View style={styles.modalHandle} />
           <Text style={styles.modalTitle}>{title}</Text>
           {items.length === 0 && <Text style={styles.modalEmpty}>Nothing to switch to.</Text>}

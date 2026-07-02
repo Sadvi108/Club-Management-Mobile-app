@@ -16,7 +16,7 @@ import {
   FlatList,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LOGO_URL, radius, spacing, useTheme } from "../src/theme";
@@ -27,6 +27,7 @@ import type { IdValueText } from "../src/api/types";
 export default function Login() {
   const router = useRouter();
   const { colors, shadow, mode, toggle } = useTheme();
+  const insets = useSafeAreaInsets();
   const { loginStudent, loginInstructor } = useAuth();
 
   const [studentId, setStudentId] = useState("DARSHANMUTHU");
@@ -302,7 +303,7 @@ export default function Login() {
       {/* Branch picker modal */}
       <Modal visible={branchModal} transparent animationType="slide" onRequestClose={() => setBranchModal(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setBranchModal(false)}>
-          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={[styles.modalSheet, { paddingBottom: 16 + insets.bottom }]} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Select branch</Text>
             {branchLoading ? (

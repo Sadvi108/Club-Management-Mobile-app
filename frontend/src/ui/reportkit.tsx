@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, FlatList, ScrollView, ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../theme";
@@ -43,6 +43,7 @@ export function SelectField({
   loading?: boolean; disabled?: boolean; searchable?: boolean; testID?: string; compact?: boolean;
 }) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const s = useMemo(() => fStyles(colors), [colors]);
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -68,7 +69,7 @@ export function SelectField({
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={() => setOpen(false)}>
-          <TouchableOpacity activeOpacity={1} style={s.sheet}>
+          <TouchableOpacity activeOpacity={1} style={[s.sheet, { paddingBottom: 16 + insets.bottom }]}>
             <View style={s.handle} />
             <Text style={s.sheetTitle}>{label || placeholder || "Select"}</Text>
             {showSearch && (
@@ -118,6 +119,7 @@ const fmt = (d: Date) => `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.get
 
 export function DateField({ label, value, onChange, testID }: { label?: string; value: Date; onChange: (d: Date) => void; testID?: string }) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const s = useMemo(() => fStyles(colors), [colors]);
   const [open, setOpen] = useState(false);
   const [view, setView] = useState(new Date(value.getFullYear(), value.getMonth(), 1));
@@ -137,7 +139,7 @@ export function DateField({ label, value, onChange, testID }: { label?: string; 
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <TouchableOpacity style={s.backdrop} activeOpacity={1} onPress={() => setOpen(false)}>
-          <TouchableOpacity activeOpacity={1} style={s.sheet}>
+          <TouchableOpacity activeOpacity={1} style={[s.sheet, { paddingBottom: 16 + insets.bottom }]}>
             <View style={s.handle} />
             <View style={s.calHead}>
               <TouchableOpacity onPress={() => stepMonth(-1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="chevron-back" size={22} color={colors.primary} /></TouchableOpacity>

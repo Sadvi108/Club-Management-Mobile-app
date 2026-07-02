@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../../src/theme";
@@ -16,6 +17,7 @@ type CollectionCounts = { cash: number; fpx: number; dbt: number };
 export default function Collections() {
   const router = useRouter();
   const { colors, shadow, mode } = useTheme();
+  const tabBarHeight = useBottomTabBarHeight();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { token } = useAuth();
   const [updating, setUpdating] = useState(false);
@@ -93,7 +95,7 @@ export default function Collections() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: tabBarHeight + 24 }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.grid}>

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -31,6 +32,7 @@ const REPORTS: ReportRow[] = [
 export default function Reports() {
   const router = useRouter();
   const { colors, shadow, mode } = useTheme();
+  const tabBarHeight = useBottomTabBarHeight();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
 
   return (
@@ -56,7 +58,7 @@ export default function Reports() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: 16, paddingBottom: 120 }}
+        contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: 16, paddingBottom: tabBarHeight + 24 }}
         showsVerticalScrollIndicator={false}
       >
         {REPORTS.map((r) => (
