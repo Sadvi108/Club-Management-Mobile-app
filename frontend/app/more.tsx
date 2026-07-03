@@ -6,22 +6,59 @@ import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../src/theme";
 import { safeBack } from "../src/ui/dialogs";
 
-// Full quick-access menu — every section of the app in one place.
-const ALL_OPTIONS: { id: string; label: string; icon: string; color: string; route: string }[] = [
-  { id: "attendance", label: "Attendance", icon: "checkmark-done-circle", color: "#10B981", route: "/attendance" },
-  { id: "schedule", label: "Schedule", icon: "calendar", color: "#0EA5E9", route: "/(tabs)/schedule" },
-  { id: "training", label: "Training", icon: "barbell", color: "#4F46E5", route: "/(tabs)/training" },
-  { id: "progress", label: "Progress", icon: "trending-up", color: "#6366F1", route: "/progress" },
-  { id: "belt", label: "Belt / Rank", icon: "ribbon", color: "#EAB308", route: "/progress" },
-  { id: "feesdue", label: "Fees Due", icon: "wallet", color: "#EF4444", route: "/(tabs)/payments" },
-  { id: "receipt", label: "Receipts", icon: "receipt", color: "#14B8A6", route: "/(tabs)/payments" },
-  { id: "outstanding", label: "Outstanding", icon: "document-text", color: "#F97316", route: "/(tabs)/payments" },
-  { id: "prepay", label: "Advance Payment", icon: "card", color: "#8B5CF6", route: "/(tabs)/payments" },
-  { id: "grading", label: "Grading", icon: "school", color: "#DB2777", route: "/progress" },
-  { id: "events", label: "Events", icon: "trophy", color: "#F59E0B", route: "/events" },
-  { id: "tournaments", label: "Tournaments", icon: "medal", color: "#DB2777", route: "/events" },
-  { id: "scan", label: "Scan QR", icon: "qr-code", color: "#0EA5E9", route: "/qr-scan" },
-  { id: "profile", label: "Profile", icon: "person-circle", color: "#64748B", route: "/(tabs)/profile" },
+// Full feature catalog — a SUPERSET of the home Quick Access grid plus every other
+// student screen, grouped by section. Icons/colors match the home grid (src/mockData.ts).
+type Option = { id: string; label: string; icon: string; color: string; route: string };
+const SECTIONS: { title: string; items: Option[] }[] = [
+  {
+    title: "Training",
+    items: [
+      { id: "training", label: "Training", icon: "barbell", color: "#4F46E5", route: "/(tabs)/training" },
+      { id: "classes", label: "Today's Classes", icon: "flash", color: "#F59E0B", route: "/(tabs)/schedule" },
+      { id: "timetable", label: "Timetable", icon: "calendar", color: "#0EA5E9", route: "/(tabs)/schedule" },
+      { id: "trainer", label: "My Trainer", icon: "person-circle", color: "#8B5CF6", route: "/(tabs)/training" },
+      { id: "attendance", label: "Attendance", icon: "checkmark-done-circle", color: "#10B981", route: "/attendance" },
+      { id: "book", label: "Book a Class", icon: "add-circle", color: "#14B8A6", route: "/book-class" },
+      { id: "scan", label: "Scan QR", icon: "qr-code", color: "#0EA5E9", route: "/qr-scan" },
+    ],
+  },
+  {
+    title: "Payments",
+    items: [
+      { id: "feesdue", label: "Fees Due", icon: "wallet", color: "#EF4444", route: "/(tabs)/payments" },
+      { id: "payments", label: "Payment History", icon: "receipt", color: "#14B8A6", route: "/(tabs)/payments" },
+      { id: "prepay", label: "Advance Payment", icon: "card", color: "#8B5CF6", route: "/(tabs)/payments" },
+      { id: "purchase", label: "Purchase Request", icon: "bag-handle", color: "#F59E0B", route: "/purchase-request" },
+      { id: "purchases", label: "My Purchases", icon: "bag-check", color: "#F97316", route: "/purchases" },
+    ],
+  },
+  {
+    title: "Progress",
+    items: [
+      { id: "progress", label: "Progress Report", icon: "trending-up", color: "#6366F1", route: "/progress" },
+      { id: "belt", label: "Belt / Rank", icon: "ribbon", color: "#EAB308", route: "/progress" },
+      { id: "grading", label: "Grading", icon: "school", color: "#DB2777", route: "/progress" },
+    ],
+  },
+  {
+    title: "Club",
+    items: [
+      { id: "events", label: "Events", icon: "trophy", color: "#F97316", route: "/events" },
+      { id: "competition", label: "Competition", icon: "medal", color: "#DB2777", route: "/events" },
+      { id: "offers", label: "Offers", icon: "pricetags", color: "#10B981", route: "/events" },
+      { id: "chat", label: "Chat Academy", icon: "chatbubbles", color: "#22C55E", route: "/chat" },
+      { id: "helpdesk", label: "Help Desk", icon: "headset", color: "#0EA5E9", route: "/helpdesk" },
+      { id: "notifications", label: "Notifications", icon: "notifications", color: "#F59E0B", route: "/notifications" },
+    ],
+  },
+  {
+    title: "Account",
+    items: [
+      { id: "profile", label: "Profile", icon: "person-circle", color: "#64748B", route: "/(tabs)/profile" },
+      { id: "details", label: "Student Details", icon: "id-card", color: "#4F46E5", route: "/student-details" },
+      { id: "editprofile", label: "Edit Profile", icon: "create", color: "#8B5CF6", route: "/edit-profile" },
+    ],
+  },
 ];
 
 export default function More() {
@@ -43,22 +80,32 @@ export default function More() {
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
         <Text style={styles.sub}>Quick access to everything</Text>
-        <View style={styles.grid}>
-          {ALL_OPTIONS.map((o) => (
-            <TouchableOpacity
-              key={o.id}
-              style={styles.card}
-              activeOpacity={0.8}
-              testID={`more-${o.id}`}
-              onPress={() => router.push(o.route as any)}
-            >
-              <View style={[styles.iconWrap, { backgroundColor: o.color + (mode === "dark" ? "33" : "18") }]}>
-                <Ionicons name={o.icon as any} size={24} color={o.color} />
-              </View>
-              <Text style={styles.cardLbl} numberOfLines={2}>{o.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {SECTIONS.map((s) => (
+          <View key={s.title}>
+            <Text style={styles.sectionTitle}>{s.title.toUpperCase()}</Text>
+            <View style={styles.grid}>
+              {s.items.map((o) => (
+                <TouchableOpacity
+                  key={o.id}
+                  style={styles.card}
+                  activeOpacity={0.8}
+                  testID={`more-${o.id}`}
+                  onPress={() => router.push(o.route as any)}
+                >
+                  <View style={[styles.iconWrap, { backgroundColor: o.color + (mode === "dark" ? "33" : "18") }]}>
+                    <Ionicons name={o.icon as any} size={24} color={o.color} />
+                  </View>
+                  <Text style={styles.cardLbl} numberOfLines={2}>{o.label}</Text>
+                </TouchableOpacity>
+              ))}
+              {/* keep the last row left-aligned when items % 3 !== 0 */}
+              {s.items.length % 3 !== 0 &&
+                Array.from({ length: 3 - (s.items.length % 3) }).map((_, i) => (
+                  <View key={`pad-${i}`} style={[styles.card, { opacity: 0 }]} pointerEvents="none" />
+                ))}
+            </View>
+          </View>
+        ))}
       </ScrollView>
     </View>
   );
@@ -71,6 +118,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     backBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
     title: { ...font.h3, color: colors.textPrimary },
     sub: { color: colors.textSecondary, fontSize: 13, marginBottom: 16 },
+    sectionTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 1, color: colors.textMuted, marginBottom: 10, marginTop: 6 },
     grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
     card: { width: "30.5%", backgroundColor: colors.surface, borderRadius: radius.lg, paddingVertical: 18, paddingHorizontal: 8, alignItems: "center", marginBottom: 14, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
     iconWrap: { width: 50, height: 50, borderRadius: 25, alignItems: "center", justifyContent: "center", marginBottom: 8 },
