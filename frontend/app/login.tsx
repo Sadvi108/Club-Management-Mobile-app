@@ -293,6 +293,18 @@ export default function Login() {
               </TouchableOpacity>
             </View>
 
+            {/* Step-by-step app walkthrough — reachable before signing in */}
+            <TouchableOpacity
+              style={styles.guideBtn}
+              testID="login-user-guide"
+              activeOpacity={0.8}
+              onPress={() => router.push("/user-guide" as any)}
+            >
+              <Ionicons name="book-outline" size={18} color={colors.primary} />
+              <Text style={styles.guideTxt}>User Guide — how the app works</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </TouchableOpacity>
+
             <Text style={styles.footer}>
               New to D-Clix? <Text style={styles.footerLink}>Contact your academy</Text>
             </Text>
@@ -388,7 +400,9 @@ function createStyles(colors: any, shadow: any) {
     altBtn: { flex: 1, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
     altTxt: { color: colors.textPrimary, fontWeight: "700", fontSize: 13 },
 
-    footer: { textAlign: "center", marginTop: 28, color: colors.textSecondary, fontSize: 13 },
+    guideBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 24, paddingVertical: 13, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.primary + "55", backgroundColor: colors.primary + "12" },
+    guideTxt: { color: colors.primary, fontWeight: "800", fontSize: 13.5 },
+    footer: { textAlign: "center", marginTop: 20, color: colors.textSecondary, fontSize: 13 },
     footerLink: { color: colors.primary, fontWeight: "800" },
 
     modalBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: "flex-end" },

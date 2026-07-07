@@ -28,6 +28,7 @@ function ThemedStack() {
         <Stack.Screen name="offer-detail" />
         <Stack.Screen name="chat" />
         <Stack.Screen name="chat-thread" />
+        <Stack.Screen name="user-guide" options={{ animation: "slide_from_bottom" }} />
       </Stack>
     </>
   );
