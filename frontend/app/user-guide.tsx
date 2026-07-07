@@ -344,6 +344,10 @@ export default function UserGuide() {
   const { width } = useWindowDimensions();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const [page, setPage] = useState(0);
+  // Measured height of the pager area — each page's vertical ScrollView gets this exact
+  // height, otherwise it has no bound inside the horizontal FlatList and can't scroll
+  // (long steps were clipped behind the controls bar on small screens).
+  const [pagerH, setPagerH] = useState(0);
   const listRef = useRef<FlatList<Step>>(null);
 
   const goto = (i: number) => {
@@ -366,16 +370,23 @@ export default function UserGuide() {
         </View>
       </SafeAreaView>
 
+      <View style={{ flex: 1 }} onLayout={(e) => setPagerH(e.nativeEvent.layout.height)}>
       <FlatList
         ref={listRef}
         data={STEPS}
         keyExtractor={(s) => s.key}
         horizontal
         pagingEnabled
+        style={{ flex: 1 }}
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / width))}
         renderItem={({ item, index }) => (
-          <ScrollView style={{ width }} contentContainerStyle={styles.pageBody} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={{ width, height: pagerH > 0 ? pagerH : undefined }}
+            contentContainerStyle={styles.pageBody}
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+          >
             <View style={styles.stepBadge}>
               <Ionicons name={item.icon as any} size={14} color={colors.primary} />
               <Text style={styles.stepBadgeTxt}>STEP {index + 1} OF {STEPS.length}</Text>
@@ -398,6 +409,7 @@ export default function UserGuide() {
           </ScrollView>
         )}
       />
+      </View>
 
       {/* Pager controls */}
       <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, 12) }]}>
@@ -445,7 +457,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     hTitle: { ...font.h3, color: colors.textPrimary },
     skip: { color: colors.primary, fontWeight: "800", fontSize: 13, padding: 10 },
 
-    pageBody: { paddingHorizontal: spacing.xl, paddingBottom: 24 },
+    pageBody: { paddingHorizontal: spacing.xl, paddingBottom: 36 },
     stepBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", backgroundColor: colors.primary + "14", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
     stepBadgeTxt: { color: colors.primary, fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },
     title: { ...font.h2, color: colors.textPrimary, marginTop: 10 },
