@@ -120,7 +120,11 @@ export default function Login() {
 
       <SafeAreaView edges={["top"]} style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={[styles.scroll, { paddingBottom: 24 + insets.bottom }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {/* Top row: logo + theme toggle */}
             <View style={styles.brandRow}>
               <Image source={{ uri: LOGO_URL }} style={styles.logoImg} />
@@ -276,23 +280,6 @@ export default function Login() {
               </LinearGradient>
             </TouchableOpacity>
 
-            <View style={styles.divider}>
-              <View style={styles.dLine} />
-              <Text style={styles.dText}>or continue with</Text>
-              <View style={styles.dLine} />
-            </View>
-
-            <View style={styles.altRow}>
-              <TouchableOpacity style={styles.altBtn} testID="login-qr-option">
-                <Ionicons name="qr-code-outline" size={20} color={colors.primary} />
-                <Text style={styles.altTxt}>Academy QR</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.altBtn} testID="login-face-id">
-                <Ionicons name="finger-print" size={20} color={colors.primary} />
-                <Text style={styles.altTxt}>Biometric</Text>
-              </TouchableOpacity>
-            </View>
-
             {/* Step-by-step app walkthrough — reachable before signing in */}
             <TouchableOpacity
               style={styles.guideBtn}
@@ -353,7 +340,7 @@ function createStyles(colors: any, shadow: any) {
     root: { flex: 1, backgroundColor: colors.background },
     blobTop: { position: "absolute", width: 280, height: 280, borderRadius: 140, top: -130, right: -80 },
     blobBottom: { position: "absolute", width: 220, height: 220, borderRadius: 110, bottom: -80, left: -60 },
-    scroll: { padding: spacing.xl, paddingBottom: 40, minHeight: "100%" },
+    scroll: { padding: spacing.xl, minHeight: "100%" },
 
     brandRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 },
     logoImg: { width: 38, height: 38, borderRadius: 10 },
@@ -362,7 +349,7 @@ function createStyles(colors: any, shadow: any) {
     helpBtn: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surfaceAlt, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
     helpTxt: { color: colors.textSecondary, fontSize: 12, fontWeight: "600" },
 
-    hero: { marginTop: 40 },
+    hero: { marginTop: 28 },
     eyebrow: { fontSize: 11, fontWeight: "800", color: colors.primary, letterSpacing: 2.5 },
     title: { fontSize: 32, fontWeight: "800", color: colors.textPrimary, letterSpacing: -0.8, marginTop: 10, lineHeight: 38 },
     subtitle: { color: colors.textSecondary, fontSize: 14, marginTop: 10, fontWeight: "500" },
@@ -392,13 +379,6 @@ function createStyles(colors: any, shadow: any) {
     signInText: { color: "#fff", fontWeight: "800", fontSize: 15, letterSpacing: 0.5 },
     arrowCircle: { width: 26, height: 26, borderRadius: 13, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
 
-    divider: { flexDirection: "row", alignItems: "center", marginVertical: 22, gap: 10 },
-    dLine: { flex: 1, height: 1, backgroundColor: colors.border },
-    dText: { color: colors.textMuted, fontSize: 11, fontWeight: "600", letterSpacing: 0.5 },
-
-    altRow: { flexDirection: "row", gap: 12 },
-    altBtn: { flex: 1, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", paddingVertical: 14, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
-    altTxt: { color: colors.textPrimary, fontWeight: "700", fontSize: 13 },
 
     guideBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 24, paddingVertical: 13, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.primary + "55", backgroundColor: colors.primary + "12" },
     guideTxt: { color: colors.primary, fontWeight: "800", fontSize: 13.5 },
