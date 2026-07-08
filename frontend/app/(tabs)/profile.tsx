@@ -266,7 +266,7 @@ export default function Profile() {
           <Ionicons name="log-out-outline" size={18} color={colors.danger} />
           <Text style={styles.logoutTxt}>Logout</Text>
         </TouchableOpacity>
-        <Text style={styles.version}>D-Clix · v2.2.0</Text>
+        <Text style={styles.version}>D-Clix · v2.3.0</Text>
       </ScrollView>
 
       {/* Student-only switchers */}
