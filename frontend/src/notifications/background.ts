@@ -3,7 +3,9 @@
 // new notifications. Web + Expo Go don't support this — everything is guarded.
 import { Platform } from "react-native";
 import { storage } from "../api/storage";
+import { secureStore } from "../api/secureStore";
 import { setAuthToken } from "../api/http";
+import { TOKEN_KEY, USER_KEY } from "../api/auth";
 import { diffAndAlert } from "./service";
 
 export const BG_NOTIF_TASK = "dclix-notification-poll";
@@ -19,12 +21,23 @@ if (Platform.OS !== "web") {
       TaskManager.defineTask(BG_NOTIF_TASK, async () => {
         try {
           // Headless context: React providers aren't mounted — restore the session by hand.
-          const raw = await storage.get("dclix.session.v1");
-          if (!raw) return BackgroundTask.BackgroundTaskResult.Success;
-          const session = JSON.parse(raw);
-          if (!session?.token || !session?.user?.id) return BackgroundTask.BackgroundTaskResult.Success;
-          setAuthToken(session.token);
-          await diffAndAlert(session.user.id);
+          // Token from the secure store; user (for the id) from AsyncStorage. Fall back to the
+          // pre-2.4 combined blob for sessions saved before the split.
+          let token = await secureStore.get(TOKEN_KEY);
+          let userId: number | undefined;
+          const userRaw = await storage.get(USER_KEY);
+          if (userRaw) userId = JSON.parse(userRaw)?.id;
+          if (!token || !userId) {
+            const legacy = await storage.get("dclix.session.v1");
+            if (legacy) {
+              const s = JSON.parse(legacy);
+              token = token || s?.token;
+              userId = userId || s?.user?.id;
+            }
+          }
+          if (!token || !userId) return BackgroundTask.BackgroundTaskResult.Success;
+          setAuthToken(token);
+          await diffAndAlert(userId);
           return BackgroundTask.BackgroundTaskResult.Success;
         } catch {
           return BackgroundTask.BackgroundTaskResult.Failed;

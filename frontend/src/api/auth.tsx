@@ -1,10 +1,15 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { setAuthToken, setUnauthorizedHandler } from "./http";
 import { storage } from "./storage";
+import { secureStore } from "./secureStore";
 import { api } from "./endpoints";
 import type { AuthUser } from "./types";
 
-const SESSION_KEY = "dclix.session.v1";
+// The bearer token (the only real secret) lives in the OS secure store (Keychain/Keystore);
+// the user profile — the user's own, non-secret, re-fetchable data — lives in AsyncStorage.
+export const TOKEN_KEY = "dclix.token.v1";
+export const USER_KEY = "dclix.user.v1";
+const LEGACY_SESSION_KEY = "dclix.session.v1"; // pre-2.4 combined blob (token+user in AsyncStorage)
 
 type Session = { token: string; user: AuthUser };
 
@@ -30,9 +35,38 @@ type AuthCtx = {
 const Ctx = createContext<AuthCtx | null>(null);
 
 function persist(session: Session | null) {
-  // fire-and-forget: storage is async (AsyncStorage) but callers don't need to wait
-  if (session) void storage.set(SESSION_KEY, JSON.stringify(session));
-  else void storage.remove(SESSION_KEY);
+  // fire-and-forget: stores are async but callers don't need to wait
+  if (session) {
+    void secureStore.set(TOKEN_KEY, session.token);
+    void storage.set(USER_KEY, JSON.stringify(session.user));
+  } else {
+    void secureStore.remove(TOKEN_KEY);
+    void storage.remove(USER_KEY);
+    void storage.remove(LEGACY_SESSION_KEY);
+  }
+}
+
+// Read the persisted session, migrating a pre-2.4 combined blob into the split stores.
+async function loadSession(): Promise<Session | null> {
+  try {
+    const token = await secureStore.get(TOKEN_KEY);
+    const userRaw = await storage.get(USER_KEY);
+    if (token && userRaw) {
+      const user = JSON.parse(userRaw) as AuthUser;
+      if (user) return { token, user };
+    }
+    // Migration: older builds stored { token, user } together in AsyncStorage.
+    const legacy = await storage.get(LEGACY_SESSION_KEY);
+    if (legacy) {
+      const s = JSON.parse(legacy) as Session;
+      if (s?.token && s?.user) {
+        persist(s); // re-home into secure + user stores
+        void storage.remove(LEGACY_SESSION_KEY);
+        return s;
+      }
+    }
+  } catch {}
+  return null;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -43,16 +77,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const raw = await storage.get(SESSION_KEY);
-        if (alive && raw) {
-          const s = JSON.parse(raw) as Session;
-          if (s?.token && s?.user) {
-            setAuthToken(s.token);
-            setSession(s);
-          }
-        }
-      } catch {}
+      const s = await loadSession();
+      if (alive && s) {
+        setAuthToken(s.token);
+        setSession(s);
+      }
       if (alive) setReady(true);
     })();
     return () => {

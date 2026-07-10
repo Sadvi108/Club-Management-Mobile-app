@@ -30,8 +30,10 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const { loginStudent, loginInstructor } = useAuth();
 
-  const [studentId, setStudentId] = useState("DARSHANMUTHU");
-  const [password, setPassword] = useState("1234");
+  // Prefill demo credentials in dev builds ONLY. Production APKs ship with empty fields so a
+  // released app never carries working accounts. __DEV__ is false in release bundles.
+  const [studentId, setStudentId] = useState(__DEV__ ? "DARSHANMUTHU" : "");
+  const [password, setPassword] = useState(__DEV__ ? "1234" : "");
   const [showPwd, setShowPwd] = useState(false);
   const [loginMode, setLoginMode] = useState<"student" | "instructor">("student");
   const [focus, setFocus] = useState<"id" | "pwd" | "club" | null>(null);
@@ -52,10 +54,12 @@ export default function Login() {
     setLoginMode(m);
     setError(null);
     if (m === "instructor") {
-      setStudentId((v) => (v === "DARSHANMUTHU" ? "929645" : v));
-      setPassword((v) => (v === "1234" ? "22222" : v));
-      setClubCode((v) => v || "RTT");
-    } else {
+      if (__DEV__) {
+        setStudentId((v) => (v === "DARSHANMUTHU" ? "929645" : v));
+        setPassword((v) => (v === "1234" ? "22222" : v));
+        setClubCode((v) => v || "RTT");
+      }
+    } else if (__DEV__) {
       setStudentId((v) => (v === "929645" ? "DARSHANMUTHU" : v));
       setPassword((v) => (v === "22222" ? "1234" : v));
     }
