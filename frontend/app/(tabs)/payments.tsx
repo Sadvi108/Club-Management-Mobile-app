@@ -41,6 +41,8 @@ export default function Payments() {
   const cart = usePaymentCart();
   const [seg, setSeg] = useState<Seg>("pay");
   const [busyPdf, setBusyPdf] = useState<string | null>(null);
+  // Inactive accounts don't get invoice/receipt PDF downloads
+  const isActive = (user?.status || "").trim().toLowerCase() !== "inactive";
 
   // Account switcher state
   const siblings = useApi(() => api.mySiblings(), []);
@@ -301,7 +303,7 @@ export default function Payments() {
                     </View>
                     <Text style={styles.invAmt} numberOfLines={1}>RM {(inv.dueAmount || 0).toLocaleString()}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
+                  {isActive && <TouchableOpacity
                     style={styles.invDownload}
                     testID={`invoice-pdf-${inv.invoiceId}`}
                     disabled={busyPdf === key}
@@ -321,7 +323,7 @@ export default function Payments() {
                         <Text style={styles.invDownloadTxt}>Invoice PDF</Text>
                       </>
                     )}
-                  </TouchableOpacity>
+                  </TouchableOpacity>}
                 </View>
               );
             })}
@@ -365,7 +367,7 @@ export default function Payments() {
                     </View>
                     <Text style={styles.invAmt} numberOfLines={1}>RM {(p.receiptAmount || 0).toLocaleString()}</Text>
                   </View>
-                  <TouchableOpacity
+                  {isActive && <TouchableOpacity
                     style={styles.invDownload}
                     testID={`receipt-pdf-${p.id}`}
                     disabled={busyPdf === k}
@@ -387,7 +389,7 @@ export default function Payments() {
                         <Text style={styles.invDownloadTxt}>Receipt PDF</Text>
                       </>
                     )}
-                  </TouchableOpacity>
+                  </TouchableOpacity>}
                 </View>
               );
             })}

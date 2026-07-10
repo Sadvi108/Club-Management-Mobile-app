@@ -68,6 +68,7 @@ export default function Profile() {
   );
 
   const personalFields = [
+    { icon: "pulse-outline", label: "Account Status", value: user?.status || "—" },
     { icon: "call-outline", label: "Phone", value: user?.handPhone || "—" },
     { icon: "ribbon-outline", label: "Belt / Grade", value: grade },
     { icon: "business-outline", label: "Center", value: info.data?.eCenterName || info.data?.tCenterName || "—" },
@@ -86,12 +87,16 @@ export default function Profile() {
   };
 
   const ROWS = isInstructor
-    ? [{ id: "help", icon: "headset-outline", label: "Help Desk", onPress: () => router.push("/helpdesk") }]
+    ? [
+        { id: "help", icon: "headset-outline", label: "Help Desk", onPress: () => router.push("/helpdesk") },
+        { id: "guide", icon: "book-outline", label: "User Guide", onPress: () => router.push("/user-guide" as any) },
+      ]
     : [
         { id: "scan", icon: "qr-code-outline", label: "Scan QR to Check In", onPress: () => router.push("/qr-scan") },
         { id: "help", icon: "headset-outline", label: "Help Desk", onPress: () => router.push("/helpdesk") },
         { id: "details", icon: "id-card-outline", label: "Student Details", onPress: () => router.push("/student-details") },
         { id: "purchases", icon: "bag-handle-outline", label: "My Purchases", onPress: () => router.push("/purchases") },
+        { id: "guide", icon: "book-outline", label: "User Guide", onPress: () => router.push("/user-guide" as any) },
       ];
 
   return (

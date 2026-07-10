@@ -7,7 +7,7 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { radius, spacing, font, useTheme, LOGO_URL } from "../../src/theme";
+import { radius, spacing, font, useTheme } from "../../src/theme";
 import { quickCards } from "../../src/mockData";
 import { useAuth } from "../../src/api/auth";
 import { api } from "../../src/api/endpoints";
@@ -50,6 +50,8 @@ function StudentHome() {
   const offers = stats.data?.myoffers ?? [];
   const trainingFirstLine = (info.data?.trainingTme || "").split(/\r?\n/).find((l) => l.trim());
   const hasUnread = unreadCount > 0;
+  // Account standing from the auth response ("Active" / "Inactive")
+  const isActive = (user?.status || "").trim().toLowerCase() !== "inactive";
 
   return (
     <View style={styles.root}>
@@ -69,12 +71,25 @@ function StudentHome() {
                 <Text style={styles.name} testID="home-student-name" numberOfLines={1}>{user?.name?.trim() || "Member"}</Text>
                 <View style={styles.badgeRow}>
                   <Ionicons name="shield-checkmark" size={12} color="#FFF7ED" />
-                  <Text style={styles.badgeTxt} numberOfLines={1}>{user?.clubName || user?.status || "Member"}</Text>
+                  <Text style={styles.badgeTxt} numberOfLines={1}>{user?.clubName || "Member"}</Text>
                 </View>
+                {!!user?.status && (
+                  <View style={[styles.statusPill, { backgroundColor: isActive ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.3)" }]} testID="home-status">
+                    <View style={[styles.statusDot, { backgroundColor: isActive ? "#4ADE80" : "#FCA5A5" }]} />
+                    <Text style={styles.statusTxt}>{isActive ? "Active" : "Inactive"}</Text>
+                  </View>
+                )}
               </View>
             </View>
             <View style={styles.headerActions}>
-              <Image source={{ uri: LOGO_URL }} style={styles.headerLogo} />
+              {/* student's own photo (was the D-CLIX logo); falls back to initials */}
+              {user?.profilePic ? (
+                <Image source={{ uri: user.profilePic }} style={styles.headerLogo} testID="home-profile-pic" />
+              ) : (
+                <View style={[styles.headerLogo, styles.headerPicEmpty]}>
+                  <Text style={styles.headerPicTxt}>{initialsOf(user?.name)}</Text>
+                </View>
+              )}
               <TouchableOpacity style={styles.bell} testID="home-notification-btn" onPress={() => router.push("/notifications")}>
                 <Ionicons name="notifications-outline" size={20} color="#fff" />
                 {hasUnread && (
@@ -217,6 +232,11 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark", width: n
     badgeTxt: { color: "#FFF7ED", fontSize: 10, fontWeight: "700", letterSpacing: 0.3 },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
     headerLogo: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#fff" },
+    headerPicEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.25)" },
+    headerPicTxt: { color: "#fff", fontWeight: "800", fontSize: 13 },
+    statusPill: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", marginTop: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9 },
+    statusDot: { width: 6, height: 6, borderRadius: 3 },
+    statusTxt: { color: "#fff", fontSize: 10, fontWeight: "800", letterSpacing: 0.3 },
     bell: { width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" },
     dot: { position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: "#FDE68A", borderWidth: 2, borderColor: colors.primary },
     badge: { position: "absolute", top: -3, right: -3, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: "#EF4444", alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.primary },
