@@ -13,6 +13,7 @@ import { useAuth } from "../../src/api/auth";
 import { api } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
 import { useNotifications } from "../../src/notifications/NotificationsProvider";
+import { SkeletonStatRow } from "../../src/ui/skeleton";
 import InstructorHome from "../../src/screens/InstructorHome";
 
 function initialsOf(name?: string) {
@@ -102,11 +103,17 @@ function StudentHome() {
           </View>
 
           <View style={styles.statRow}>
-            <View style={styles.stat}><Text style={styles.statNum}>{invoiceCount}</Text><Text style={styles.statLbl}>Invoices</Text></View>
-            <View style={styles.statSep} />
-            <View style={styles.stat}><Text style={styles.statNum}>{beltShort}</Text><Text style={styles.statLbl}>Current Grade</Text></View>
-            <View style={styles.statSep} />
-            <View style={styles.stat}><Text style={styles.statNum}>{dueAmount}</Text><Text style={styles.statLbl}>Due (RM)</Text></View>
+            {stats.loading && !stats.data ? (
+              <SkeletonStatRow />
+            ) : (
+              <>
+                <View style={styles.stat}><Text style={styles.statNum}>{invoiceCount}</Text><Text style={styles.statLbl}>Invoices</Text></View>
+                <View style={styles.statSep} />
+                <View style={styles.stat}><Text style={styles.statNum}>{beltShort}</Text><Text style={styles.statLbl}>Current Grade</Text></View>
+                <View style={styles.statSep} />
+                <View style={styles.stat}><Text style={styles.statNum}>{dueAmount}</Text><Text style={styles.statLbl}>Due (RM)</Text></View>
+              </>
+            )}
           </View>
         </LinearGradient>
       </SafeAreaView>

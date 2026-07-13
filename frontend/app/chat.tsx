@@ -8,6 +8,7 @@ import { safeBack } from "../src/ui/dialogs";
 import { useAuth } from "../src/api/auth";
 import { useNotifications } from "../src/notifications/NotificationsProvider";
 import { threadsWithSent, HELPDESK_THREAD, type SentMsg } from "../src/chat/store";
+import { SkeletonList } from "../src/ui/skeleton";
 import type { AppNotification } from "../src/api/types";
 
 function fmtWhen(iso?: string) {
@@ -110,7 +111,7 @@ export default function Chat() {
         </TouchableOpacity>
 
         <Text style={styles.sectionLbl}>CONVERSATIONS</Text>
-        {loading && items.length === 0 && <ActivityIndicator color={colors.primary} style={{ marginVertical: 30 }} />}
+        {loading && items.length === 0 && <SkeletonList rows={5} lines={2} style={{ padding: 0, paddingTop: 4 }} />}
         {!loading && threads.length === 0 && (
           <View style={styles.empty}>
             <Ionicons name="chatbubbles-outline" size={44} color={colors.textMuted} />

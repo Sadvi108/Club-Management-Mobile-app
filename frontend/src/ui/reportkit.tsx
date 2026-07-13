@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../theme";
 import { safeBack } from "./dialogs";
+import { SkeletonList } from "./skeleton";
 
 // Shared building blocks for the instructor report / filter screens. Everything here matches the
 // D-CLIX design system (theme tokens, Ionicons, surface cards, light/dark parity, 44pt targets,
@@ -205,7 +206,7 @@ export function ReportScaffold<T>({
       {error ? (
         <View style={s.center}><Ionicons name="alert-circle-outline" size={40} color={colors.danger} /><Text style={s.errTxt}>{error}</Text></View>
       ) : loading && !onSearch ? (
-        <View style={s.center}><ActivityIndicator color={colors.primary} size="large" /></View>
+        <SkeletonList rows={7} />
       ) : rows.length === 0 ? (
         <View style={s.center}>
           <Ionicons name="file-tray-outline" size={44} color={colors.textMuted} />

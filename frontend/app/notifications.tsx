@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../src/theme";
 import { safeBack } from "../src/ui/dialogs";
+import { SkeletonList } from "../src/ui/skeleton";
 import { api } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
 import { useNotifications } from "../src/notifications/NotificationsProvider";
@@ -98,7 +99,7 @@ export default function Notifications() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={notif.loading} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} />}
       >
-        {notif.loading && items.length === 0 && <ActivityIndicator color={colors.primary} style={{ marginVertical: 40 }} />}
+        {notif.loading && items.length === 0 && <SkeletonList rows={6} lines={2} style={{ padding: 0, paddingTop: 4 }} />}
         {notif.error && <Text style={styles.errTxt}>{notif.error}</Text>}
         {!notif.loading && items.length === 0 && (
           <View style={styles.empty}>

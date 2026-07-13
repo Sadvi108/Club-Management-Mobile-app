@@ -18,6 +18,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { radius, spacing, font, useTheme } from "../../src/theme";
 import { notify } from "../../src/ui/dialogs";
+import { SkeletonList } from "../../src/ui/skeleton";
 import { useAuth } from "../../src/api/auth";
 import { api, defaultRange } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
@@ -257,9 +258,7 @@ export default function Payments() {
 
         {seg === "pay" && (
           <>
-            {dues.loading && (
-              <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
-            )}
+            {dues.loading && <SkeletonList rows={4} lines={2} style={{ paddingHorizontal: 0, paddingTop: 4 }} />}
             {!dues.loading && invoices.length === 0 && (
               <Text style={styles.emptyTxt}>No outstanding invoices.</Text>
             )}
@@ -343,9 +342,7 @@ export default function Payments() {
 
         {seg === "history" && (
           <>
-            {history.loading && (
-              <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
-            )}
+            {history.loading && <SkeletonList rows={4} lines={2} style={{ paddingHorizontal: 0, paddingTop: 4 }} />}
             {!history.loading && (history.data?.length ?? 0) === 0 && (
               <Text style={styles.emptyTxt}>No receipts found.</Text>
             )}
