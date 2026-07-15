@@ -181,6 +181,66 @@ export type PurchaseProduct = {
   qty: number; cost: number; price: number; hightFrom?: number; hightTo?: number; isRegistration: boolean;
 };
 
+// ── Online student submissions (instructor "New Student" approval) ──
+// PROPOSED CONTRACT — the mobile backend does not expose these yet (see
+// docs/superpowers/specs/2026-07-11-new-student-approval.md). Shapes mirror the web portal's
+// "Student Online Submission List" columns + registration form so wiring is drop-in once the
+// endpoints land. The app shows an "awaiting backend" state (404) rather than any fake rows.
+export type OnlineSubmissionRow = {
+  id: number; // submission id used by approve/reject/details
+  sNo?: number;
+  studentName: string;
+  gender?: string;
+  isOldStudent?: boolean;
+  uniformRequested?: boolean;
+  guardianName?: string; // Ibubapa / Penjaga
+  contactNo?: string;
+  presentGrade?: string;
+  schoolName?: string;
+  trainingCentre?: string;
+  submissionDate?: string;
+  status?: string; // "Pending" | "Approved" | "Rejected"
+};
+
+// Full particulars for one submission (registration form / student-particulars view).
+export type OnlineSubmissionDetail = OnlineSubmissionRow & {
+  regNo?: string;
+  icNo?: string;
+  dateOfBirth?: string;
+  examCentre?: string;
+  studentCentre?: string;
+  schoolWorkplace?: string;
+  addressLine1?: string; addressLine2?: string; addressLine3?: string; addressLine4?: string;
+  state?: string; city?: string; postcode?: string;
+  guardianOccupation?: string;
+  emailAddress?: string;
+  classCommencementDate?: string;
+  feeType?: string;
+  packageSession?: string;
+  registrationYear?: string;
+  material?: string; // uniform / combo
+  healthRemarks?: string;
+  religion?: string;
+  trainingDay?: string;
+  trainingTime?: string;
+  outstandingAmount?: number;
+  qrCode?: string | number;
+  // ids the approve call needs (present when the backend has resolved defaults)
+  trainingCentreId?: number; studentCentreId?: number; examCentreId?: number;
+  presentGradeId?: number; feeTypeId?: number;
+};
+
+// Body for approving a submission — the required (*) fields the web form enforces.
+export type ApproveSubmissionRequest = {
+  id: number;
+  trainingCentreId?: number | null;
+  studentCentreId?: number | null;
+  examCentreId?: number | null;
+  presentGradeId?: number | null;
+  feeTypeId?: number | null;
+  registrationYear?: number | null;
+};
+
 // Request body shared by /Reports/* and used loosely by Outstanding
 export type ReportRequest = {
   sCenterId?: number | null;

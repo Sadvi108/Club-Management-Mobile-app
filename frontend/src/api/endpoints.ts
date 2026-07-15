@@ -11,6 +11,9 @@ import type {
   Invoice,
   MyInfo,
   ExamCenterRow,
+  OnlineSubmissionRow,
+  OnlineSubmissionDetail,
+  ApproveSubmissionRequest,
   OutstandingRequest,
   PackageInfo,
   PurchaseProduct,
@@ -163,6 +166,18 @@ export const api = {
   // Recalculates/syncs the collection count for a type server-side; returns "OK".
   updateCollectionCount: (typeId: number) =>
     http.get<string>(`/Outstanding/UpdateCollectionCount/${typeId}`),
+
+  // ── Instructor: New Student (online submission) approval ──
+  // PROPOSED CONTRACT — not yet on the backend (returns 404 today; the UI shows an
+  // "awaiting backend" state, never fake data). Paths chosen to match the /Reports + /Account
+  // conventions; adjust these four lines to the real routes once the backend ships them.
+  onlineSubmissions: () => http.get<OnlineSubmissionRow[]>("/Reports/OnlineSubmissions"),
+  onlineSubmissionDetail: (id: number) =>
+    http.get<OnlineSubmissionDetail>(`/Reports/OnlineSubmissionDetails/${id}`),
+  approveSubmission: (body: ApproveSubmissionRequest) =>
+    http.post<any>("/Account/ApproveStudent", body),
+  rejectSubmission: (id: number, remarks?: string) =>
+    http.post<any>("/Account/RejectStudent", { id, remarks: remarks || "" }),
 
   // ── Instructor: Reports ──
   // GET (no body): center summary reports.

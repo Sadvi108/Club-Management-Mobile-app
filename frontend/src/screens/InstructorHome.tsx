@@ -71,6 +71,7 @@ export default function InstructorHome() {
     collections: "/(tabs)/collections",
     "missing-invoice": "/r-outstanding",
     "payment-slip": "/r-payment-slips",
+    "new-student": "/new-student",
     more: "/(tabs)/reports",
   };
   const onTile = (t: Tile) => {
