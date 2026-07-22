@@ -31,7 +31,7 @@ const TILES: Tile[] = [
   { id: "grading-schedule", label: "Grading Schedule", icon: "school-outline", color: "#9333EA" },
   { id: "tournament-schedule", label: "Tournament Schedule", icon: "trophy-outline", color: "#EF4444" },
   { id: "collections", label: "Collections", icon: "cash-outline", color: "#DB2777" },
-  { id: "missing-invoice", label: "Missing Invoice", icon: "document-text-outline", color: "#F97316" },
+  { id: "missing-invoice", label: "Missing Invoice", icon: "document-text-outline", color: "#E11D2A" },
   { id: "fee-master", label: "Fee Master", icon: "pricetags-outline", color: "#64748B" },
   { id: "new-student", label: "New Student", icon: "person-add-outline", color: "#10B981" },
   { id: "payment-slip", label: "Payment Slip", icon: "document-attach-outline", color: "#4F46E5" },
@@ -141,7 +141,7 @@ export default function InstructorHome() {
           activeOpacity={0.9}
         >
           <LinearGradient
-            colors={mode === "dark" ? ["#2D1A0A", "#3F2410"] : ["#FEF3C7", "#FED7AA"]}
+            colors={colors.gradientSoft}
             style={styles.dueGradient}
           >
             <View style={styles.dueIcon}>
@@ -157,7 +157,7 @@ export default function InstructorHome() {
               )}
               <Text style={styles.dueSub}>RM {dueAmount.toLocaleString()} total due amount</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={mode === "dark" ? "#FDBA74" : "#9A3412"} />
+            <Ionicons name="chevron-forward" size={18} color={mode === "dark" ? "#FF8A93" : "#B10E18"} />
           </LinearGradient>
         </TouchableOpacity>
 
@@ -259,7 +259,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     avatarEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.25)" },
     hi: { color: "rgba(255,255,255,0.85)", fontSize: 12 },
     name: { color: "#fff", fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
-    sub: { color: "#FFF7ED", fontSize: 12, fontWeight: "600", marginTop: 2 },
+    sub: { color: "#FDECEC", fontSize: 12, fontWeight: "600", marginTop: 2 },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
     iconBtn: {
       width: 42,
@@ -295,8 +295,8 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
       alignItems: "center",
       justifyContent: "center",
     },
-    dueTitle: { color: mode === "dark" ? "#FED7AA" : "#7C2D12", fontSize: 16, fontWeight: "800" },
-    dueSub: { color: mode === "dark" ? "#FDBA74" : "#9A3412", fontSize: 12, marginTop: 3, fontWeight: "600" },
+    dueTitle: { color: mode === "dark" ? "#FFB3B8" : "#8F0B13", fontSize: 16, fontWeight: "800" },
+    dueSub: { color: mode === "dark" ? "#FF8A93" : "#B10E18", fontSize: 12, marginTop: 3, fontWeight: "600" },
 
     sectionHead: {
       flexDirection: "row",

@@ -29,7 +29,7 @@ const SECTIONS: { title: string; items: Option[] }[] = [
       { id: "payments", label: "Payment History", icon: "receipt", color: "#14B8A6", route: "/(tabs)/payments" },
       { id: "prepay", label: "Advance Payment", icon: "card", color: "#8B5CF6", route: "/(tabs)/payments" },
       { id: "purchase", label: "Purchase Request", icon: "bag-handle", color: "#F59E0B", route: "/purchase-request" },
-      { id: "purchases", label: "My Purchases", icon: "bag-check", color: "#F97316", route: "/purchases" },
+      { id: "purchases", label: "My Purchases", icon: "bag-check", color: "#E11D2A", route: "/purchases" },
     ],
   },
   {
@@ -43,7 +43,7 @@ const SECTIONS: { title: string; items: Option[] }[] = [
   {
     title: "Club",
     items: [
-      { id: "events", label: "Events", icon: "trophy", color: "#F97316", route: "/events" },
+      { id: "events", label: "Events", icon: "trophy", color: "#E11D2A", route: "/events" },
       { id: "competition", label: "Competition", icon: "medal", color: "#DB2777", route: "/events" },
       { id: "offers", label: "Offers", icon: "pricetags", color: "#10B981", route: "/events" },
       { id: "chat", label: "Chat Academy", icon: "chatbubbles", color: "#22C55E", route: "/chat" },

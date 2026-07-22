@@ -160,7 +160,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     emptySub: { fontSize: 13, color: colors.textSecondary },
 
     card: { flexDirection: "row", gap: 12, alignItems: "flex-start", backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, marginBottom: 10, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
-    cardUnread: { backgroundColor: mode === "dark" ? colors.surfaceAlt : "#FFF7ED", borderWidth: 1, borderColor: colors.primary + "55" },
+    cardUnread: { backgroundColor: mode === "dark" ? colors.surfaceAlt : colors.secondary, borderWidth: 1, borderColor: colors.primary + "55" },
     iconWrap: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
     cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
     cardTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.textPrimary },

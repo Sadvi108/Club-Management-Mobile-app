@@ -145,7 +145,7 @@ export default function QRScan() {
           {!result && !busy && (
             <Animated.View style={[styles.laser, { transform: [{ translateY }] }]}>
               <LinearGradient
-                colors={["rgba(249,115,22,0)", colors.primary, "rgba(249,115,22,0)"]}
+                colors={["rgba(225,29,42,0)", colors.primary, "rgba(225,29,42,0)"]}
                 style={{ width: "100%", height: 3 }}
               />
             </Animated.View>
