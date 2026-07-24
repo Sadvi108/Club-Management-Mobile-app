@@ -351,7 +351,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     memberRow: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 10, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, maxWidth: "90%" },
     memberTxt: { color: "#FFF7ED", fontSize: 12, fontWeight: "700", flexShrink: 1 },
 
-    virtualId: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -34, borderRadius: radius.xl, padding: 18, ...shadow.card, overflow: "hidden", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border, alignItems: "center" },
+    virtualId: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -34, borderRadius: radius.xl, padding: 18, ...shadow.shade, overflow: "hidden", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border, alignItems: "center" },
     vidLeft: { flex: 1 },
     vidBrandRow: { flexDirection: "row", gap: 8, alignItems: "center" },
     vidLogo: { width: 24, height: 24, borderRadius: 7 },

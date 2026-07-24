@@ -254,7 +254,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark", width: n
     statLbl: { color: "rgba(255,255,255,0.85)", fontSize: 10, marginTop: 2, letterSpacing: 0.5 },
     statSep: { width: 1, backgroundColor: "rgba(255,255,255,0.25)" },
 
-    topQuick: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -20, borderRadius: radius.xl, paddingVertical: 16, paddingHorizontal: 6, ...shadow.card, justifyContent: "space-between", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    topQuick: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -20, borderRadius: radius.xl, paddingVertical: 16, paddingHorizontal: 6, ...shadow.shade, justifyContent: "space-between", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
     topQuickItem: { alignItems: "center", flex: 1 },
     topQuickIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center", marginBottom: 6 },
     topQuickLbl: { fontSize: 9.5, color: colors.textPrimary, fontWeight: "600", textAlign: "center" },

@@ -25,6 +25,12 @@ type Palette = {
   overlay: string;
   cardShadowColor: string;
   strongShadowColor: string;
+  // Liquid-glass (frosted chrome): translucent fills + BlurView tint for tab bar, sheets,
+  // and cards that overlap the gradient header.
+  glassBg: string;
+  glassBgStrong: string;
+  glassBorder: string;
+  glassTint: "light" | "dark" | "default";
 };
 
 // Internal color grading: brand orange (primary + gradient) is UNCHANGED. What's graded is the
@@ -55,6 +61,10 @@ export const lightColors: Palette = {
   overlay: "rgba(15,23,42,0.5)",
   cardShadowColor: "#1E1B18", // warm-tinted shadow (was cold slate) so elevation matches the brand
   strongShadowColor: "#F97316",
+  glassBg: "rgba(255,255,255,0.60)",
+  glassBgStrong: "rgba(255,255,255,0.80)",
+  glassBorder: "rgba(255,255,255,0.65)",
+  glassTint: "light",
 };
 
 export const darkColors: Palette = {
@@ -82,33 +92,45 @@ export const darkColors: Palette = {
   overlay: "rgba(0,0,0,0.7)",
   cardShadowColor: "#000000",
   strongShadowColor: "#F97316",
+  glassBg: "rgba(26,25,30,0.55)",
+  glassBgStrong: "rgba(26,25,30,0.78)",
+  glassBorder: "rgba(255,255,255,0.10)",
+  glassTint: "dark",
 };
 
 export const radius = { sm: 10, md: 14, lg: 18, xl: 22, xxl: 28, full: 9999 };
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 };
 
 export const makeShadow = (c: Palette) => ({
-  // Softer, more diffuse elevation → cards feel like they float rather than sit on a hard edge.
+  // Diffuse elevation → cards float rather than sit on a hard edge. Deepened for more "shade".
   card: {
     shadowColor: c.cardShadowColor,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.07,
-    shadowRadius: 22,
-    elevation: 4,
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 5,
   },
   soft: {
     shadowColor: c.cardShadowColor,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  // Deeper ambient shade for hero/elevated surfaces that need real presence.
+  shade: {
+    shadowColor: c.cardShadowColor,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.16,
+    shadowRadius: 30,
+    elevation: 8,
   },
   strong: {
     shadowColor: c.strongShadowColor,
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.26,
-    shadowRadius: 24,
-    elevation: 9,
+    shadowOpacity: 0.3,
+    shadowRadius: 26,
+    elevation: 10,
   },
 });
 

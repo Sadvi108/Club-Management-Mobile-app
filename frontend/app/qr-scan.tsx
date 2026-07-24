@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { radius, spacing, useTheme } from "../src/theme";
@@ -118,7 +119,7 @@ export default function QRScan() {
       {/* Scrim for overlay contrast over the camera feed */}
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.35)" }]} pointerEvents="none" />
 
-      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 56) }]}>
+      <BlurView intensity={30} tint="dark" style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 56) }]}>
         <TouchableOpacity
           style={styles.close}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -129,7 +130,7 @@ export default function QRScan() {
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>Scan to Check-in</Text>
         <View style={styles.close} />
-      </View>
+      </BlurView>
 
       <View style={styles.center}>
         <Text style={styles.instruction}>

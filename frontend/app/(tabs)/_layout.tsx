@@ -1,6 +1,7 @@
 import { Tabs, useRouter, Redirect } from "expo-router";
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../src/theme";
@@ -10,7 +11,8 @@ function FabQR({ onPress, gradient }: { onPress: () => void; gradient: readonly 
   return (
     <TouchableOpacity testID="fab-qr-scan" onPress={onPress} activeOpacity={0.9} style={styles.fabWrap}>
       <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fab}>
-        <Ionicons name="qr-code" size={26} color="#fff" />
+        {/* smoother viewfinder look than the busy qr-code grid */}
+        <Ionicons name="scan-outline" size={30} color="#fff" />
       </LinearGradient>
       <Text style={[styles.fabLabel, { color: gradient[1] }]}>Scan</Text>
     </TouchableOpacity>
@@ -27,7 +29,7 @@ const HIDDEN = { href: null } as const;
 
 export default function TabsLayout() {
   const router = useRouter();
-  const { colors, shadow } = useTheme();
+  const { colors, shadow, mode } = useTheme();
   const { ready, user, isInstructor } = useAuth();
   const insets = useSafeAreaInsets();
 
@@ -51,10 +53,18 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.textMuted,
         // Android: an absolute bar would float above the open keyboard — hide it instead
         tabBarHideOnKeyboard: true,
+        // Frosted liquid-glass tab bar (blur over the content behind it).
+        tabBarBackground: () => (
+          <BlurView
+            intensity={mode === "dark" ? 40 : 60}
+            tint={mode === "dark" ? "dark" : "light"}
+            style={[StyleSheet.absoluteFill, { backgroundColor: colors.glassBg, borderTopWidth: 1, borderTopColor: colors.glassBorder }]}
+          />
+        ),
         tabBarStyle: {
           position: "absolute",
           borderTopWidth: 0,
-          backgroundColor: colors.surface,
+          backgroundColor: "transparent",
           // Size from the device's real bottom inset so the bar clears the Android
           // system nav (gesture pill or 3-button) and the iOS home indicator alike.
           height: 62 + insets.bottom,
