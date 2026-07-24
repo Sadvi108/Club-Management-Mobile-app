@@ -496,16 +496,16 @@ function mockStyles(colors: any, mode: "light" | "dark") {
     statNum: { color: "#fff", fontSize: 11, fontWeight: "800" },
     statLbl: { color: "rgba(255,255,255,0.85)", fontSize: 7 },
 
-    dueCard: { flexDirection: "row", alignItems: "center", margin: 8, marginBottom: 0, padding: 8, borderRadius: 10, backgroundColor: mode === "dark" ? "#241416" : "#FDECEC" },
-    dueLbl: { fontSize: 7, fontWeight: "800", color: mode === "dark" ? "#FF8A93" : "#B10E18" },
-    dueAmt: { fontSize: 13, fontWeight: "800", color: mode === "dark" ? "#FFB3B8" : "#8F0B13" },
+    dueCard: { flexDirection: "row", alignItems: "center", margin: 8, marginBottom: 0, padding: 8, borderRadius: 10, backgroundColor: mode === "dark" ? "#3F2410" : "#FEF3C7" },
+    dueLbl: { fontSize: 7, fontWeight: "800", color: mode === "dark" ? "#FDBA74" : "#9A3412" },
+    dueAmt: { fontSize: 13, fontWeight: "800", color: mode === "dark" ? "#FED7AA" : "#7C2D12" },
     payBtn: { backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 5 },
     payBtnTxt: { color: "#fff", fontSize: 8, fontWeight: "800" },
 
     gridRow: { flexDirection: "row", gap: 6, paddingHorizontal: 8, marginTop: 8 },
     gridCell: { flex: 1, aspectRatio: 1.15, borderRadius: 8, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
     banner: { margin: 8, marginBottom: 0, height: 34, borderRadius: 8, backgroundColor: "#1F2937", alignItems: "center", justifyContent: "center" },
-    bannerTxt: { color: "#FF8A93", fontSize: 8, fontWeight: "800" },
+    bannerTxt: { color: "#FDBA74", fontSize: 8, fontWeight: "800" },
 
     pageTitle: { fontSize: 12, fontWeight: "800", color: colors.textPrimary, margin: 10, marginBottom: 6 },
     segRow: { flexDirection: "row", gap: 4, paddingHorizontal: 10 },
@@ -521,8 +521,8 @@ function mockStyles(colors: any, mode: "light" | "dark") {
     ctaTxt: { color: "#fff", fontSize: 9, fontWeight: "800" },
 
     qrFrame: { alignSelf: "center", width: 110, height: 110, alignItems: "center", justifyContent: "center", marginTop: 12 },
-    qrCorner: { position: "absolute", width: 18, height: 18, borderColor: "#F5333F", borderTopWidth: 3, borderLeftWidth: 3, borderRadius: 2 },
-    scanLine: { position: "absolute", left: 6, right: 6, top: "52%", height: 2, backgroundColor: "#F5333F", opacity: 0.9 },
+    qrCorner: { position: "absolute", width: 18, height: 18, borderColor: "#F97316", borderTopWidth: 3, borderLeftWidth: 3, borderRadius: 2 },
+    scanLine: { position: "absolute", left: 6, right: 6, top: "52%", height: 2, backgroundColor: "#F97316", opacity: 0.9 },
     qrHint: { color: "rgba(255,255,255,0.75)", fontSize: 8.5, textAlign: "center", marginTop: 12, paddingHorizontal: 16 },
     qrResult: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "center", marginTop: 10, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
     qrResultTxt: { color: "#fff", fontSize: 8.5, fontWeight: "700" },

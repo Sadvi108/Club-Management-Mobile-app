@@ -128,7 +128,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     title: { ...font.h3, color: colors.textPrimary },
 
     fitCard: { flexDirection: "row", borderRadius: radius.xxl, padding: 20 },
-    fitLbl: { color: "#FDECEC", fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
+    fitLbl: { color: "#FFF7ED", fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
     fitNum: { color: "#fff", fontSize: 38, fontWeight: "800", marginTop: 4, letterSpacing: -1 },
     fitMsg: { color: "rgba(255,255,255,0.9)", fontSize: 12 },
     fitIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },

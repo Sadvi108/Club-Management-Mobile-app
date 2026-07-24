@@ -71,7 +71,7 @@ function StudentHome() {
                 <Text style={styles.hi}>Hello,</Text>
                 <Text style={styles.name} testID="home-student-name" numberOfLines={1}>{user?.name?.trim() || "Member"}</Text>
                 <View style={styles.badgeRow}>
-                  <Ionicons name="shield-checkmark" size={12} color="#FDECEC" />
+                  <Ionicons name="shield-checkmark" size={12} color="#FFF7ED" />
                   <Text style={styles.badgeTxt} numberOfLines={1}>{user?.clubName || "Member"}</Text>
                 </View>
                 {!!user?.status && (
@@ -135,7 +135,7 @@ function StudentHome() {
         </View>
 
         <TouchableOpacity style={styles.dueCard} onPress={() => router.push("/(tabs)/payments")} activeOpacity={0.9} testID="home-due-card">
-          <LinearGradient colors={colors.gradientSoft} style={styles.dueGradient}>
+          <LinearGradient colors={mode === "dark" ? ["#2D1A0A", "#3F2410"] : ["#FEF3C7", "#FED7AA"]} style={styles.dueGradient}>
             <View style={{ flex: 1 }}>
               <Text style={styles.dueLbl}>FEES DUE</Text>
               {stats.loading ? (
@@ -236,7 +236,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark", width: n
     hi: { color: "rgba(255,255,255,0.85)", fontSize: 12 },
     name: { color: "#fff", fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
     badgeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, alignSelf: "flex-start" },
-    badgeTxt: { color: "#FDECEC", fontSize: 10, fontWeight: "700", letterSpacing: 0.3 },
+    badgeTxt: { color: "#FFF7ED", fontSize: 10, fontWeight: "700", letterSpacing: 0.3 },
     headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
     headerLogo: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#fff" },
     headerPicEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.25)" },
@@ -261,9 +261,9 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark", width: n
 
     dueCard: { marginHorizontal: spacing.xl, marginTop: 18 },
     dueGradient: { borderRadius: radius.xl, padding: 18, flexDirection: "row", alignItems: "center" },
-    dueLbl: { color: mode === "dark" ? "#FF8A93" : "#B10E18", fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
-    dueAmt: { color: mode === "dark" ? "#FFB3B8" : "#8F0B13", fontSize: 24, fontWeight: "800", marginTop: 2 },
-    dueDate: { color: mode === "dark" ? "#FF8A93" : "#B10E18", fontSize: 11, marginTop: 2, fontWeight: "500" },
+    dueLbl: { color: mode === "dark" ? "#FDBA74" : "#9A3412", fontSize: 11, fontWeight: "700", letterSpacing: 0.5 },
+    dueAmt: { color: mode === "dark" ? "#FED7AA" : "#7C2D12", fontSize: 24, fontWeight: "800", marginTop: 2 },
+    dueDate: { color: mode === "dark" ? "#FDBA74" : "#9A3412", fontSize: 11, marginTop: 2, fontWeight: "500" },
     dueBtn: { flexDirection: "row", gap: 6, alignItems: "center", backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.md },
     dueBtnTxt: { color: "#fff", fontWeight: "700", fontSize: 12 },
 
@@ -288,7 +288,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark", width: n
     // slightly narrower when several offers exist so the next card peeks in
     eventBannerPeek: { width: width - spacing.xl * 2 - 36 },
     eventBottom: { padding: 16, marginTop: "auto" },
-    eventCat: { color: "#FF8A93", fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
+    eventCat: { color: "#FDBA74", fontSize: 10, fontWeight: "700", letterSpacing: 1.5 },
     eventTitle: { color: "#fff", fontSize: 18, fontWeight: "800", marginTop: 4 },
     eventMeta: { color: "rgba(255,255,255,0.85)", fontSize: 11, marginTop: 6 },
   });

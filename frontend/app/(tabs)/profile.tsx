@@ -123,7 +123,7 @@ export default function Profile() {
               <Text style={styles.name} numberOfLines={1}>{user?.name?.trim() || "Member"}</Text>
               <Text style={styles.id} numberOfLines={1}>{user?.code || user?.icNo}</Text>
               <View style={styles.memberRow}>
-                <Ionicons name={isInstructor ? "school" : "shield-checkmark"} size={14} color="#FDECEC" />
+                <Ionicons name={isInstructor ? "school" : "shield-checkmark"} size={14} color="#FFF7ED" />
                 <Text style={styles.memberTxt} numberOfLines={1}>{isInstructor ? `Instructor · ${clubName}` : clubName}</Text>
               </View>
             </View>
@@ -245,7 +245,7 @@ export default function Profile() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.themeTitle}>{mode === "dark" ? "Dark Mode" : "Light Mode"}</Text>
-              <Text style={styles.themeSub}>{mode === "dark" ? "Red & black" : "Red & white"}</Text>
+              <Text style={styles.themeSub}>{mode === "dark" ? "Orange & black" : "Orange & white"}</Text>
             </View>
             <Switch
               testID="profile-dark-mode-toggle"
@@ -349,7 +349,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     name: { color: "#fff", fontSize: 24, fontWeight: "800", marginTop: 14, textAlign: "center", paddingHorizontal: 10 },
     id: { color: "rgba(255,255,255,0.9)", fontSize: 13, marginTop: 4 },
     memberRow: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 10, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, maxWidth: "90%" },
-    memberTxt: { color: "#FDECEC", fontSize: 12, fontWeight: "700", flexShrink: 1 },
+    memberTxt: { color: "#FFF7ED", fontSize: 12, fontWeight: "700", flexShrink: 1 },
 
     virtualId: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -34, borderRadius: radius.xl, padding: 18, ...shadow.card, overflow: "hidden", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border, alignItems: "center" },
     vidLeft: { flex: 1 },

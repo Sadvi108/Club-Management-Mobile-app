@@ -128,7 +128,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     heroCard: { flexDirection: "row", borderRadius: radius.xxl, padding: 18, alignItems: "center" },
     ringWrap: { width: 120, height: 120, alignItems: "center", justifyContent: "center" },
     ringOuter: { width: 120, height: 120, borderRadius: 60, borderWidth: 6, borderColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" },
-    ringInner: { width: 100, height: 100, borderRadius: 50, borderTopWidth: 6, borderRightWidth: 6, borderBottomWidth: 6, borderLeftWidth: 6, borderTopColor: "#FDECEC", borderRightColor: "#FDECEC", borderBottomColor: "rgba(255,255,255,0.4)", borderLeftColor: "rgba(255,255,255,0.4)", alignItems: "center", justifyContent: "center", transform: [{ rotate: "-45deg" }] },
+    ringInner: { width: 100, height: 100, borderRadius: 50, borderTopWidth: 6, borderRightWidth: 6, borderBottomWidth: 6, borderLeftWidth: 6, borderTopColor: "#FFF7ED", borderRightColor: "#FFF7ED", borderBottomColor: "rgba(255,255,255,0.4)", borderLeftColor: "rgba(255,255,255,0.4)", alignItems: "center", justifyContent: "center", transform: [{ rotate: "-45deg" }] },
     pct: { color: "#fff", fontSize: 22, fontWeight: "800", transform: [{ rotate: "45deg" }] },
     pctLbl: { color: "rgba(255,255,255,0.85)", fontSize: 9, fontWeight: "700", transform: [{ rotate: "45deg" }] },
     heroRight: { flex: 1, marginLeft: 16 },

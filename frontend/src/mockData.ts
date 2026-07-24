@@ -24,7 +24,7 @@ export const quickCards = [
   { id: "payments", label: "Payment History", icon: "receipt", color: "#14B8A6", route: "/(tabs)/payments" },
   { id: "progress", label: "Progress Report", icon: "trending-up", color: "#6366F1", route: "/progress" },
   { id: "belt", label: "Belt / Rank", icon: "ribbon", color: "#EAB308", route: "/progress" },
-  { id: "events", label: "Events", icon: "trophy", color: "#E11D2A", route: "/events" },
+  { id: "events", label: "Events", icon: "trophy", color: "#F97316", route: "/events" },
   { id: "competition", label: "Competition", icon: "medal", color: "#DB2777", route: "/events" },
   { id: "purchase", label: "Purchase Request", icon: "bag-handle", color: "#F59E0B", route: "/purchase-request" },
   { id: "chat", label: "Chat Academy", icon: "chatbubbles", color: "#22C55E", route: "/chat" },
@@ -149,7 +149,7 @@ export const skills = [
 ];
 
 export const achievements = [
-  { id: "a1", title: "100 Classes", icon: "flame", color: "#E11D2A" },
+  { id: "a1", title: "100 Classes", icon: "flame", color: "#F97316" },
   { id: "a2", title: "Belt Upgrade", icon: "ribbon", color: "#3B82F6" },
   { id: "a3", title: "Top Performer", icon: "star", color: "#EAB308" },
   { id: "a4", title: "Team Player", icon: "people", color: "#8B5CF6" },

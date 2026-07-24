@@ -27,61 +27,61 @@ type Palette = {
   strongShadowColor: string;
 };
 
-// D-CLIX design system (INTEGRATION.md): Red · Black · White. One accent only — red; structure is
-// black/white/neutral. Values mirror the token tables in §3; screens must consume these tokens,
-// never hardcode a themed color.
+// Internal color grading: brand orange (primary + gradient) is UNCHANGED. What's graded is the
+// neutral ramp around it — a barely-warm page tint so white cards lift off the background, and
+// slightly stronger borders so surfaces separate without heavier shadows. Same theme, more depth.
 export const lightColors: Palette = {
-  background: "#FFFFFF",
+  background: "#FBFAF9", // warm paper white (was pure #FFF) → white surfaces now read as elevated
   surface: "#FFFFFF",
-  surfaceAlt: "#F6F6F7", // --surface-alt (neutral, not a brand wash)
-  surfaceAlt2: "#EDEDEF",
-  primary: "#E11D2A", // --dclix-red
-  primaryDark: "#B10E18",
-  primaryLight: "#F5333F",
-  accent: "#F5333F",
-  secondary: "#FCE9EA", // --primary-wash (pale red wash)
-  textPrimary: "#0A0A0A",
-  textSecondary: "#5B5B60",
-  textMuted: "#9A9AA0",
+  surfaceAlt: "#FFF7ED",
+  surfaceAlt2: "#FFEDD5",
+  primary: "#F97316",
+  primaryDark: "#EA580C",
+  primaryLight: "#FB923C",
+  accent: "#FB923C",
+  secondary: "#FDBA74",
+  textPrimary: "#0F172A",
+  textSecondary: "#5B6472", // nudged darker for crisper AA contrast on white
+  textMuted: "#9AA1AC",
   textInverse: "#FFFFFF",
-  border: "#E6E6E8",
-  borderLight: "#F1F1F3",
-  success: "#16A34A",
+  border: "#EBEDF0", // a touch stronger than #F1F5F9 so card edges are visible on the warm bg
+  borderLight: "#F4F5F7",
+  success: "#10B981",
   warning: "#F59E0B",
-  danger: "#DC2626",
-  gradient: ["#F5333F", "#E11D2A", "#B10E18"] as const,
-  gradientSoft: ["#FDECEC", "#FCDDDE"] as const, // fees-due / dues card wash
+  danger: "#EF4444",
+  gradient: ["#FB923C", "#F97316", "#EA580C"] as const,
+  gradientSoft: ["#FFF7ED", "#FFEDD5"] as const,
   gold: "#F59E0B",
-  overlay: "rgba(10,10,10,0.5)",
-  cardShadowColor: "#141416",
-  strongShadowColor: "#E11D2A", // red-tinted lift — CTAs/FAB only
+  overlay: "rgba(15,23,42,0.5)",
+  cardShadowColor: "#1E1B18", // warm-tinted shadow (was cold slate) so elevation matches the brand
+  strongShadowColor: "#F97316",
 };
 
 export const darkColors: Palette = {
-  background: "#000000", // dark bg = black (design rule #2)
-  surface: "#141416",
-  surfaceAlt: "#1E1E21",
-  surfaceAlt2: "#26262A",
-  primary: "#F5333F",
-  primaryDark: "#E11D2A",
-  primaryLight: "#FF5C66",
-  accent: "#F5333F",
-  secondary: "rgba(245,51,63,0.16)", // --primary-wash (dark)
-  textPrimary: "#FFFFFF",
-  textSecondary: "#A6A6AD",
-  textMuted: "#6E6E76",
-  textInverse: "#0A0A0A",
-  border: "#2A2A2E",
-  borderLight: "#202023",
-  success: "#22C55E",
+  background: "#0B0A0C", // faint warm cast (was neutral #0A0A0B) to match the orange brand
+  surface: "#1A191E", // lifted a step so cards separate from the background
+  surfaceAlt: "#232228",
+  surfaceAlt2: "#2B2A31",
+  primary: "#FB923C",
+  primaryDark: "#F97316",
+  primaryLight: "#FDBA74",
+  accent: "#FB923C",
+  secondary: "#FDBA74",
+  textPrimary: "#FAFAFA",
+  textSecondary: "#A8A6AF",
+  textMuted: "#77757E",
+  textInverse: "#0A0A0B",
+  border: "#2E2C34", // more visible dividers in dark mode
+  borderLight: "#232228",
+  success: "#34D399",
   warning: "#FBBF24",
   danger: "#F87171",
-  gradient: ["#FF5C66", "#F5333F", "#B10E18"] as const,
-  gradientSoft: ["#241416", "#2A181A"] as const,
+  gradient: ["#FDBA74", "#F97316", "#EA580C"] as const,
+  gradientSoft: ["#232228", "#2B2A31"] as const,
   gold: "#FBBF24",
   overlay: "rgba(0,0,0,0.7)",
   cardShadowColor: "#000000",
-  strongShadowColor: "#E11D2A",
+  strongShadowColor: "#F97316",
 };
 
 export const radius = { sm: 10, md: 14, lg: 18, xl: 22, xxl: 28, full: 9999 };

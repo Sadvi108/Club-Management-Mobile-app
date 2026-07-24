@@ -53,7 +53,7 @@ export default function Training() {
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: tabBarHeight + 24 }} showsVerticalScrollIndicator={false}>
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.heroCard, shadow.strong]}>
           <View style={styles.heroRow}>
-            <Ionicons name="trophy" size={22} color="#FDECEC" />
+            <Ionicons name="trophy" size={22} color="#FFF7ED" />
             <Text style={styles.heroBadge}>SESSIONS ATTENDED</Text>
           </View>
           {att.loading ? (
@@ -76,7 +76,7 @@ export default function Training() {
         ) : (
           <View style={styles.programCard} testID="program-current">
             <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.programBanner}>
-              <Ionicons name="medal" size={40} color="#FDECEC" />
+              <Ionicons name="medal" size={40} color="#FFF7ED" />
               <Text style={styles.bannerTxt} numberOfLines={1}>{user?.clubName || "Martial Arts"}</Text>
             </LinearGradient>
             <View style={styles.programBody}>
@@ -123,7 +123,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
 
     heroCard: { borderRadius: radius.xl, padding: 20, marginBottom: 20 },
     heroRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-    heroBadge: { color: "#FDECEC", fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
+    heroBadge: { color: "#FFF7ED", fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
     heroNum: { color: "#fff", fontSize: 44, fontWeight: "800", marginTop: 4, letterSpacing: -1 },
     heroUnit: { fontSize: 16, fontWeight: "500", color: "rgba(255,255,255,0.8)" },
     heroMsg: { color: "rgba(255,255,255,0.9)", fontSize: 12, marginTop: 2 },

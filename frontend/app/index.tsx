@@ -32,7 +32,7 @@ export default function Splash() {
 
   const bgColors = mode === "dark"
     ? (["#000000", "#0A0A0B", "#1F1F23"] as const)
-    : (["#FFFFFF", "#FDECEC", "#FCDDDE"] as const);
+    : (["#FFFFFF", "#FFF7ED", "#FFEDD5"] as const);
 
   return (
     <View style={[styles.container, { backgroundColor: mode === "dark" ? "#000" : "#fff" }]} testID="splash-screen">
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     height: 170,
     borderRadius: 85,
     borderWidth: 2,
-    borderColor: "rgba(225,29,42,0.18)",
+    borderColor: "rgba(249,115,22,0.18)",
   },
   logoCircle: {
     width: 130,
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
-    shadowColor: "#E11D2A",
+    shadowColor: "#F97316",
     shadowOpacity: 0.35,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 10 },

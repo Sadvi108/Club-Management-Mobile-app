@@ -38,7 +38,7 @@ export async function ensureNotificationPermissions(): Promise<boolean> {
         name: "Club notifications",
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#E11D2A",
+        lightColor: "#F97316",
       });
     }
     const cur = await Notifications.getPermissionsAsync();

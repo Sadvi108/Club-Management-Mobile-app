@@ -154,7 +154,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     sectionLbl: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: colors.textMuted, marginTop: 18, marginBottom: 10 },
 
     row: { flexDirection: "row", gap: 12, alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, marginBottom: 10, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
-    pinned: { borderWidth: 1, borderColor: colors.primary + "44", backgroundColor: mode === "dark" ? colors.surfaceAlt : colors.secondary },
+    pinned: { borderWidth: 1, borderColor: colors.primary + "44", backgroundColor: mode === "dark" ? colors.surfaceAlt : "#FFF7ED" },
     avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
     rowTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
     rowTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.textPrimary },
