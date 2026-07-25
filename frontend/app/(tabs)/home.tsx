@@ -60,13 +60,16 @@ function StudentHome() {
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerBg}>
           <View style={styles.headerRow}>
             <View style={styles.userRow}>
-              {user?.clubPic ? (
-                <Image source={{ uri: user.clubPic }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarInitials]}>
-                  <Text style={styles.avatarInitialsTxt}>{initialsOf(user?.name)}</Text>
-                </View>
-              )}
+              {/* avatar with a status ring (green = active, red = inactive) per the design spec */}
+              <View style={[styles.avatarRing, { borderColor: isActive ? "#4ADE80" : "#FCA5A5" }]}>
+                {user?.clubPic ? (
+                  <Image source={{ uri: user.clubPic }} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarInitials]}>
+                    <Text style={styles.avatarInitialsTxt}>{initialsOf(user?.name)}</Text>
+                  </View>
+                )}
+              </View>
               <View style={styles.nameCol}>
                 <Text style={styles.hi}>Hello,</Text>
                 <Text style={styles.name} testID="home-student-name" numberOfLines={1}>{user?.name?.trim() || "Member"}</Text>
@@ -230,6 +233,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark", width: n
     headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },
     userRow: { flexDirection: "row", gap: 12, alignItems: "center", flex: 1, marginRight: 12 },
     nameCol: { flex: 1 },
+    avatarRing: { borderRadius: 32, borderWidth: 2.5, padding: 2.5, backgroundColor: "rgba(255,255,255,0.12)" },
     avatar: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: "rgba(255,255,255,0.6)", backgroundColor: "#fff" },
     avatarInitials: { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.25)" },
     avatarInitialsTxt: { color: "#fff", fontWeight: "800", fontSize: 18 },
