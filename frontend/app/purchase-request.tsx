@@ -3,10 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Activi
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as WebBrowser from "expo-web-browser";
 import { radius, spacing, font, useTheme } from "../src/theme";
 import { ScreenHeader } from "../src/ui/reportkit";
 import { notify } from "../src/ui/dialogs";
-import { api } from "../src/api/endpoints";
+import { api, defaultRange } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
 import { useAuth } from "../src/api/auth";
 import type { PurchaseProduct } from "../src/api/types";
@@ -17,15 +18,20 @@ export default function PurchaseRequest() {
   const { colors, shadow, mode } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
-  const { token } = useAuth();
+  const { token, apiEnv } = useAuth();
   const products = useApi<PurchaseProduct[]>(() => (token ? api.purchaseProducts() : Promise.resolve([])), [token]);
   const rows = products.data ?? [];
+  // A purchase is raised by paying for it: /Bcpg/PayInvoices carries the lines in
+  // `purchaseItems`. There is no other create-purchase route in the mobile API, so on a
+  // server without the Boost gateway this screen can only browse the catalogue.
+  const canPurchase = apiEnv.hasBoostGateway;
 
   // productId -> quantity string
   const [qty, setQty] = useState<Record<number, string>>({});
   const setQ = (id: number, v: string) => setQty((m) => ({ ...m, [id]: v.replace(/[^0-9]/g, "") }));
+  const [paying, setPaying] = useState(false);
 
-  const proceed = () => {
+  const proceed = async () => {
     const selected = rows
       .map((p) => ({ p, n: parseInt(qty[p.productId] || "0", 10) || 0 }))
       .filter((x) => x.n > 0);
@@ -34,8 +40,38 @@ export default function PurchaseRequest() {
       return;
     }
     const total = selected.reduce((sum, x) => sum + x.n * Number(x.p.price || 0), 0);
-    // No create endpoint is exposed yet — confirm to the user and keep the computed order ready.
-    notify("Purchase request submitted", `${selected.length} item(s) · ${fmtRM(total)}. Your academy will process it.`);
+    if (!canPurchase) {
+      notify(
+        "Not available on this server",
+        "Purchases are submitted through the payment gateway, which this server doesn't run yet. Please order through your academy."
+      );
+      return;
+    }
+    setPaying(true);
+    try {
+      // Row count before paying, so the return leg can tell whether the request was raised.
+      const range = defaultRange();
+      const baseline = await api
+        .purchaseRequests({ fromDate: range.fromDate, toDate: range.toDate })
+        .then((r) => r?.length ?? 0)
+        .catch(() => null);
+      const res = await api.startPayment({
+        purchaseItems: selected.map((x) => api.purchaseLine(x.p, x.n)),
+      });
+      await WebBrowser.openBrowserAsync(res.url);
+      const verdict = await api.confirmPayment({ referenceId: res.referenceId, purchaseBaseline: baseline });
+      notify(
+        verdict.outcome === "paid" ? "Purchase confirmed" : "Purchase",
+        verdict.outcome === "paid"
+          ? `${selected.length} item(s) · ${fmtRM(total)}. Your academy will process the order.`
+          : verdict.message
+      );
+      if (verdict.outcome === "paid") setQty({});
+    } catch (e: any) {
+      notify("Purchase failed", e?.message || "Could not start the payment.");
+    } finally {
+      setPaying(false);
+    }
   };
 
   return (
@@ -96,10 +132,16 @@ export default function PurchaseRequest() {
       )}
 
       <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom + 12, 28) }]}>
-        <TouchableOpacity onPress={proceed} activeOpacity={0.9} testID="pr-proceed">
+        <TouchableOpacity onPress={proceed} disabled={paying} activeOpacity={0.9} testID="pr-proceed">
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.proceedBtn, shadow.strong]}>
-            <Ionicons name="bag-check" size={20} color="#fff" />
-            <Text style={styles.proceedTxt}>Proceed</Text>
+            {paying ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="bag-check" size={20} color="#fff" />
+                <Text style={styles.proceedTxt}>{canPurchase ? "Proceed to pay" : "Proceed"}</Text>
+              </>
+            )}
           </LinearGradient>
         </TouchableOpacity>
       </View>

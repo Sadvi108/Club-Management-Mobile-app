@@ -73,14 +73,13 @@ export default function PayDues() {
     setPaying(true);
     try {
       // Boost gateway (/Bcpg/PayInvoices) where the server has it, legacy gateway otherwise.
-      const res = await api.startOnlinePayment(selected);
+      const res = await api.startPayment({ invoiceIds: selected });
       await WebBrowser.openBrowserAsync(res.url);
-      if (res.gateway === "bcpg" && res.referenceId) {
-        const v = await api.bcpgVerifyPayment(res.referenceId).catch(() => null);
-        const status = String(v?.status ?? "").trim();
-        if (status) notify("Payment", `Gateway says: ${status}`);
-      }
+      // The browser never reports the result — verify by reference, then reconcile the list.
+      const verdict = await api.confirmPayment({ referenceId: res.referenceId, invoiceIds: selected });
       inv.reload();
+      setSelected([]);
+      notify(verdict.outcome === "paid" ? "Payment received" : "Payment", verdict.message);
     } catch (e: any) {
       notify("Payment failed", e?.message);
     } finally {

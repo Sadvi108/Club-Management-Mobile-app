@@ -12,9 +12,11 @@ Pick the default with `EXPO_PUBLIC_API_ENV=prod|uat` in `frontend/.env` (current
 users switch at runtime from the **Server** chips on the login screen, which also drops the
 session. Registry lives in `frontend/src/api/config.ts`.
 
-Two known UAT blockers are backend-owned — the gateway call fails to deserialize its own
-gateway response, and the host serves a self-signed Plesk certificate. Details, repro, and the
-release checklist: `docs/superpowers/specs/2026-07-28-uat-boost-gateway-integration.md`.
+Two known UAT blockers are backend-owned — the host serves a self-signed Plesk certificate, and
+the **invoice/term** paths of `/Bcpg/PayInvoices` 400 while looking the amount up
+(`"The JSON value could not be converted to System.String. Path: $.status"`). The gateway itself
+works: `purchaseItems` returns a real Boost checkout link. Details, repro, and the release
+checklist: `docs/superpowers/specs/2026-07-28-uat-boost-gateway-integration.md` (§6 = latest).
 
 ## Layout
 - `frontend/` — the app. Screens in `frontend/app`, API layer in `frontend/src/api`, theme in `frontend/src/theme.ts`.
@@ -44,8 +46,13 @@ copy from `frontend/.env.example` if missing.
   (2=Online → returns gateway URL; 1=Bank-In → requires `files` slip; **3=Cash, settles the invoice
   instantly with no payment — don't send it**).
 - Boost: `POST /Bcpg/PayInvoices` is **JSON** — `{ invoiceIds, payTermPayments, purchaseItems }` →
-  gateway URL in `data`. Use `api.startOnlinePayment()`, which prefers `/Bcpg` and falls back to the
-  legacy route on 404 so one build serves both servers.
+  gateway URL in `data` (`https://stage-pay.boostconnect.biz?t=…`; that `t` is a checkout token,
+  NOT a `VerifyPayment` reference). Use `api.startPayment(intent)`, which prefers `/Bcpg`, falls
+  back to the legacy route on 404 so one build serves both servers, and refuses to mix
+  `purchaseItems` with invoices. After the browser returns, `api.confirmPayment()` decides the
+  outcome by reconciliation — never assume a payment succeeded.
+  `payTermPayments` in the body is what makes **advance months with no invoice yet** payable
+  (the legacy query flag never did); `purchaseItems` is the only way to raise a purchase request.
 - Receipt/invoice PDF (public): `GET /Utilities/ReceiptAsPDF/{clubId}/0/{invoiceId}` (the id from
   Reports/Receipts is an **invoiceId** → use the 3rd slot, not paymentId, or you get a BLANK PDF).
 - Profile edit + photo: `POST /Profile/UpdateProfile` multipart (PascalCase fields + `files` photo →

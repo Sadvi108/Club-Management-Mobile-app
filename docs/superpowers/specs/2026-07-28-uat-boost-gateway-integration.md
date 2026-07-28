@@ -95,7 +95,10 @@ Production has no `/Bcpg` routes (verified 404 on both), so the fallback in
 
 ## 4. Blockers — backend-owned, app cannot fix
 
-### 4.1 The Boost gateway call fails server-side (blocks all online payment on UAT)
+> **Superseded in part on 2026-07-29** — the gateway itself works. Purchases return a real
+> Boost link; only the invoice and term paths fail. See §6.
+
+### 4.1 The Boost gateway call fails server-side (invoice + term paths only — see §6)
 
 Every request with a non-empty `invoiceIds` returns:
 
@@ -175,3 +178,82 @@ instructor/admin-only server-side.
 3. Backend fixes `/Bcpg/Redirect` (4.3) and confirms the return URL the gateway is configured with.
 4. Before a production release: set `EXPO_PUBLIC_API_ENV=prod` (or change `DEFAULT_ENV` in
    `src/api/config.ts`) — this build defaults to **UAT**.
+
+---
+
+## 6. Second pass — 2026-07-29 (re-probed live, wiring completed)
+
+Both blockers from §4 are still live and unchanged (`/Bcpg/PayInvoices` still returns the
+`$.status` deserialisation error for invoices; the host still serves the self-signed Plesk
+certificate, `notAfter=17 Apr 2027`). Re-probing the route by request shape changed the
+diagnosis and opened up two capabilities the app wasn't using.
+
+### 6.1 The gateway works — the failure is the amount lookup, not the gateway
+
+Same token, same server, four bodies:
+
+| Body | Result |
+|---|---|
+| `{"invoiceIds":[]}` | `400 "Invalid Request"` (request validation) |
+| `{"invoiceIds":[961685]}` — a **real** pending invoice (student 38668) | `400` `$.status` error |
+| `{"invoiceIds":[],"payTermPayments":{"studentIds":[35842],"year":2026,"months":[8,9,10]}}` | `400` `$.status` error |
+| `{"invoiceIds":[],"purchaseItems":[{…,"productId":259,"qty":2,"price":20,"totalAmount":40}]}` | **`200`** → `https://stage-pay.boostconnect.biz?t=2yoYIRarviWYHSfWLc0D7n` |
+
+The purchase link is a real Boost checkout page (HTTP 200, Boost SPA). So the Boost merchant
+credentials, the outbound call and the response parsing are all fine. The one thing purchase
+lines have that invoices and term months don't is a **price in the request** — the invoice and
+term paths have to look the amount up first, and it's that lookup whose JSON reply has a
+non-string `status`. That is the code to fix, and it is much narrower than "the gateway is
+broken".
+
+Also worth knowing: a body carrying **both** a (bogus) invoice id **and** purchase lines returns
+a gateway URL. The invoice is not demonstrably billed, so mixing the two silently risks a bill
+that omits the invoices — `startPayment()` refuses to combine them.
+
+### 6.2 The Boost link's `t` is not a reference
+
+`https://stage-pay.boostconnect.biz?t=<token>` — `t` is the checkout session token.
+`GET /Bcpg/VerifyPayment/2yoYIRarviWYHSfWLc0D7n` → `{"status":"NotFound"}`. The reference the
+API knows only appears on the `/Bcpg/Redirect` return leg, which goes to the **browser**, not
+to the app. `extractReferenceId()` therefore deliberately does not treat `t` as a reference, and
+payments are confirmed by **reconciliation** instead (see 6.4).
+
+### 6.3 What was wired this pass
+
+| File | Change |
+|---|---|
+| `src/api/endpoints.ts` | `startPayment(intent)` replaces `startOnlinePayment(ids, opts)`: one intent covering `invoiceIds`, `term` and `purchaseItems`, /Bcpg preferred, legacy fallback on 404/405, and a hard refusal to mix purchases with invoices. `confirmPayment()` (see 6.4). `purchaseLine()` builds a `PurchaseRequestLineViewModel`. `extractReferenceId()` no longer guesses. |
+| `src/api/types.ts` | `PaymentIntent`, `PaymentOutcome`. |
+| `app/(tabs)/payments.tsx` | One online method per server — **Boost** where `/Bcpg` exists, legacy FPX/card where it doesn't (UAT's legacy online route proxies to the same Boost gateway, so offering both was offering the same payment twice). Advance Payment now allows **months with no invoice yet** on a Boost server (`payTermPayments` in the body is exactly what the legacy query flag never managed) — marked `*`, totals labelled "Est. Amt", final amount confirmed on the gateway page. Bank-in still refuses uninvoiced months, because that route bills invoice ids only. |
+| `app/pay-dues.tsx` | `startPayment` + `confirmPayment`. |
+| `app/purchase-request.tsx` | **Proceed to pay** now actually raises the purchase by paying for it through `/Bcpg` `purchaseItems` — the screen previously showed "Purchase request submitted" without calling anything, because no create-purchase route exists in the mobile API. On a non-Boost server it says so plainly instead. |
+
+### 6.4 Confirming a payment without a return leg
+
+`confirmPayment({ referenceId, invoiceIds, studentId, purchaseBaseline })`:
+
+1. `VerifyPayment` polled up to 3× (2 s apart) — only when a genuine reference exists.
+2. Reconciliation, which is what actually fires: refetch `Outstanding/Fetch` and check whether
+   the invoices being paid are gone; for a purchase, whether a new `Reports/PurchaseRequests`
+   row appeared.
+3. Otherwise `"unknown"` with an honest message. It never claims a payment it can't evidence.
+
+### 6.5 Verified live (web preview against UAT, student DARSHANMUTHU)
+
+- Advance Payment lists Aug–Dec 2026 as payable with `*`; two months → "Est. Amt 160.00",
+  "Pay Now · ~RM 160.00"; sheet shows Boost + Bank-In only.
+- Proceed → `POST /@uat/Bcpg/PayInvoices` with the term model → the backend error is surfaced
+  verbatim ("The JSON value could not be converted to System.String…"), no fake success.
+- Purchase Request → Proceed to pay → real link `https://stage-pay.boostconnect.biz?t=4uinjkKM9u3hywezovTnHk`
+  opened, and on return the honest "will appear under Purchase Requests once the payment is
+  confirmed" (the payment was not completed).
+- `tsc --noEmit` clean. No console errors.
+
+### 6.6 For the backend team
+
+1. **Fix the amount lookup on the invoice/term path** (§6.1) — the gateway itself is fine.
+2. `GET /Bcpg/Redirect` still 500s without a bearer (§4.3) — it is the browser return URL.
+3. Install a real certificate on `apimacuat.zyncbook.com` (§4.2).
+4. `purchaseItems` carries client-supplied `price`/`totalAmount`. If the server bills those
+   rather than re-pricing from `productId`, a client can set its own price. Worth checking.
+5. Confirm whether `invoiceIds` are billed when `purchaseItems` is also present (§6.1).

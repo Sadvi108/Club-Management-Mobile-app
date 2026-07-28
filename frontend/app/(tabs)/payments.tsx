@@ -28,13 +28,18 @@ import { usePaymentCart, type CartItem } from "../../src/payments/usePaymentCart
 type Seg = "pay" | "prepay" | "history";
 
 // Advance-payment selection carried into the pay sheet. studentIds/year/months are what
-// /Bcpg/PayInvoices wants for `payTermPayments` (the legacy route takes a query flag only).
+// /Bcpg/PayInvoices wants for `payTermPayments` (the legacy route took a query flag that
+// the backend never honoured). `ids` are the months that already have an invoice; on a
+// Boost server the term model bills the rest of `months` too, which is the whole point of
+// the route — see `estimated`.
 type TermPayContext = {
   ids: number[];
   total: number;
   studentIds: number[];
   year: number;
   months: number[];
+  /** true when the selection includes months the academy hasn't invoiced yet. */
+  estimated: boolean;
 };
 
 function fmtDate(iso?: string) {
@@ -46,7 +51,11 @@ function fmtDate(iso?: string) {
 export default function Payments() {
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
-  const { user } = useAuth();
+  const { user, apiEnv } = useAuth();
+  // Only the Boost server exposes /Bcpg. It is also the gateway the legacy online route
+  // proxies to there, so on such a server "Online" and "Boost" are the same payment —
+  // the sheet offers one online method, resolved here.
+  const boostServer = apiEnv.hasBoostGateway;
   const tabBarHeight = useBottomTabBarHeight(); // offset fixed Pay bar above the tab bar
   const insets = useSafeAreaInsets();
   const cart = usePaymentCart();
@@ -76,8 +85,9 @@ export default function Payments() {
 
   // Pay sheet state
   const [sheet, setSheet] = useState(false);
-  // "online" = legacy gateway (FPX/card), "boost" = Boost gateway (/Bcpg), "bankin" = slip upload.
-  const [method, setMethod] = useState<"online" | "boost" | "bankin">("online");
+  // "online" = the server's payment gateway (Boost via /Bcpg where available, otherwise the
+  // legacy FPX/card gateway), "bankin" = payment-slip upload.
+  const [method, setMethod] = useState<"online" | "bankin">("online");
   const [slip, setSlip] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [paying, setPaying] = useState(false);
   // Advance (term) payment context — when set, the sheet pays these ids with PayTermPayments=true
@@ -163,60 +173,54 @@ export default function Payments() {
     history.reload();
   }
 
-  // Ask the Boost gateway what happened to a payment we just sent the user off to.
-  // Only possible when the gateway URL carried a referenceId; otherwise we say plainly
-  // that the invoice list is being refreshed rather than claiming a result we don't have.
-  async function verifyPayment(res: { gateway: string; referenceId: string | null }): Promise<string> {
-    if (res.gateway !== "bcpg" || !res.referenceId) {
-      return "Returned from the payment gateway. Refreshing your invoices.";
-    }
-    try {
-      const v = await api.bcpgVerifyPayment(res.referenceId);
-      const status = String(v?.status ?? "").trim();
-      if (/^(success|paid|completed|captured)$/i.test(status)) return `Payment confirmed (ref ${res.referenceId}).`;
-      if (/notfound/i.test(status)) return "No payment was recorded for this attempt. Your invoices are unchanged.";
-      if (status) return `Gateway says: ${status}. Refreshing your invoices.`;
-    } catch {
-      /* verification is best-effort — fall through to the neutral message */
-    }
-    return "Returned from the payment gateway. Refreshing your invoices.";
-  }
-
   async function proceedToPay() {
-    if (payingIds.length === 0) {
+    // An advance selection can be term-only (months with no invoice yet), which the Boost
+    // route bills from the term model — so ids may legitimately be empty there.
+    const hasTermSelection = !!termPay && termPay.months.length > 0;
+    if (payingIds.length === 0 && !hasTermSelection) {
       notify("Select invoices", "Choose at least one invoice to pay.");
       return;
     }
-    const isTerm = !!termPay;
     setPaying(true);
     try {
       if (method !== "bankin") {
-        // Boost → /Bcpg/PayInvoices (the dedicated Boost gateway route, UAT and later).
-        // Online → the legacy /Outstanding/PayInvoices (PaymentMethod 2) FPX/card flow.
-        // startOnlinePayment falls back to the legacy route on servers without /Bcpg.
-        const res = await api.startOnlinePayment(payingIds, {
-          payTermPayments: isTerm,
-          preferBoost: method === "boost",
-          studentIds: termPay?.studentIds,
-          year: termPay?.year,
-          months: termPay?.months,
+        // One gateway session for whatever is selected: issued invoices, and — on a Boost
+        // server — the advance months that have no invoice yet. startPayment picks /Bcpg
+        // where it exists and falls back to the legacy gateway where it doesn't.
+        const res = await api.startPayment({
+          invoiceIds: payingIds,
+          term: termPay ? { studentIds: termPay.studentIds, year: termPay.year, months: termPay.months } : null,
         });
         await WebBrowser.openBrowserAsync(res.url); // hosted gateway page
         setPaying(false);
 
-        // Back from the gateway. The browser result never tells us whether the payment
-        // succeeded, so ask the server when we have a reference to ask about.
-        const verdict = await verifyPayment(res);
+        // Back from the gateway. The browser result never says whether the payment went
+        // through, so ask the server: verify by reference, then reconcile the invoice list.
+        const verdict = await api.confirmPayment({
+          referenceId: res.referenceId,
+          invoiceIds: payingIds,
+          studentId: accountId,
+        });
         afterPaid();
-        notify("Payment", verdict);
+        notify(verdict.outcome === "paid" ? "Payment received" : "Payment", verdict.message);
       } else {
         if (!slip) {
           setPaying(false);
           notify("Payment slip required", "Attach your bank-in slip first.");
           return;
         }
+        // Bank-in goes through the legacy multipart route, which bills invoice ids only —
+        // months without an invoice can't be settled this way.
+        if (payingIds.length === 0) {
+          setPaying(false);
+          notify(
+            "Not available for these months",
+            "A bank-in slip can only be submitted against issued invoices. Pay online to settle months your academy hasn't invoiced yet."
+          );
+          return;
+        }
         const file = await toUploadFile(slip);
-        await api.payInvoicesBankIn(payingIds, file, isTerm);
+        await api.payInvoicesBankIn(payingIds, file, !!termPay);
         setPaying(false);
         afterPaid();
         notify("Submitted", "Your payment slip has been submitted for verification.");
@@ -376,6 +380,7 @@ export default function Payments() {
             colors={colors}
             onPay={openTermSheet}
             refreshKey={prepayRefresh}
+            boostServer={boostServer}
           />
         )}
 
@@ -471,23 +476,36 @@ export default function Payments() {
             </View>
 
             <View style={styles.mpSummaryRow}>
-              <Text style={styles.mpSummary}>Paying Invoice(s) : <Text style={styles.mpStrong}>{payingIds.length}</Text></Text>
-              <Text style={styles.mpSummary}>Paying Amt : <Text style={styles.mpStrong}>{payingTotal.toFixed(2)}</Text></Text>
+              <Text style={styles.mpSummary}>
+                {termPay ? "Paying Month(s) : " : "Paying Invoice(s) : "}
+                <Text style={styles.mpStrong}>{termPay ? termPay.months.length : payingIds.length}</Text>
+              </Text>
+              <Text style={styles.mpSummary}>
+                {termPay?.estimated ? "Est. Amt : " : "Paying Amt : "}
+                <Text style={styles.mpStrong}>{payingTotal.toFixed(2)}</Text>
+              </Text>
             </View>
             {termPay && (
               <View style={styles.mpHintRow}>
                 <Ionicons name="calendar-outline" size={16} color={colors.primary} />
-                <Text style={styles.mpHint}>Advance payment — settling upcoming months ahead of time.</Text>
+                <Text style={styles.mpHint}>
+                  {termPay.estimated
+                    ? "Advance payment — some of these months aren't invoiced yet, so the payment page confirms the final amount."
+                    : "Advance payment — settling upcoming months ahead of time."}
+                </Text>
               </View>
             )}
 
-            {/* Method toggles */}
+            {/* Method toggles. The online method is whichever gateway this server runs. */}
             <View style={styles.mpMethods}>
               {([
-                { id: "online", label: "Online (FPX / Card)", icon: "globe-outline" },
-                { id: "boost", label: "Boost e-wallet", icon: "wallet-outline" },
+                {
+                  id: "online",
+                  label: boostServer ? "Boost (online payment)" : "Online (FPX / Card)",
+                  icon: boostServer ? "wallet-outline" : "globe-outline",
+                },
                 { id: "bankin", label: "Direct Bank-In", icon: "receipt-outline" },
-              ] as const).map((m) => {
+              ] as { id: "online" | "bankin"; label: string; icon: string }[]).map((m) => {
                 const on = method === m.id;
                 return (
                   <TouchableOpacity key={m.id} disabled={paying} onPress={() => setMethod(m.id)} style={[styles.mpMethod, on && styles.mpMethodOn]} testID={`pay-method-${m.id}`} activeOpacity={0.7}>
@@ -502,10 +520,10 @@ export default function Payments() {
             {/* Online/Boost hint or Bank-In slip picker */}
             {method !== "bankin" ? (
               <View style={styles.mpHintRow}>
-                <Ionicons name={method === "boost" ? "wallet-outline" : "globe-outline"} size={18} color={colors.textSecondary} />
+                <Ionicons name={boostServer ? "wallet-outline" : "globe-outline"} size={18} color={colors.textSecondary} />
                 <Text style={styles.mpHint}>
-                  {method === "boost"
-                    ? "You'll be taken straight to the secure Boost payment gateway to complete this payment."
+                  {boostServer
+                    ? "You'll be taken to the secure Boost payment gateway to complete this payment."
                     : "You will be redirected to the secure payment gateway to finalize your payment (FPX, card & e-wallets)."}
                 </Text>
               </View>
@@ -548,7 +566,7 @@ export default function Payments() {
               </LinearGradient>
             </TouchableOpacity>
             <Text style={styles.mpPowered}>
-              {method === "boost" ? "SECURED BY BOOST" : method === "online" ? "SECURE PAYMENT GATEWAY" : "VERIFIED BY YOUR ACADEMY"}
+              {method === "bankin" ? "VERIFIED BY YOUR ACADEMY" : boostServer ? "SECURED BY BOOST" : "SECURE PAYMENT GATEWAY"}
             </Text>
           </View>
         </View>
@@ -577,6 +595,7 @@ function PrepaySegment({
   colors,
   onPay,
   refreshKey,
+  boostServer,
 }: {
   user: { id: number; name: string };
   siblings: { id: number; value: string; text: string }[];
@@ -584,6 +603,8 @@ function PrepaySegment({
   colors: any;
   onPay: (ctx: TermPayContext) => void;
   refreshKey: number;
+  /** Server exposes /Bcpg, whose term model can bill months with no invoice yet. */
+  boostServer: boolean;
 }) {
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
@@ -607,27 +628,35 @@ function PrepaySegment({
     [year, acctKey, refreshKey]
   );
   const rows = terms.data ?? [];
-  // Only rows with a real invoiceId are payable — the backend bills exactly the InvoiceIds it's
-  // given and won't create invoices for months the academy hasn't billed yet (probed live:
-  // rows with invoiceId 0 are projections; every PayTermPayments binding leaves them unpaid).
-  const payableRows = useMemo(() => rows.filter((r) => (r.invoiceId ?? 0) > 0), [rows]);
+  // Rows with a real invoiceId are billable by any gateway. Rows with invoiceId 0 are months
+  // the academy hasn't invoiced yet: the legacy route can never charge them (probed live —
+  // no PayTermPayments query binding makes the backend create those invoices), but /Bcpg
+  // takes the term model in the body and bills them, so they are selectable on a Boost server.
+  const invoicedRows = useMemo(() => rows.filter((r) => (r.invoiceId ?? 0) > 0), [rows]);
+  const uninvoicedRows = useMemo(() => rows.filter((r) => !((r.invoiceId ?? 0) > 0)), [rows]);
+  const uninvoicedMonths = useMemo(() => new Set(uninvoicedRows.map((r) => termMonth(r))), [uninvoicedRows]);
+  const payableRows = boostServer ? rows : invoicedRows;
   const availMonths = useMemo(() => new Set(payableRows.map((r) => termMonth(r))), [payableRows]);
+  // Months shown with a clock: known but not payable on this server.
   const upcomingMonths = useMemo(
-    () => new Set(rows.filter((r) => !((r.invoiceId ?? 0) > 0)).map((r) => termMonth(r))),
-    [rows]
+    () => (boostServer ? new Set<number>() : uninvoicedMonths),
+    [boostServer, uninvoicedMonths]
   );
   const chosen = payableRows.filter((r) => selMonths.has(termMonth(r)));
   const totalInvoices = chosen.length;
   const dueAmount = chosen.reduce((s, r) => s + (r.dueAmount || 0), 0);
+  // Any chosen month without an invoice → the total is the academy's projected fee and the
+  // gateway page shows the amount the backend actually bills.
+  const estimated = chosen.some((r) => !((r.invoiceId ?? 0) > 0));
 
   const toggleMonth = (m: number) => {
     if (!availMonths.has(m)) {
-      // Not a UI choice: the payment API charges only months whose invoice exists.
-      // (Verified live — the gateway bill always contains just the real invoiceIds.)
+      // Legacy servers charge only months whose invoice exists (verified live — the bill
+      // always contained just the real invoiceIds).
       if (upcomingMonths.has(m)) {
         notify(
           `${MONTH_ABBR[m - 1]} ${year} — not billed yet`,
-          "Your academy hasn't issued this month's invoice yet, so it can't be charged. It becomes payable here automatically the moment the invoice is issued."
+          "Your academy hasn't issued this month's invoice yet, so this server can't charge it. It becomes payable here automatically the moment the invoice is issued."
         );
       }
       return;
@@ -671,6 +700,9 @@ function PrepaySegment({
               const available = availMonths.has(m);
               const upcoming = !available && upcomingMonths.has(m);
               const selected = available && selMonths.has(m);
+              // Payable, but the invoice doesn't exist yet — the amount is the academy's
+              // projection until the gateway prices it.
+              const projected = available && uninvoicedMonths.has(m);
               return (
                 <TouchableOpacity
                   key={abbr}
@@ -688,6 +720,7 @@ function PrepaySegment({
                   />
                   <Text style={[styles.tpMonthTxt, { color: available ? colors.textPrimary : colors.textMuted, fontWeight: available ? "700" : "500" }]}>
                     {abbr}
+                    {projected ? "*" : ""}
                   </Text>
                 </TouchableOpacity>
               );
@@ -698,6 +731,14 @@ function PrepaySegment({
               <Ionicons name="time-outline" size={15} color={colors.textSecondary} />
               <Text style={styles.mpHint}>
                 Months with a clock haven&apos;t been billed by your academy yet — they become payable once the invoice is issued.
+              </Text>
+            </View>
+          )}
+          {boostServer && uninvoicedMonths.size > 0 && (
+            <View style={styles.mpHintRow}>
+              <Ionicons name="information-circle-outline" size={15} color={colors.textSecondary} />
+              <Text style={styles.mpHint}>
+                Months marked * haven&apos;t been invoiced yet. You can still pay them in advance — the amount shown is your academy&apos;s standard fee, and the payment page confirms the final amount before you pay.
               </Text>
             </View>
           )}
@@ -716,8 +757,11 @@ function PrepaySegment({
       })}
 
       <View style={styles.tpSummary}>
-        <Text style={styles.tpSummaryTxt}>Total Invoice(s) : {totalInvoices}</Text>
-        <Text style={styles.tpSummaryTxt}>Due Amt : {dueAmount.toFixed(2)}</Text>
+        <Text style={styles.tpSummaryTxt}>Total Month(s) : {totalInvoices}</Text>
+        <Text style={styles.tpSummaryTxt}>
+          {estimated ? "Est. Amt : " : "Due Amt : "}
+          {dueAmount.toFixed(2)}
+        </Text>
       </View>
 
       {totalInvoices > 0 ? (
@@ -726,17 +770,22 @@ function PrepaySegment({
           activeOpacity={0.9}
           onPress={() =>
             onPay({
-              ids: chosen.map((c) => c.invoiceId),
+              // Only real invoice ids go in `invoiceIds`; every selected month goes in the
+              // term model, which is what bills the not-yet-invoiced ones on /Bcpg.
+              ids: chosen.map((c) => c.invoiceId).filter((id) => (id ?? 0) > 0),
               total: dueAmount,
               studentIds: [...selAccts],
               year,
-              months: chosen.map((c) => termMonth(c)),
+              months: [...new Set(chosen.map((c) => termMonth(c)))].filter((m) => m > 0),
+              estimated,
             })
           }
         >
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.tpPayBtnActive}>
             <Ionicons name="lock-closed" size={14} color="#fff" />
-            <Text style={styles.tpPayTxtActive}>Pay Now · RM {dueAmount.toFixed(2)}</Text>
+            <Text style={styles.tpPayTxtActive}>
+              Pay Now · {estimated ? "~" : ""}RM {dueAmount.toFixed(2)}
+            </Text>
           </LinearGradient>
         </TouchableOpacity>
       ) : (

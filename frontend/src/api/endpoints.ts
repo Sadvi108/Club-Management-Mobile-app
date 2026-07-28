@@ -20,7 +20,10 @@ import type {
   ApproveSubmissionRequest,
   OutstandingRequest,
   PackageInfo,
+  PaymentIntent,
+  PaymentOutcome,
   PurchaseProduct,
+  PurchaseRequestLine,
   Receipt,
   ReportRequest,
   ReportRow,
@@ -35,12 +38,29 @@ import type {
  * (/Bcpg/Redirect takes `referenceId`). Pull it out of whatever URL the gateway
  * returned so the app can verify the payment afterwards. Returns null when the URL
  * carries no recognisable reference — verification is then skipped, never faked.
+ *
+ * The query-parameter names below cover the /Bcpg/Redirect contract (`referenceId`,
+ * `uuid`) plus the usual gateway spellings.
+ *
+ * NOTE (verified live 2026-07-29): a real Boost link looks like
+ * `https://stage-pay.boostconnect.biz/?t=2yoYIRarviWYHSfWLc0D7n`. That `t` is the
+ * checkout-session token, NOT a reference the API knows — `/Bcpg/VerifyPayment/{t}`
+ * answers `{"status":"NotFound"}` — so it is deliberately not matched here. The real
+ * reference is minted by the gateway and only appears on the /Bcpg/Redirect return leg,
+ * which goes to the browser, not to the app. Payments are therefore confirmed by
+ * reconciliation (see `confirmPayment`), and this parser only fires if a future gateway
+ * URL genuinely carries the reference.
  */
 export function extractReferenceId(url: string): string | null {
   if (!url) return null;
-  const m = /[?&](?:referenceId|reference_id|referenceid|ref)=([^&#]+)/i.exec(url);
-  return m ? decodeURIComponent(m[1]) : null;
+  const q =
+    /[?&](?:referenceId|reference_id|referenceid|reference|uuid|order_?id|bill_?id|transaction_?id)=([^&#]+)/i.exec(
+      url
+    );
+  return q ? decodeURIComponent(q[1]) : null;
 }
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // Default report window: last 18 months → end of next year (covers receipts/attendance).
 export function defaultRange(): { fromDate: string; toDate: string } {
@@ -138,11 +158,12 @@ export const api = {
     http.get<any>(`/Payment/Completed/${encodeURIComponent(status)}`),
 
   // ── Boost payment gateway (/Bcpg) ──
-  // New on UAT/staging. JSON (not multipart like /Outstanding/PayInvoices) and the term
-  // model rides in the body instead of the query string. Returns the gateway URL in `data`.
+  // New on UAT/staging. JSON (not multipart like /Outstanding/PayInvoices) and both the
+  // term model and the purchase lines ride in the body instead of the query string.
+  // Returns the gateway URL in `data`.
   bcpgPayInvoices: (body: BcpgPayRequest) =>
     http.post<string>("/Bcpg/PayInvoices", {
-      invoiceIds: body.invoiceIds,
+      invoiceIds: body.invoiceIds ?? [],
       payTermPayments: body.payTermPayments ?? null,
       purchaseItems: body.purchaseItems ?? null,
     }),
@@ -153,17 +174,42 @@ export const api = {
   /**
    * Start an online payment and get the gateway URL to open.
    *
-   * Prefers the Boost gateway (/Bcpg/PayInvoices) where the server has it; falls back to
-   * the legacy multipart /Outstanding/PayInvoices (PaymentMethod=2) on servers that don't
-   * expose /Bcpg yet, so one build works against both production and UAT.
+   * One intent covers everything the Boost route can bill in a single gateway session:
+   * existing invoices, advance (term) months, and purchase-request lines.
+   *
+   * Route selection:
+   * - Boost server (`hasBoostGateway`) → `POST /Bcpg/PayInvoices` (JSON).
+   * - Otherwise, or if /Bcpg is missing (404/405) → legacy `POST /Outstanding/PayInvoices`
+   *   `PaymentMethod=2`, which can only bill existing invoice ids. A term or purchase
+   *   intent has no legacy equivalent (both were query-bound there and never worked), so
+   *   it fails loudly instead of silently billing less than the user selected.
    */
-  startOnlinePayment: async (
-    invoiceIds: number[],
-    opts: { payTermPayments?: boolean; preferBoost?: boolean; studentIds?: number[]; year?: number; months?: number[] } = {}
-  ): Promise<OnlinePaymentResult> => {
-    const { payTermPayments = false, preferBoost = true } = opts;
+  startPayment: async (intent: PaymentIntent): Promise<OnlinePaymentResult> => {
+    const invoiceIds = (intent.invoiceIds ?? []).filter((id) => id > 0);
+    const term = intent.term && intent.term.months.length && intent.term.studentIds.length ? intent.term : null;
+    const purchaseItems = intent.purchaseItems?.length ? intent.purchaseItems : null;
+    const preferBoost = intent.preferBoost !== false;
+
+    if (!invoiceIds.length && !term && !purchaseItems) {
+      throw new ApiError("Nothing was selected to pay.", 0, null);
+    }
+    // Probed live 2026-07-29: a body with BOTH purchaseItems and a (bogus) invoice id still
+    // returns a gateway URL, while the same invoice id alone fails — i.e. the server takes
+    // the purchase path and the invoices are not demonstrably billed. Never risk charging a
+    // user for a bill that silently dropped their invoices: keep purchases in their own session.
+    if (purchaseItems && (invoiceIds.length || term)) {
+      throw new ApiError("Purchases have to be paid on their own — pay your invoices in a separate payment.", 0, null);
+    }
+
     const legacy = async (): Promise<OnlinePaymentResult> => {
-      const url = await api.payInvoicesOnline(invoiceIds, payTermPayments);
+      if (term || purchaseItems) {
+        throw new ApiError(
+          "This server does not support the Boost gateway, which is what handles advance months and purchases. Switch to a server with the Boost gateway, or pay issued invoices instead.",
+          0,
+          null
+        );
+      }
+      const url = await api.payInvoicesOnline(invoiceIds, false);
       if (!url || typeof url !== "string") throw new ApiError("No payment link was returned.", 0, url);
       return { url, gateway: "legacy", referenceId: extractReferenceId(url) };
     };
@@ -171,15 +217,7 @@ export const api = {
     if (!preferBoost || !getApiEnv().hasBoostGateway) return legacy();
 
     try {
-      const url = await api.bcpgPayInvoices({
-        invoiceIds,
-        // Only sent when the caller actually has a term selection; the server bills the
-        // real InvoiceIds either way (see the note on payInvoicesOnline).
-        payTermPayments:
-          payTermPayments && opts.studentIds?.length
-            ? { studentIds: opts.studentIds, year: opts.year ?? new Date().getFullYear(), months: opts.months ?? [] }
-            : null,
-      });
+      const url = await api.bcpgPayInvoices({ invoiceIds, payTermPayments: term, purchaseItems });
       if (!url || typeof url !== "string") throw new ApiError("No payment link was returned by the Boost gateway.", 0, url);
       return { url, gateway: "bcpg", referenceId: extractReferenceId(url) };
     } catch (e: any) {
@@ -188,6 +226,114 @@ export const api = {
       if (e instanceof ApiError && (e.status === 404 || e.status === 405)) return legacy();
       throw e;
     }
+  },
+
+  /**
+   * What happened to a payment the user was sent off to the gateway for.
+   *
+   * The browser never tells us — `/Bcpg/Redirect` takes the *browser* back, not the app —
+   * so this asks the server two independent ways and reports only what it can back up:
+   *
+   * 1. `GET /Bcpg/VerifyPayment/{referenceId}` when the gateway URL carried a reference,
+   *    polled a few times because the gateway callback can land after the user returns.
+   * 2. Reconciliation: refetch `Outstanding/Fetch` and see whether the invoices that were
+   *    being paid are gone — or, for a purchase, whether a new purchase-request row
+   *    appeared. This is the signal that actually fires in practice: the Boost link carries
+   *    a checkout token rather than a reference (see `extractReferenceId`).
+   *
+   * Returns "unknown" rather than guessing when neither signal is conclusive.
+   */
+  confirmPayment: async (args: {
+    referenceId?: string | null;
+    invoiceIds?: number[];
+    studentId?: number | null;
+    /** Number of purchase-request rows before the payment — a new row means it went through. */
+    purchaseBaseline?: number | null;
+    attempts?: number;
+    delayMs?: number;
+  }): Promise<PaymentOutcome> => {
+    const { referenceId, invoiceIds = [], studentId = null, purchaseBaseline = null, attempts = 3, delayMs = 2000 } = args;
+    let gatewayStatus: string | null = null;
+
+    if (referenceId) {
+      for (let i = 0; i < Math.max(1, attempts); i++) {
+        if (i) await sleep(delayMs);
+        try {
+          const v = await api.bcpgVerifyPayment(referenceId);
+          const status = String(v?.status ?? "").trim();
+          if (status) gatewayStatus = status;
+          if (/^(success|successful|paid|completed|complete|captured|settled|approved)$/i.test(status)) {
+            return { outcome: "paid", gatewayStatus: status, message: `Payment confirmed by the gateway (ref ${referenceId}).` };
+          }
+          if (/^(failed|failure|cancelled|canceled|declined|rejected|expired)$/i.test(status)) {
+            return { outcome: "unpaid", gatewayStatus: status, message: `The gateway reported this payment as ${status.toLowerCase()}.` };
+          }
+          // "NotFound" / "Pending" / anything else → give the callback another moment.
+        } catch {
+          /* verification is best-effort — fall through to reconciliation */
+        }
+      }
+    }
+
+    // Reconcile against the invoice list. Only meaningful when we were paying invoices.
+    const payable = invoiceIds.filter((id) => id > 0);
+    if (payable.length) {
+      try {
+        const range = defaultRange();
+        const rows = await api.outstanding({
+          studentId,
+          startDate: range.fromDate,
+          endDate: range.toDate,
+        });
+        const stillDue = new Set((rows ?? []).map((r) => r.invoiceId));
+        const remaining = payable.filter((id) => stillDue.has(id));
+        if (remaining.length === 0) {
+          return { outcome: "paid", gatewayStatus, message: "Payment received — these invoices are settled." };
+        }
+        if (remaining.length === payable.length) {
+          return {
+            outcome: "unpaid",
+            gatewayStatus,
+            message: gatewayStatus
+              ? `Gateway status: ${gatewayStatus}. Your invoices are unchanged.`
+              : "No payment was recorded — your invoices are unchanged.",
+          };
+        }
+        return {
+          outcome: "unknown",
+          gatewayStatus,
+          message: `${payable.length - remaining.length} of ${payable.length} invoices were settled. Pull to refresh in a moment for the rest.`,
+        };
+      } catch {
+        /* fall through to the honest unknown below */
+      }
+    }
+
+    // Purchases don't touch the invoice list — a paid one shows up as a purchase request.
+    if (purchaseBaseline != null) {
+      try {
+        const range = defaultRange();
+        const rows = await api.purchaseRequests({ fromDate: range.fromDate, toDate: range.toDate });
+        if ((rows?.length ?? 0) > purchaseBaseline) {
+          return { outcome: "paid", gatewayStatus, message: "Payment received — your purchase request has been raised." };
+        }
+        return {
+          outcome: "unknown",
+          gatewayStatus,
+          message: "Back from the payment gateway. Your purchase will appear under Purchase Requests once the payment is confirmed.",
+        };
+      } catch {
+        /* fall through to the honest unknown below */
+      }
+    }
+
+    return {
+      outcome: "unknown",
+      gatewayStatus,
+      message: gatewayStatus
+        ? `Gateway status: ${gatewayStatus}. Refreshing your account.`
+        : "Back from the payment gateway. Refreshing your account — a completed payment can take a moment to show up.",
+    };
   },
   // Public PDF URL (no auth). The id from Outstanding/Reports.Receipts is an INVOICE id and goes
   // in the invoiceId slot (paymentId=0) — that renders the full populated receipt/invoice. Passing
@@ -268,6 +414,26 @@ export const api = {
 
   // ── Student: purchase request ──
   purchaseProducts: () => http.post<PurchaseProduct[]>("/PurchaseRequest/FetchProducts", {}),
+  /**
+   * Build one `purchaseItems` line (PurchaseRequestLineViewModel) for /Bcpg/PayInvoices.
+   * There is no separate "create purchase request" route in the mobile API — paying for
+   * the lines through the Boost gateway is how a purchase is raised.
+   * `id`/`purchaseRequestId` are 0 because the server creates both.
+   */
+  purchaseLine: (product: PurchaseProduct, qty: number): PurchaseRequestLine => {
+    const price = Number(product.price || 0);
+    const n = Math.max(0, Math.trunc(qty));
+    return {
+      id: 0,
+      purchaseRequestId: 0,
+      productId: product.productId,
+      qty: n,
+      price,
+      unitTax: 0,
+      totalTax: 0,
+      totalAmount: Number((price * n).toFixed(2)),
+    };
+  },
 
   // ── Utilities ──
   studentQRCodeUrl: (clubId: number, branchId: number, studentIds: number | string) =>

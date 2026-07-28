@@ -330,6 +330,28 @@ export type OnlinePaymentResult = {
   referenceId: string | null;
 };
 
+/**
+ * What a single gateway session should bill. Mirrors RequestBcpgPayViewModel: the Boost
+ * route can bill issued invoices, advance (term) months and purchase lines in one go.
+ * The legacy gateway can only do `invoiceIds`.
+ */
+export type PaymentIntent = {
+  invoiceIds?: number[];
+  /** Advance months. On the Boost route these are billed even with no invoice issued yet. */
+  term?: { studentIds: number[]; year: number; months: number[] } | null;
+  purchaseItems?: PurchaseRequestLine[] | null;
+  /** false → skip /Bcpg and use the legacy gateway (invoices only). */
+  preferBoost?: boolean;
+};
+
+/** Result of checking on a payment after the user comes back from the gateway. */
+export type PaymentOutcome = {
+  outcome: "paid" | "unpaid" | "unknown";
+  /** Raw status string from /Bcpg/VerifyPayment, when one was obtained. */
+  gatewayStatus?: string | null;
+  message: string;
+};
+
 // ── Class booking ──────────────────────────────────────────────────────────
 // GET /ClassBooking/TrainingTimeWithDateAndInstructor/{month}/{year}/{tCenterId}/{instructorId}
 export type TrainingSlot = {
