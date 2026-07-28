@@ -30,8 +30,11 @@ From `frontend/` (no yarn on the dev box; `npx expo` is broken — use the node 
 npm install
 node node_modules/expo/bin/cli start --web --port 8081
 ```
-The CORS proxy must also run (port 8082) for browser API calls. `../start-web.js` launches both
-(used by `.claude/launch.json` / the preview tool). Resize the preview to 375x812.
+The CORS proxy must also run (port 8082) for browser API calls. `start-web.js` at the repo root
+launches both (`node start-web.js`, also what `.claude/launch.json` / the preview tool runs).
+Resize the preview to 375x812. NOTE: this dev box also has a copy of the launcher one level up,
+outside the repo (`D:\Club-Management-Mobile-app-main (1)\start-web.js`) — that one is
+machine-specific and is what the preview tool currently uses; the tracked copy is the portable one.
 
 `frontend/.env` (gitignored) holds `EXPO_PUBLIC_API_URL` + `EXPO_PUBLIC_WEB_API_PROXY=http://localhost:8082`;
 copy from `frontend/.env.example` if missing.
