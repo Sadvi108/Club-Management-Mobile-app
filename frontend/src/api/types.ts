@@ -279,6 +279,57 @@ export type TermPayment = {
 // POST /Outstanding/PayInvoices → returns a Billplz bill URL (string) or { url }
 export type PayInvoicesResult = { url?: string } | string;
 
+// ── Boost payment gateway (/Bcpg) ──────────────────────────────────────────
+// Present on UAT/staging (Club.Api v1, 73 paths) and absent on the current production
+// server (69 paths). Every other route is byte-for-byte identical between the two.
+
+// POST /Bcpg/PayInvoices — RequestBcpgPayViewModel.
+// Unlike /Outstanding/PayInvoices (multipart, term model bound from the query string),
+// this route is plain JSON and carries the term-payment model in the body.
+export type BcpgPayRequest = {
+  invoiceIds: number[];
+  payTermPayments?: { studentIds: number[]; year: number; months: number[] } | null;
+  purchaseItems?: PurchaseRequestLine[] | null;
+};
+
+// RequestBcpgPayViewModel.purchaseItems[] — PurchaseRequestLineViewModel
+export type PurchaseRequestLine = {
+  id: number;
+  purchaseRequestId: number;
+  productId: number;
+  qty: number;
+  price: number;
+  unitTax?: number | null;
+  totalTax?: number | null;
+  totalAmount: number;
+};
+
+// GET /Bcpg/VerifyPayment/{referenceId} → NOT the usual envelope; a bare
+// { status: "..." } object ("NotFound" for an unknown reference).
+export type BcpgVerifyResult = { status?: string | null; [k: string]: any };
+
+// GET /Bcpg/Redirect query params — the gateway sends the *browser* here after payment;
+// the app never calls it, but it defines the return-URL shape we parse for a referenceId.
+export type BcpgRedirectParams = {
+  uuid?: string;
+  referenceId?: string;
+  status?: string;
+  amount?: string;
+  currency?: string;
+  description?: string;
+  signature?: string;
+};
+
+// Which gateway route actually produced a payment link.
+export type PaymentGateway = "bcpg" | "legacy";
+
+export type OnlinePaymentResult = {
+  url: string;
+  gateway: PaymentGateway;
+  /** Parsed out of the gateway URL when present — lets us verify the payment on return. */
+  referenceId: string | null;
+};
+
 // ── Class booking ──────────────────────────────────────────────────────────
 // GET /ClassBooking/TrainingTimeWithDateAndInstructor/{month}/{year}/{tCenterId}/{instructorId}
 export type TrainingSlot = {

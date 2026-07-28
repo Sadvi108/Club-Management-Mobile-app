@@ -29,6 +29,10 @@ yarn-error.*
 # macOS
 .DS_Store
 *.pem
+# Exception: the UAT host's PUBLIC server certificate. Not a secret (anyone can fetch it from
+# the server) and the Android build plugin needs it in the repo to produce a working APK.
+# Private keys stay ignored by the rule above.
+!plugins/certs/*.pem
 
 # local env files — ignore ALL .env variants so real secrets can never be committed.
 # (.env.example is force-tracked below as the safe, committed template.)

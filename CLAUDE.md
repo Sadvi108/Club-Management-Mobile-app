@@ -1,8 +1,20 @@
 # CLAUDE.md — D-CLIX Club Management App
 
 Expo Router React Native app for a martial-arts club, wired to the live **Club.Api**
-backend (`http://apimac.zyncbook.com`). Repo is PRIVATE — keep it private (docs + prefilled
-login hold test creds).
+backend. Repo is PRIVATE — keep it private (docs + prefilled login hold test creds).
+
+## API environments (switchable at runtime)
+- **prod** `http://apimac.zyncbook.com` — live academy data, 69 endpoints.
+- **uat** `https://apimacuat.zyncbook.com` — same 69 endpoints byte-for-byte **plus** the four
+  Boost gateway routes (`/Bcpg/PayInvoices|Callback|Redirect|VerifyPayment`).
+
+Pick the default with `EXPO_PUBLIC_API_ENV=prod|uat` in `frontend/.env` (currently **uat**);
+users switch at runtime from the **Server** chips on the login screen, which also drops the
+session. Registry lives in `frontend/src/api/config.ts`.
+
+Two known UAT blockers are backend-owned — the gateway call fails to deserialize its own
+gateway response, and the host serves a self-signed Plesk certificate. Details, repro, and the
+release checklist: `docs/superpowers/specs/2026-07-28-uat-boost-gateway-integration.md`.
 
 ## Layout
 - `frontend/` — the app. Screens in `frontend/app`, API layer in `frontend/src/api`, theme in `frontend/src/theme.ts`.
@@ -29,7 +41,11 @@ copy from `frontend/.env.example` if missing.
 ## API quick reference
 - Auth `POST /Account/Authenticate` (multipart? no — JSON). Bearer token. Student `DARSHANMUTHU`/`1234` (userType 3).
 - Payments: `POST /Outstanding/PayInvoices` is **multipart** — `InvoiceIds` (repeated) + `PaymentMethod`
-  (2=Online → returns Billplz URL; 1=Bank-In → requires `files` slip).
+  (2=Online → returns gateway URL; 1=Bank-In → requires `files` slip; **3=Cash, settles the invoice
+  instantly with no payment — don't send it**).
+- Boost: `POST /Bcpg/PayInvoices` is **JSON** — `{ invoiceIds, payTermPayments, purchaseItems }` →
+  gateway URL in `data`. Use `api.startOnlinePayment()`, which prefers `/Bcpg` and falls back to the
+  legacy route on 404 so one build serves both servers.
 - Receipt/invoice PDF (public): `GET /Utilities/ReceiptAsPDF/{clubId}/0/{invoiceId}` (the id from
   Reports/Receipts is an **invoiceId** → use the 3rd slot, not paymentId, or you get a BLANK PDF).
 - Profile edit + photo: `POST /Profile/UpdateProfile` multipart (PascalCase fields + `files` photo →

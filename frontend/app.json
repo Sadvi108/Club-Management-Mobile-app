@@ -58,6 +58,7 @@
           }
         }
       ],
+      "./plugins/withUatCertificate",
       "expo-background-task",
       [
         "expo-notifications",

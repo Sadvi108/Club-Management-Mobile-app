@@ -1,11 +1,15 @@
-import { http } from "./http";
+import { http, ApiError } from "./http";
+import { getApiBaseUrl, getApiEnv } from "./config";
 import type {
   AppNotification,
   AttendanceRecord,
   AttendanceResult,
   AuthRequest,
+  BcpgPayRequest,
+  BcpgVerifyResult,
   BookClassRequest,
   BookingInfo,
+  OnlinePaymentResult,
   HomePageStats,
   IdValueText,
   Invoice,
@@ -25,6 +29,18 @@ import type {
   TrainingCenterRow,
   TrainingSlot,
 } from "./types";
+
+/**
+ * Payment gateways hand the browser back with the reference in the query string
+ * (/Bcpg/Redirect takes `referenceId`). Pull it out of whatever URL the gateway
+ * returned so the app can verify the payment afterwards. Returns null when the URL
+ * carries no recognisable reference — verification is then skipped, never faked.
+ */
+export function extractReferenceId(url: string): string | null {
+  if (!url) return null;
+  const m = /[?&](?:referenceId|reference_id|referenceid|ref)=([^&#]+)/i.exec(url);
+  return m ? decodeURIComponent(m[1]) : null;
+}
 
 // Default report window: last 18 months → end of next year (covers receipts/attendance).
 export function defaultRange(): { fromDate: string; toDate: string } {
@@ -120,16 +136,69 @@ export const api = {
   },
   paymentCompleted: (status: string) =>
     http.get<any>(`/Payment/Completed/${encodeURIComponent(status)}`),
+
+  // ── Boost payment gateway (/Bcpg) ──
+  // New on UAT/staging. JSON (not multipart like /Outstanding/PayInvoices) and the term
+  // model rides in the body instead of the query string. Returns the gateway URL in `data`.
+  bcpgPayInvoices: (body: BcpgPayRequest) =>
+    http.post<string>("/Bcpg/PayInvoices", {
+      invoiceIds: body.invoiceIds,
+      payTermPayments: body.payTermPayments ?? null,
+      purchaseItems: body.purchaseItems ?? null,
+    }),
+  // Authenticated. Bare { status } object — "NotFound" for an unknown reference.
+  bcpgVerifyPayment: (referenceId: string) =>
+    http.get<BcpgVerifyResult>(`/Bcpg/VerifyPayment/${encodeURIComponent(referenceId)}`),
+
+  /**
+   * Start an online payment and get the gateway URL to open.
+   *
+   * Prefers the Boost gateway (/Bcpg/PayInvoices) where the server has it; falls back to
+   * the legacy multipart /Outstanding/PayInvoices (PaymentMethod=2) on servers that don't
+   * expose /Bcpg yet, so one build works against both production and UAT.
+   */
+  startOnlinePayment: async (
+    invoiceIds: number[],
+    opts: { payTermPayments?: boolean; preferBoost?: boolean; studentIds?: number[]; year?: number; months?: number[] } = {}
+  ): Promise<OnlinePaymentResult> => {
+    const { payTermPayments = false, preferBoost = true } = opts;
+    const legacy = async (): Promise<OnlinePaymentResult> => {
+      const url = await api.payInvoicesOnline(invoiceIds, payTermPayments);
+      if (!url || typeof url !== "string") throw new ApiError("No payment link was returned.", 0, url);
+      return { url, gateway: "legacy", referenceId: extractReferenceId(url) };
+    };
+
+    if (!preferBoost || !getApiEnv().hasBoostGateway) return legacy();
+
+    try {
+      const url = await api.bcpgPayInvoices({
+        invoiceIds,
+        // Only sent when the caller actually has a term selection; the server bills the
+        // real InvoiceIds either way (see the note on payInvoicesOnline).
+        payTermPayments:
+          payTermPayments && opts.studentIds?.length
+            ? { studentIds: opts.studentIds, year: opts.year ?? new Date().getFullYear(), months: opts.months ?? [] }
+            : null,
+      });
+      if (!url || typeof url !== "string") throw new ApiError("No payment link was returned by the Boost gateway.", 0, url);
+      return { url, gateway: "bcpg", referenceId: extractReferenceId(url) };
+    } catch (e: any) {
+      // Route missing on this server → use the legacy gateway instead. Any other failure
+      // (gateway/config error) is surfaced as-is; we never silently pretend it worked.
+      if (e instanceof ApiError && (e.status === 404 || e.status === 405)) return legacy();
+      throw e;
+    }
+  },
   // Public PDF URL (no auth). The id from Outstanding/Reports.Receipts is an INVOICE id and goes
   // in the invoiceId slot (paymentId=0) — that renders the full populated receipt/invoice. Passing
   // it as paymentId returns a BLANK template.
   receiptPdfUrl: (clubId: number, paymentId: number, invoiceId: number) =>
-    `${require("./config").API_BASE_URL}/Utilities/ReceiptAsPDF/${clubId}/${paymentId}/${invoiceId}`,
+    `${getApiBaseUrl()}/Utilities/ReceiptAsPDF/${clubId}/${paymentId}/${invoiceId}`,
 
   // Public PNG QR (no auth) — usable directly in <Image>. StudentQRCode returns a PDF, so we
   // render a QRCode PNG of the student's content instead.
   qrCodeUrl: (content: string | number, size = 300) =>
-    `${require("./config").API_BASE_URL}/Utilities/QRCode/${size}/${size}/${encodeURIComponent(String(content))}`,
+    `${getApiBaseUrl()}/Utilities/QRCode/${size}/${size}/${encodeURIComponent(String(content))}`,
 
   // ── Listings (for class booking) ──
   trainingCenters: () => http.get<IdValueText[]>("/Listing/TrainingCenters"),
@@ -202,7 +271,7 @@ export const api = {
 
   // ── Utilities ──
   studentQRCodeUrl: (clubId: number, branchId: number, studentIds: number | string) =>
-    `${require("./config").API_BASE_URL}/Utilities/StudentQRCode/${clubId}/${branchId}/${studentIds}`,
+    `${getApiBaseUrl()}/Utilities/StudentQRCode/${clubId}/${branchId}/${studentIds}`,
   trainingCenterQRCodeUrl: (clubId: number, tcid: number) =>
-    `${require("./config").API_BASE_URL}/Utilities/TrainingCenterQRCode/${clubId}/${tcid}`,
+    `${getApiBaseUrl()}/Utilities/TrainingCenterQRCode/${clubId}/${tcid}`,
 };

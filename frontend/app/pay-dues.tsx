@@ -72,9 +72,15 @@ export default function PayDues() {
     }
     setPaying(true);
     try {
-      const url = await api.payInvoicesOnline(selected);
-      if (!url) throw new Error("No payment link was returned.");
-      await WebBrowser.openBrowserAsync(String(url));
+      // Boost gateway (/Bcpg/PayInvoices) where the server has it, legacy gateway otherwise.
+      const res = await api.startOnlinePayment(selected);
+      await WebBrowser.openBrowserAsync(res.url);
+      if (res.gateway === "bcpg" && res.referenceId) {
+        const v = await api.bcpgVerifyPayment(res.referenceId).catch(() => null);
+        const status = String(v?.status ?? "").trim();
+        if (status) notify("Payment", `Gateway says: ${status}`);
+      }
+      inv.reload();
     } catch (e: any) {
       notify("Payment failed", e?.message);
     } finally {

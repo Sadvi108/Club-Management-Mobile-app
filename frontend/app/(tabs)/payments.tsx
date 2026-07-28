@@ -27,6 +27,16 @@ import { usePaymentCart, type CartItem } from "../../src/payments/usePaymentCart
 
 type Seg = "pay" | "prepay" | "history";
 
+// Advance-payment selection carried into the pay sheet. studentIds/year/months are what
+// /Bcpg/PayInvoices wants for `payTermPayments` (the legacy route takes a query flag only).
+type TermPayContext = {
+  ids: number[];
+  total: number;
+  studentIds: number[];
+  year: number;
+  months: number[];
+};
+
 function fmtDate(iso?: string) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -66,13 +76,13 @@ export default function Payments() {
 
   // Pay sheet state
   const [sheet, setSheet] = useState(false);
-  // "online" = Billplz (FPX/card), "boost" = Boost e-wallet via the same Billplz gateway, "bankin" = slip upload.
+  // "online" = legacy gateway (FPX/card), "boost" = Boost gateway (/Bcpg), "bankin" = slip upload.
   const [method, setMethod] = useState<"online" | "boost" | "bankin">("online");
   const [slip, setSlip] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [paying, setPaying] = useState(false);
   // Advance (term) payment context — when set, the sheet pays these ids with PayTermPayments=true
   // instead of the cart. Bumping prepayRefresh makes PrepaySegment refetch after a payment.
-  const [termPay, setTermPay] = useState<{ ids: number[]; total: number } | null>(null);
+  const [termPay, setTermPay] = useState<TermPayContext | null>(null);
   const [prepayRefresh, setPrepayRefresh] = useState(0);
 
   const invoiceIds = useMemo(
@@ -91,8 +101,8 @@ export default function Payments() {
     setSheet(true);
   }
 
-  function openTermSheet(ids: number[], total: number) {
-    setTermPay({ ids, total });
+  function openTermSheet(ctx: TermPayContext) {
+    setTermPay(ctx);
     setMethod("online");
     setSlip(null);
     setSheet(true);
@@ -153,6 +163,25 @@ export default function Payments() {
     history.reload();
   }
 
+  // Ask the Boost gateway what happened to a payment we just sent the user off to.
+  // Only possible when the gateway URL carried a referenceId; otherwise we say plainly
+  // that the invoice list is being refreshed rather than claiming a result we don't have.
+  async function verifyPayment(res: { gateway: string; referenceId: string | null }): Promise<string> {
+    if (res.gateway !== "bcpg" || !res.referenceId) {
+      return "Returned from the payment gateway. Refreshing your invoices.";
+    }
+    try {
+      const v = await api.bcpgVerifyPayment(res.referenceId);
+      const status = String(v?.status ?? "").trim();
+      if (/^(success|paid|completed|captured)$/i.test(status)) return `Payment confirmed (ref ${res.referenceId}).`;
+      if (/notfound/i.test(status)) return "No payment was recorded for this attempt. Your invoices are unchanged.";
+      if (status) return `Gateway says: ${status}. Refreshing your invoices.`;
+    } catch {
+      /* verification is best-effort — fall through to the neutral message */
+    }
+    return "Returned from the payment gateway. Refreshing your invoices.";
+  }
+
   async function proceedToPay() {
     if (payingIds.length === 0) {
       notify("Select invoices", "Choose at least one invoice to pay.");
@@ -162,14 +191,24 @@ export default function Payments() {
     setPaying(true);
     try {
       if (method !== "bankin") {
-        // Online + Boost both go through the Billplz gateway (PaymentMethod 2). Boost is selectable
-        // as a channel on the Billplz hosted page — the backend has no separate Boost endpoint.
-        const url = await api.payInvoicesOnline(payingIds, isTerm);
-        if (!url || typeof url !== "string") throw new Error("No payment link returned.");
-        await WebBrowser.openBrowserAsync(url); // Billplz gateway (FPX / card / Boost & e-wallets)
+        // Boost → /Bcpg/PayInvoices (the dedicated Boost gateway route, UAT and later).
+        // Online → the legacy /Outstanding/PayInvoices (PaymentMethod 2) FPX/card flow.
+        // startOnlinePayment falls back to the legacy route on servers without /Bcpg.
+        const res = await api.startOnlinePayment(payingIds, {
+          payTermPayments: isTerm,
+          preferBoost: method === "boost",
+          studentIds: termPay?.studentIds,
+          year: termPay?.year,
+          months: termPay?.months,
+        });
+        await WebBrowser.openBrowserAsync(res.url); // hosted gateway page
         setPaying(false);
+
+        // Back from the gateway. The browser result never tells us whether the payment
+        // succeeded, so ask the server when we have a reference to ask about.
+        const verdict = await verifyPayment(res);
         afterPaid();
-        notify("Payment", "Returned from the payment gateway. Refreshing your invoices.");
+        notify("Payment", verdict);
       } else {
         if (!slip) {
           setPaying(false);
@@ -446,7 +485,7 @@ export default function Payments() {
             <View style={styles.mpMethods}>
               {([
                 { id: "online", label: "Online (FPX / Card)", icon: "globe-outline" },
-                { id: "boost", label: "Boost", icon: "wallet-outline" },
+                { id: "boost", label: "Boost e-wallet", icon: "wallet-outline" },
                 { id: "bankin", label: "Direct Bank-In", icon: "receipt-outline" },
               ] as const).map((m) => {
                 const on = method === m.id;
@@ -466,8 +505,8 @@ export default function Payments() {
                 <Ionicons name={method === "boost" ? "wallet-outline" : "globe-outline"} size={18} color={colors.textSecondary} />
                 <Text style={styles.mpHint}>
                   {method === "boost"
-                    ? "You'll be redirected to the secure Billplz gateway — pick Boost to pay with your e-wallet."
-                    : "You will be redirected to Billplz to securely finalize your payment (FPX, card, Boost & e-wallets)."}
+                    ? "You'll be taken straight to the secure Boost payment gateway to complete this payment."
+                    : "You will be redirected to the secure payment gateway to finalize your payment (FPX, card & e-wallets)."}
                 </Text>
               </View>
             ) : (
@@ -508,7 +547,9 @@ export default function Payments() {
                 )}
               </LinearGradient>
             </TouchableOpacity>
-            <Text style={styles.mpPowered}>Powered by BILLPLZ</Text>
+            <Text style={styles.mpPowered}>
+              {method === "boost" ? "SECURED BY BOOST" : method === "online" ? "SECURE PAYMENT GATEWAY" : "VERIFIED BY YOUR ACADEMY"}
+            </Text>
           </View>
         </View>
       </Modal>
@@ -541,7 +582,7 @@ function PrepaySegment({
   siblings: { id: number; value: string; text: string }[];
   styles: ReturnType<typeof createStyles>;
   colors: any;
-  onPay: (ids: number[], total: number) => void;
+  onPay: (ctx: TermPayContext) => void;
   refreshKey: number;
 }) {
   const thisYear = new Date().getFullYear();
@@ -683,7 +724,15 @@ function PrepaySegment({
         <TouchableOpacity
           testID="prepay-paynow"
           activeOpacity={0.9}
-          onPress={() => onPay(chosen.map((c) => c.invoiceId), dueAmount)}
+          onPress={() =>
+            onPay({
+              ids: chosen.map((c) => c.invoiceId),
+              total: dueAmount,
+              studentIds: [...selAccts],
+              year,
+              months: chosen.map((c) => termMonth(c)),
+            })
+          }
         >
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.tpPayBtnActive}>
             <Ionicons name="lock-closed" size={14} color="#fff" />

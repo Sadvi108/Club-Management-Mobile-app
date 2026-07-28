@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { setAuthToken, setUnauthorizedHandler } from "./http";
+import { getApiEnv, restoreApiEnv, setApiEnv, type ApiEnvKey, type ApiEnvironment } from "./config";
 import { storage } from "./storage";
 import { secureStore } from "./secureStore";
 import { api } from "./endpoints";
@@ -30,6 +31,8 @@ type AuthCtx = {
   loginInstructor: (c: InstructorCreds) => Promise<void>;
   logout: () => void;
   updateUser: (patch: Partial<AuthUser>) => void; // merge edited profile fields into the session
+  apiEnv: ApiEnvironment; // which Club.Api server this session talks to
+  switchApiEnv: (key: ApiEnvKey) => Promise<void>; // change server + drop the session
 };
 
 const Ctx = createContext<AuthCtx | null>(null);
@@ -72,11 +75,15 @@ async function loadSession(): Promise<Session | null> {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
+  const [apiEnv, setApiEnvState] = useState<ApiEnvironment>(getApiEnv());
 
-  // Restore persisted session on mount.
+  // Restore persisted session on mount. The API environment is restored FIRST — every
+  // request (including the session restore below) must go to the right server.
   useEffect(() => {
     let alive = true;
     (async () => {
+      const env = await restoreApiEnv();
+      if (alive) setApiEnvState(env);
       const s = await loadSession();
       if (alive && s) {
         setAuthToken(s.token);
@@ -153,6 +160,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         persist(null);
         setSession(null);
       },
+      apiEnv,
+      // A token issued by one server is meaningless on another, so switching drops the
+      // session and sends the user back to the login screen.
+      switchApiEnv: async (key: ApiEnvKey) => {
+        const next = await setApiEnv(key);
+        setApiEnvState(next);
+        setAuthToken(null);
+        persist(null);
+        setSession(null);
+      },
       updateUser: (patch) =>
         setSession((prev) => {
           if (!prev) return prev;
@@ -161,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return next;
         }),
     }),
-    [ready, session]
+    [ready, session, apiEnv]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
