@@ -1,4 +1,5 @@
-import { getApiBaseUrl } from "./config";
+import { Platform } from "react-native";
+import { getApiBaseUrl, getApiEnv } from "./config";
 
 // Backend envelope: { status, meta: { code }, data }
 export type ApiEnvelope<T> = {
@@ -35,6 +36,28 @@ export function setUnauthorizedHandler(fn: (() => void) | null) {
 
 type Options = { method?: string; body?: unknown; signal?: AbortSignal; auth?: boolean };
 
+/**
+ * A failed fetch on a device is almost always the UAT certificate, not the network.
+ *
+ * That host serves the stock self-signed Plesk certificate: it is issued by itself AND it
+ * carries no SAN entry for `apimacuat.zyncbook.com` (CN is literally "Plesk"). Trusting the
+ * certificate isn't enough — Android and iOS also verify the hostname against the SAN, so the
+ * connection is refused before any request goes out. `plugins/withUatCertificate.js` covers the
+ * trust half only. Nothing in the app can fix the hostname half; the host needs a real
+ * certificate. Say that instead of "Network error".
+ */
+function networkErrorMessage(raw: string): string {
+  const env = getApiEnv();
+  if (Platform.OS !== "web" && env.selfSignedCert) {
+    return (
+      `Can't reach ${env.label} securely. ${new URL(env.baseUrl).host} is using a self-signed ` +
+      `certificate that phones refuse to accept, so this is a server-side fix — the API host needs ` +
+      `a valid certificate installed. Until then, use the Production server (sign out → Server).`
+    );
+  }
+  return `Network error: ${raw || "request failed"}`;
+}
+
 // The backend answers HTTP 200 with an error *inside* the envelope
 // ({ status: 400, meta: { code: 400, error: "..." } }). Pull that code out so callers
 // see the real failure instead of a silently empty result. `status` is sometimes a
@@ -65,7 +88,7 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
       signal,
     });
   } catch (e: any) {
-    throw new ApiError(`Network error: ${e?.message || "request failed"}`, 0, null);
+    throw new ApiError(networkErrorMessage(e?.message), 0, null);
   }
 
   const text = await res.text();
@@ -110,7 +133,7 @@ export const http = {
     try {
       res = await fetch(getApiBaseUrl() + path, { method: "POST", headers, body: form });
     } catch (e: any) {
-      throw new ApiError(`Network error: ${e?.message || "request failed"}`, 0, null);
+      throw new ApiError(networkErrorMessage(e?.message), 0, null);
     }
     const text = await res.text();
     let parsed: any = text;
@@ -136,11 +159,17 @@ export const http = {
     const headers: Record<string, string> = { accept: "*/*" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
     if (auth && authToken) headers["Authorization"] = "bearer " + authToken;
-    const res = await fetch(getApiBaseUrl() + path, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    let res: Response;
+    try {
+      res = await fetch(getApiBaseUrl() + path, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    } catch (e: any) {
+      // Login goes through here — this is where the certificate problem surfaces first.
+      throw new ApiError(networkErrorMessage(e?.message), 0, null);
+    }
     const text = await res.text();
     let parsed: any = text;
     try {

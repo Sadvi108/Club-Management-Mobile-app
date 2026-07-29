@@ -56,6 +56,12 @@ copy from `frontend/.env.example` if missing.
   outcome by reconciliation — never assume a payment succeeded.
   `payTermPayments` in the body is what makes **advance months with no invoice yet** payable
   (the legacy query flag never did); `purchaseItems` is the only way to raise a purchase request.
+- Attendance check-in: `POST /Attendance/Add` `{ qrCode, attendanceType, tTimeId? }`. **`attendanceType`
+  must be 1** (student self check-in) — 0 and 3 always answer `data.status:-1 "Invalid QR Code"`, 2 is
+  instructor marking. The centre QR (`Utilities/TrainingCenterQRCode/{clubId}/{tcid}` PDF) encodes
+  **`TC-` + tcid padded to 8 digits** (`TC-00001945`); the student QR encodes `ST-00035842` and is NOT
+  accepted. `data.status`: 0 = checked in, 1 = "Select your training class time" → resend with a
+  `tTimeId` from `Listing/TrainingTimeByTcId/{tcid}`, -1 = not a centre code.
 - Receipt/invoice PDF (public): `GET /Utilities/ReceiptAsPDF/{clubId}/0/{invoiceId}` (the id from
   Reports/Receipts is an **invoiceId** → use the 3rd slot, not paymentId, or you get a BLANK PDF).
 - Profile edit + photo: `POST /Profile/UpdateProfile` multipart (PascalCase fields + `files` photo →

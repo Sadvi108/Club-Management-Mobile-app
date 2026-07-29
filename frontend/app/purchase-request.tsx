@@ -41,9 +41,13 @@ export default function PurchaseRequest() {
     }
     const total = selected.reduce((sum, x) => sum + x.n * Number(x.p.price || 0), 0);
     if (!canPurchase) {
+      // Almost always means the app is signed in to Production, where /Bcpg doesn't exist.
+      // Name the server so it's obvious, and say exactly how to move.
       notify(
-        "Not available on this server",
-        "Purchases are submitted through the payment gateway, which this server doesn't run yet. Please order through your academy."
+        `Boost isn't on ${apiEnv.label}`,
+        `You're signed in to ${apiEnv.label} (${apiEnv.baseUrl.replace(/^https?:\/\//, "")}), which doesn't run the ` +
+          `payment gateway — purchases are raised by paying for them. Sign out and pick the UAT server under ` +
+          `"Server" on the login screen, then try again.`
       );
       return;
     }

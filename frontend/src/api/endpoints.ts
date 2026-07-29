@@ -62,6 +62,24 @@ export function extractReferenceId(url: string): string | null {
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** `Attendance/Add.attendanceType` — see the note on `api.addAttendance`. */
+export const ATTENDANCE_TYPE = { selfCheckIn: 1, instructorMark: 2 } as const;
+
+/** `data.status` of `Attendance/Add`. */
+export const ATTENDANCE_RESULT = { checkedIn: 0, needsClassTime: 1, invalidQr: -1 } as const;
+
+/**
+ * Training-centre check-in QR content: `TC-` + the centre id padded to 8 digits
+ * (`TC-00001945` = centre 1945). Returns the centre id, or null for anything else —
+ * the student QR (`ST-00035842`) is not a check-in code.
+ */
+export function parseCenterQr(value: string): number | null {
+  const m = /^\s*TC-?(\d{1,10})\s*$/i.exec(value || "");
+  if (!m) return null;
+  const id = parseInt(m[1], 10);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
 // Default report window: last 18 months → end of next year (covers receipts/attendance).
 export function defaultRange(): { fromDate: string; toDate: string } {
   const now = new Date();
@@ -351,10 +369,25 @@ export const api = {
   studentCenters: () => http.get<IdValueText[]>("/Listing/StudentCenters"),
   instructors: () => http.get<IdValueText[]>("/Listing/Instructors"),
 
-  // ── Attendance (self check-in via scanned center QR) ──
-  // Returns AttendanceResult; data.status === -1 means the QR isn't a valid D-CLIX center QR.
-  addAttendance: (body: { qrCode?: string | null; attendanceType: number; tTimeId?: number | null }) =>
-    http.post<AttendanceResult>("/Attendance/Add", body),
+  // ── Attendance (self check-in via scanned training-centre QR) ──
+  //
+  // Contract probed live on UAT 2026-07-29 (student DARSHANMUTHU, centre 1945):
+  //
+  //   attendanceType 1 = student self check-in with the CENTRE QR  ← what the scanner uses
+  //   attendanceType 2 = instructor marking (rejects a student token: "Invalid Instructor details")
+  //   attendanceType 0 / 3 = always -1, not usable from the app
+  //
+  // The centre QR (`GET /Utilities/TrainingCenterQRCode/{clubId}/{tcid}`, a PDF poster) encodes
+  // `TC-00001945` — "TC-" + the training-centre id zero-padded to 8 digits. The student QR
+  // encodes `ST-00035842` and is NOT accepted for check-in.
+  //
+  // data.status: 0 = checked in, 1 = "Select your training class time" (resend with tTimeId),
+  // -1 = the QR isn't a D-CLIX centre code.
+  addAttendance: (body: { qrCode?: string | null; attendanceType?: number; tTimeId?: number | null }) =>
+    http.post<AttendanceResult>("/Attendance/Add", {
+      ...body,
+      attendanceType: body.attendanceType ?? ATTENDANCE_TYPE.selfCheckIn,
+    }),
 
   // ── Class booking ──
   // Bookable time slots for a center+instructor in a given month.

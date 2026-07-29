@@ -18,9 +18,10 @@ import { useRouter } from "expo-router";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { radius, spacing, useTheme } from "../src/theme";
 import { safeBack } from "../src/ui/dialogs";
-import { api } from "../src/api/endpoints";
+import { api, ATTENDANCE_RESULT, ATTENDANCE_TYPE, parseCenterQr } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
 import { useAuth } from "../src/api/auth";
+import type { IdValueText } from "../src/api/types";
 
 // QR payloads that are obviously NOT a club check-in code — rejected before hitting the API
 // for instant feedback. The backend (/Attendance/Add → status -1) is the real D-CLIX validator.
@@ -31,6 +32,9 @@ function looksForeign(v: string) {
 }
 
 type Result = { ok: boolean; title: string; sub: string };
+// Set when the server answers "Select your training class time" — the same QR is resent
+// once the user picks a slot.
+type ClassPick = { qrCode: string; centerId: number | null };
 
 export default function QRScan() {
   const router = useRouter();
@@ -43,6 +47,8 @@ export default function QRScan() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [manual, setManual] = useState("");
+  const [classPick, setClassPick] = useState<ClassPick | null>(null);
+  const [slots, setSlots] = useState<IdValueText[]>([]);
   const lockRef = useRef(false); // CameraView fires onBarcodeScanned continuously — gate to one in-flight check
   const scan = useRef(new Animated.Value(0)).current;
   const isWeb = Platform.OS === "web";
@@ -66,9 +72,12 @@ export default function QRScan() {
 
   const translateY = scan.interpolate({ inputRange: [0, 1], outputRange: [0, 220] });
 
-  async function submitCode(raw: string) {
+  // One check-in attempt. `tTimeId` is only sent on the retry after the server asked which
+  // class this is for. attendanceType 1 = student self check-in (0 is rejected by the API —
+  // that was the bug: every scan came back "Invalid QR Code").
+  async function submitCode(raw: string, tTimeId?: number) {
     const value = (raw || "").trim();
-    if (!value || busy || lockRef.current) return;
+    if (!value || busy || (lockRef.current && tTimeId === undefined)) return;
     lockRef.current = true;
     if (looksForeign(value)) {
       setResult({ ok: false, title: "Not a D-CLIX QR", sub: "Scan the QR poster at your training center." });
@@ -76,20 +85,44 @@ export default function QRScan() {
     }
     setBusy(true);
     try {
-      const res = await api.addAttendance({ qrCode: value, attendanceType: 0 });
-      if (!res || res.status === -1) {
-        setResult({
-          ok: false,
-          title: "Invalid QR Code",
-          sub: res?.message && res.message !== "Invalid QR Code"
-            ? res.message
-            : "This QR isn't a D-CLIX check-in code.",
-        });
-      } else {
+      const res = await api.addAttendance({
+        qrCode: value,
+        attendanceType: ATTENDANCE_TYPE.selfCheckIn,
+        tTimeId: tTimeId ?? null,
+      });
+
+      if (res?.status === ATTENDANCE_RESULT.checkedIn) {
         const center =
           info.data?.tCenterName || (res.tTimeSession?.[0] as any)?.centerName || "Training Center";
+        setClassPick(null);
         setResult({ ok: true, title: "Check-in Successful!", sub: `${center} · ${now}` });
+        return;
       }
+
+      // The centre QR was understood, but the server can't tell which session this is —
+      // ask, then resend the same code with the chosen tTimeId.
+      if (res?.status === ATTENDANCE_RESULT.needsClassTime) {
+        const centerId = parseCenterQr(value);
+        setClassPick({ qrCode: value, centerId });
+        setSlots([]);
+        if (centerId) {
+          try {
+            setSlots(await api.trainingTimeByTcId(centerId));
+          } catch {
+            /* the picker falls back to a plain message when the list can't be loaded */
+          }
+        }
+        setResult(null);
+        return;
+      }
+
+      setResult({
+        ok: false,
+        title: "Invalid QR Code",
+        sub: res?.message && res.message !== "Invalid QR Code"
+          ? res.message
+          : "Scan the D-CLIX centre poster (its code looks like TC-00001945). Your own student QR won't check you in.",
+      });
     } catch (e: any) {
       setResult({ ok: false, title: "Check-in failed", sub: e?.message || "Please try again." });
     } finally {
@@ -100,6 +133,8 @@ export default function QRScan() {
   function rescan() {
     lockRef.current = false;
     setResult(null);
+    setClassPick(null);
+    setSlots([]);
     setManual("");
   }
 
@@ -134,9 +169,42 @@ export default function QRScan() {
 
       <View style={styles.center}>
         <Text style={styles.instruction}>
-          {result ? (result.ok ? result.title : result.title) : busy ? "Checking in…" : "Align the QR within the frame"}
+          {result
+            ? result.title
+            : classPick
+              ? "Select your training class time"
+              : busy
+                ? "Checking in…"
+                : "Align the QR within the frame"}
         </Text>
 
+        {/* Server answered "Select your training class time" — pick a slot and resend the code */}
+        {classPick && !result ? (
+          <View style={styles.pickWrap}>
+            {busy ? (
+              <ActivityIndicator color={colors.primary} size="large" />
+            ) : slots.length ? (
+              slots.map((s) => (
+                <TouchableOpacity
+                  key={s.id}
+                  style={styles.pickRow}
+                  activeOpacity={0.8}
+                  onPress={() => submitCode(classPick.qrCode, s.id)}
+                  testID={`qr-slot-${s.id}`}
+                >
+                  <Ionicons name="time-outline" size={18} color={colors.primary} />
+                  <Text style={styles.pickTxt} numberOfLines={1}>{s.text || s.value}</Text>
+                  <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.6)" />
+                </TouchableOpacity>
+              ))
+            ) : (
+              <Text style={styles.pickEmpty}>
+                No class times are listed for this centre. Ask your academy to add the training time,
+                then scan again.
+              </Text>
+            )}
+          </View>
+        ) : (
         <View style={styles.frame}>
           <View style={[styles.corner, styles.tl, { borderColor: result?.ok === false ? colors.danger : colors.primary }]} />
           <View style={[styles.corner, styles.tr, { borderColor: result?.ok === false ? colors.danger : colors.primary }]} />
@@ -166,17 +234,29 @@ export default function QRScan() {
             </View>
           )}
         </View>
+        )}
 
         <Text style={styles.hint}>
           {result
             ? result.ok
               ? "Attendance marked for today"
               : "Make sure you scan the D-CLIX center QR"
-            : "Make sure the camera has good lighting"}
+            : classPick
+              ? "Your academy needs to know which class this check-in is for"
+              : "Make sure the camera has good lighting"}
         </Text>
 
+        {/* Cancel out of the class-time picker back to scanning */}
+        {classPick && !result && !busy && (
+          <TouchableOpacity onPress={rescan} activeOpacity={0.9} style={styles.doneBtnWrap} testID="qr-pick-cancel">
+            <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.doneBtn}>
+              <Text style={styles.doneTxt}>Scan Again</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
         {/* Native, no permission yet → ask */}
-        {!isWeb && permission && !permission.granted && !result && (
+        {!isWeb && permission && !permission.granted && !result && !classPick && (
           <TouchableOpacity onPress={requestPermission} activeOpacity={0.9} style={styles.doneBtnWrap} testID="qr-permission">
             <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.doneBtn}>
               <Ionicons name="camera" size={16} color="#fff" />
@@ -186,13 +266,13 @@ export default function QRScan() {
         )}
 
         {/* Web preview has no camera → manual code entry so check-in is still testable */}
-        {isWeb && !result && (
+        {isWeb && !result && !classPick && (
           <View style={styles.manualWrap}>
             <Text style={styles.manualNote}>Live camera scanning runs in the D-CLIX mobile app.</Text>
             <View style={styles.manualRow}>
               <TextInput
                 style={styles.manualInput}
-                placeholder="Enter / paste center QR code"
+                placeholder="Centre code, e.g. TC-00001945"
                 placeholderTextColor="rgba(255,255,255,0.45)"
                 value={manual}
                 onChangeText={setManual}
@@ -258,6 +338,14 @@ function createStyles(colors: any) {
     doneBtnWrap: { marginTop: 28 },
     doneBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingHorizontal: 44, paddingVertical: 14, borderRadius: radius.md },
     doneTxt: { color: "#fff", fontWeight: "800", fontSize: 15 },
+    pickWrap: { width: "100%", maxWidth: 340, gap: 10, paddingVertical: 8, minHeight: 120, justifyContent: "center" },
+    pickRow: {
+      flexDirection: "row", alignItems: "center", gap: 10,
+      backgroundColor: "rgba(255,255,255,0.12)", borderRadius: radius.md,
+      paddingHorizontal: 14, paddingVertical: 14,
+    },
+    pickTxt: { flex: 1, color: "#fff", fontSize: 14, fontWeight: "700" },
+    pickEmpty: { color: "rgba(255,255,255,0.75)", fontSize: 13, textAlign: "center", lineHeight: 19 },
     manualWrap: { marginTop: 28, width: "100%", maxWidth: 320 },
     manualNote: { color: "rgba(255,255,255,0.65)", fontSize: 12, textAlign: "center", marginBottom: 12 },
     manualRow: { flexDirection: "row", alignItems: "center", gap: 10 },

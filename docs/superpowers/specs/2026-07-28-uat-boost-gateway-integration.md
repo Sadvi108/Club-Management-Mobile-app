@@ -249,7 +249,54 @@ payments are confirmed by **reconciliation** instead (see 6.4).
   confirmed" (the payment was not completed).
 - `tsc --noEmit` clean. No console errors.
 
-### 6.6 For the backend team
+### 6.6 The UAT certificate blocks the APK completely (why "purchases aren't available")
+
+Reported from a device on v2.6.0: **New Purchase Request** answers "Not available on this server".
+That message only shows when the app is signed in to a server without `/Bcpg` — i.e. Production.
+The reason the device is on Production is that **it cannot reach UAT at all**:
+
+```
+subject = C=CH, L=Schaffhausen, O=Plesk, CN=Plesk
+SAN     = (none — the extension is absent)
+```
+
+`plugins/withUatCertificate.js` fixes chain validation only. Android and iOS *also* verify the
+hostname against the certificate's SAN list, and there is no SAN — `CN=Plesk` doesn't match
+`apimacuat.zyncbook.com` either. So the TLS handshake is rejected before any request is sent, no
+matter what the app trusts. **There is no in-app fix**; the host needs a real certificate
+(Let's Encrypt, one click in Plesk).
+
+App-side changes made in response: network failures on a `selfSignedCert` environment now say
+exactly this instead of "Network error" (`src/api/http.ts`), and the purchase screen names the
+server it is signed in to and how to switch (`app/purchase-request.tsx`).
+
+### 6.7 Attendance check-in was sending the wrong `attendanceType` (fixed)
+
+Every scan returned "Invalid QR Code". Cause was in the app, not the QR: `qr-scan.tsx` sent
+`attendanceType: 0`, which the API always rejects. Probed on UAT with a real centre QR:
+
+| body | `data.status` / message |
+|---|---|
+| `{"qrCode":"TC-00001945","attendanceType":0}` | `-1` Invalid QR Code |
+| `{"qrCode":"TC-00001945","attendanceType":1}` | **`0` Attendance updated successfully** |
+| `{"qrCode":"TC-00001945","attendanceType":2}` | `-1` Invalid Instructor details |
+| `{"qrCode":"ST-00035842","attendanceType":1}` | `-1` Invalid QR Code (student QR is not a check-in code) |
+| `{"qrCode":"TC-00001198","attendanceType":1}` | `1` **Select your training class time** |
+| `{"qrCode":"hello-world","attendanceType":1}` | `-1` Invalid QR Code (so type 1 really does validate) |
+
+The QR content itself was read by rendering the centre poster PDF
+(`GET /Utilities/TrainingCenterQRCode/68/1945`) and decoding it: **`TC-00001945`** = `TC-` + centre
+id padded to 8 digits. The student poster decodes to `ST-00035842`.
+
+Confirmed the check-in is real: two rows appeared in `POST /Reports/Attendance` for today
+("Present", SMK KK2, 15:30:23 and 15:30:47).
+
+Fixed in `qr-scan.tsx`: sends `attendanceType: 1`, treats `status 1` by loading
+`Listing/TrainingTimeByTcId/{tcid}` and re-sending the same code with the chosen `tTimeId`, and the
+invalid message now tells the user which poster to scan. Verified in the web preview — `TC-00001945`
+→ "Check-in Successful! SMK KK2", `TC-00001198` → the class-time step.
+
+### 6.8 For the backend team
 
 1. **Fix the amount lookup on the invoice/term path** (§6.1) — the gateway itself is fine.
 2. `GET /Bcpg/Redirect` still 500s without a bearer (§4.3) — it is the browser return URL.
