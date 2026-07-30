@@ -56,6 +56,11 @@ copy from `frontend/.env.example` if missing.
   outcome by reconciliation — never assume a payment succeeded.
   `payTermPayments` in the body is what makes **advance months with no invoice yet** payable
   (the legacy query flag never did); `purchaseItems` is the only way to raise a purchase request.
+- Class booking: `TrainingTimeWithDateAndInstructor` returns a **weekly** timetable (the month in
+  the path is ignored) and **`classLimit` is capacity, not availability — `0` books fine**, so never
+  disable a slot on it. `BookNow` accepts duplicates and a weekday that doesn't match the slot, so
+  the app owns the date choice and the duplicate check. `NextBookings` is always `[]` — filter
+  `GetBookings` instead. Details: `docs/superpowers/specs/2026-07-29-class-booking-contract.md`.
 - Attendance check-in: `POST /Attendance/Add` `{ qrCode, attendanceType, tTimeId? }`. **`attendanceType`
   must be 1** (student self check-in) — 0 and 3 always answer `data.status:-1 "Invalid QR Code"`, 2 is
   instructor marking. The centre QR (`Utilities/TrainingCenterQRCode/{clubId}/{tcid}` PDF) encodes

@@ -390,16 +390,37 @@ export const api = {
     }),
 
   // ── Class booking ──
-  // Bookable time slots for a center+instructor in a given month.
+  //
+  // Contract probed live on UAT 2026-07-29 (student 35842, centre 1945 SMK KK2):
+  //
+  // - The weekly timetable for a centre+instructor. The month/year in the path make no
+  //   difference to the response (July, August and September return the identical rows) —
+  //   these are recurring weekly slots, and the calendar date is the app's job.
+  // - `classLimit` is the class's configured capacity, **not** seats remaining and not an
+  //   availability flag: a slot with `classLimit: 0` booked fine (booking 3280) and the value
+  //   never moved afterwards. Do not use it to disable a slot.
   trainingSlots: (month: number, year: number, tCenterId: number, instructorId: number) =>
     http.get<TrainingSlot[]>(
       `/ClassBooking/TrainingTimeWithDateAndInstructor/${month}/${year}/${tCenterId}/${instructorId}`
     ),
-  packageInfo: (studentId: number, month: number, year: number) =>
-    http.get<PackageInfo>(`/ClassBooking/PackageInfo/${studentId}?month=${month}&year=${year}`),
+  // The student's package (packageType feeds BookNow). month/year are accepted but ignored.
+  packageInfo: (studentId: number, month?: number, year?: number) =>
+    http.get<PackageInfo>(
+      `/ClassBooking/PackageInfo/${studentId}` +
+        (month && year ? `?month=${month}&year=${year}` : "")
+    ),
   // Creates a booking; returns the new booking id. Body = BookClassViewModel.
+  //
+  // The server validates almost nothing: it accepts a duplicate of an existing booking, and
+  // accepts a trainingDate whose weekday doesn't match the slot (a Friday slot booked on a
+  // Tuesday returned 200). Only an empty `timeSlots` is refused ("Invalid Request"). So the
+  // date and the duplicate check are the app's responsibility — see `app/book-class.tsx`.
   bookNow: (body: BookClassRequest) => http.post<{ id: number }>("/ClassBooking/BookNow", body),
+  // Returns [] even when the student has a future booking (verified against booking 3280,
+  // dated 2026-08-07) — unusable. Use getBookings() and filter by date instead.
   nextBookings: () => http.get<BookingInfo[]>("/ClassBooking/NextBookings"),
+  // Every booking for the student, past and future. `studentId` is optional — a student token
+  // returns its own bookings either way.
   getBookings: (studentId?: number) =>
     http.get<BookingInfo[]>(
       `/ClassBooking/GetBookings${studentId ? `?studentId=${studentId}` : ""}`

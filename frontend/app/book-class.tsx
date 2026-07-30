@@ -24,23 +24,28 @@ const startTimeOf = (name?: string) => {
   const m = /(\d{1,2}:\d{2})/.exec(name || "");
   return m ? m[1] : "";
 };
+const isoDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-// First date in the chosen month that falls on the slot's weekday and is not in the past.
-function nextDateForDow(dowName: string, month: number, year: number): Date {
+/**
+ * Every date in the chosen month that falls on the slot's weekday, today onwards.
+ *
+ * The timetable the API returns is weekly and month-independent, and BookNow accepts any date
+ * you send it — including one whose weekday doesn't match the slot (verified: a Friday slot
+ * booked on a Tuesday returned 200). So the app picks the candidate dates and the student
+ * chooses one, instead of a date being computed behind their back.
+ */
+function datesForDow(dowName: string, month: number, year: number): Date[] {
   const target = DOW.findIndex((d) => d.toLowerCase() === (dowName || "").toLowerCase());
+  if (target < 0) return [];
   const today = new Date();
-  let d = new Date(year, month - 1, 1);
-  if (today.getFullYear() === year && today.getMonth() === month - 1 && today.getDate() > 1) {
-    d = new Date(year, month - 1, today.getDate());
+  today.setHours(0, 0, 0, 0);
+  const out: Date[] = [];
+  const d = new Date(year, month - 1, 1);
+  while (d.getMonth() === month - 1) {
+    if (d.getDay() === target && d.getTime() >= today.getTime()) out.push(new Date(d));
+    d.setDate(d.getDate() + 1);
   }
-  if (target >= 0) {
-    let guard = 0;
-    while (d.getDay() !== target && guard < 14) {
-      d.setDate(d.getDate() + 1);
-      guard++;
-    }
-  }
-  return d;
+  return out;
 }
 
 export default function BookClass() {
@@ -61,6 +66,7 @@ export default function BookClass() {
   const [instructorId, setInstructorId] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0); // 0 = this month, 1 = next month
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null); // yyyy-mm-dd
   const [booking, setBooking] = useState(false);
 
   const base = new Date();
@@ -79,9 +85,15 @@ export default function BookClass() {
     );
     setTCenterId(mine?.id ?? centers.data[0].id);
   }, [centers.data, info.data, info.loading]);
+  // Default to the student's own instructor when the API tells us who that is — picking the
+  // first name in the list lands on an instructor who often teaches nothing at this centre.
   useEffect(() => {
-    if (!instructorId && instructors.data?.length) setInstructorId(instructors.data[0].id);
-  }, [instructors.data]);
+    if (instructorId || info.loading || !instructors.data?.length) return;
+    const mine = instructors.data.find(
+      (i) => i.id === info.data?.instructorId || i.text === info.data?.instructorName
+    );
+    setInstructorId(mine?.id ?? instructors.data[0].id);
+  }, [instructors.data, info.data, info.loading]);
 
   const slots = useApi(
     () =>
@@ -95,32 +107,93 @@ export default function BookClass() {
     [token, studentId]
   );
 
+  // The student's package — BookNow takes the packageType from here rather than a guess.
+  const pkg = useApi(
+    () => (token && studentId ? api.packageInfo(studentId) : Promise.resolve(null)),
+    [token, studentId]
+  );
+
   // Drop the selection whenever the slot list changes.
-  useEffect(() => setSelectedSlot(null), [tCenterId, instructorId, month, year]);
+  useEffect(() => {
+    setSelectedSlot(null);
+    setSelectedDate(null);
+  }, [tCenterId, instructorId, month, year]);
 
   const slotList = slots.data ?? [];
   const chosen = slotList.find((s) => s.id === selectedSlot) || null;
+  const centerName = (centers.data ?? []).find((c) => c.id === tCenterId)?.text || "";
+  const instructorName = (instructors.data ?? []).find((i) => i.id === instructorId)?.text || "";
+
+  // Candidate dates for the chosen slot, and the first one preselected.
+  const dateOptions = useMemo(
+    () => (chosen ? datesForDow(chosen.dayOfWeek, month, year) : []),
+    [chosen, month, year]
+  );
+  // Preselect the first date the student hasn't already booked, so the default choice is
+  // actionable rather than immediately warning about a duplicate.
+  useEffect(() => {
+    if (!chosen) return;
+    const taken = new Set(
+      (bookings.data ?? [])
+        .filter((b) => b.timeId === chosen.id)
+        .map((b) => (b.trainingDate || "").slice(0, 10))
+    );
+    const free = dateOptions.find((d) => !taken.has(isoDate(d)));
+    setSelectedDate((prev) =>
+      prev && dateOptions.some((d) => isoDate(d) === prev)
+        ? prev
+        : free
+          ? isoDate(free)
+          : dateOptions[0]
+            ? isoDate(dateOptions[0])
+            : null
+    );
+  }, [chosen, dateOptions, bookings.data]);
+
+  // Upcoming bookings first (soonest first), then past ones (most recent first).
+  const myBookings = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return (bookings.data ?? [])
+      .map((b) => ({ b, t: new Date(b.trainingDate).getTime() }))
+      .map((x) => ({ ...x, past: !isNaN(x.t) && x.t < today.getTime() }))
+      .sort((a, z) => (a.past === z.past ? (a.past ? z.t - a.t : a.t - z.t) : a.past ? 1 : -1));
+  }, [bookings.data]);
+
+  // The API happily creates a second identical booking, so check here.
+  const alreadyBooked = useMemo(() => {
+    if (!chosen || !selectedDate) return false;
+    return (bookings.data ?? []).some(
+      (b) => b.timeId === chosen.id && (b.trainingDate || "").slice(0, 10) === selectedDate
+    );
+  }, [bookings.data, chosen, selectedDate]);
 
   async function confirmBooking() {
     if (!chosen || !studentId || booking) return;
+    if (!selectedDate) {
+      notify("Pick a date", "Choose which date you want to attend this class.");
+      return;
+    }
+    if (alreadyBooked) {
+      notify("Already booked", "You've already booked this class on that date. Pick another date.");
+      return;
+    }
     setBooking(true);
     try {
-      const date = nextDateForDow(chosen.dayOfWeek, month, year);
       const start = startTimeOf(chosen.name) || "00:00";
-      const iso = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${start}:00`;
       await api.bookNow({
         id: 0,
         tCenterId,
         instructorId,
         studentId,
-        packageType: info.data ? "Monthly" : null,
+        packageType: pkg.data?.packageType || null,
         sessionId: 0,
         remarks: "Booked via app",
         timeSlots: [
           {
             bookingId: 0,
             timeId: chosen.id,
-            trainingDate: iso,
+            trainingDate: `${selectedDate}T${start}:00`,
             status: "",
             title: "",
             name: chosen.name,
@@ -129,11 +202,13 @@ export default function BookClass() {
           },
         ],
       });
+      const when = new Date(`${selectedDate}T00:00:00`);
       setSelectedSlot(null);
+      setSelectedDate(null);
       bookings.reload();
       notify(
         "Class booked",
-        `${chosen.name}\n${date.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "short" })} · ${chosen.centerName}`
+        `${chosen.name}\n${when.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "short" })} · ${chosen.centerName}`
       );
     } catch (e: any) {
       notify("Booking failed", e?.message || "Please try again.");
@@ -210,20 +285,21 @@ export default function BookClass() {
         {!slots.loading && slotList.length === 0 && (
           <View style={styles.emptyCard}>
             <Ionicons name="calendar-outline" size={40} color={colors.textMuted} />
-            <Text style={styles.emptyTxt}>No bookable sessions</Text>
-            <Text style={styles.emptySub}>Try another center, instructor or month</Text>
+            <Text style={styles.emptyTxt}>No sessions here</Text>
+            <Text style={styles.emptySub}>
+              {instructorName ? `${instructorName} doesn't teach at ` : "No timetable at "}
+              {centerName || "this centre"}. Pick another instructor or centre above.
+            </Text>
           </View>
         )}
         {slotList.map((s) => {
           const on = s.id === selectedSlot;
-          const full = s.classLimit <= 0;
           return (
             <TouchableOpacity
               key={s.id}
-              disabled={full}
               onPress={() => setSelectedSlot(s.id)}
               activeOpacity={0.85}
-              style={[styles.slotCard, on && styles.slotCardOn, full && { opacity: 0.5 }]}
+              style={[styles.slotCard, on && styles.slotCardOn]}
               testID={`book-slot-${s.id}`}
             >
               <View style={[styles.slotDow, on && { backgroundColor: colors.primary }]}>
@@ -231,16 +307,53 @@ export default function BookClass() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.slotTitle} numberOfLines={2}>{s.name}</Text>
-                <Text style={styles.slotMeta} numberOfLines={1}>{s.centerName} · {s.instructorName}</Text>
+                <Text style={styles.slotMeta} numberOfLines={1}>
+                  {s.centerName} · {s.instructorName}
+                  {s.classLimit > 0 ? ` · max ${s.classLimit}` : ""}
+                </Text>
               </View>
-              {full ? (
-                <Text style={styles.fullTag}>Full</Text>
-              ) : (
-                <Ionicons name={on ? "radio-button-on" : "radio-button-off"} size={22} color={on ? colors.primary : colors.textMuted} />
-              )}
+              <Ionicons name={on ? "radio-button-on" : "radio-button-off"} size={22} color={on ? colors.primary : colors.textMuted} />
             </TouchableOpacity>
           );
         })}
+
+        {/* Date — the API takes any date, so the student picks which one */}
+        {chosen && (
+          <>
+            <Text style={styles.section}>Pick a date</Text>
+            {dateOptions.length === 0 ? (
+              <Text style={styles.emptySub}>
+                No {chosen.dayOfWeek} left in {monthLabel}. Choose next month above.
+              </Text>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                {dateOptions.map((d) => {
+                  const key = isoDate(d);
+                  const on = key === selectedDate;
+                  const taken = (bookings.data ?? []).some(
+                    (b) => b.timeId === chosen.id && (b.trainingDate || "").slice(0, 10) === key
+                  );
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      onPress={() => setSelectedDate(key)}
+                      style={[styles.dateChip, on && styles.chipOn, taken && { opacity: 0.55 }]}
+                      testID={`book-date-${key}`}
+                    >
+                      <Text style={[styles.dateDay, on && styles.chipTxtOn]}>{d.getDate()}</Text>
+                      <Text style={[styles.dateMon, on && styles.chipTxtOn]}>
+                        {taken ? "booked" : d.toLocaleDateString("en-GB", { month: "short" })}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+            {alreadyBooked && (
+              <Text style={styles.warnTxt}>You already have this class booked on that date.</Text>
+            )}
+          </>
+        )}
 
         {/* My bookings */}
         <Text style={styles.section}>My Bookings</Text>
@@ -248,15 +361,18 @@ export default function BookClass() {
         {!bookings.loading && (bookings.data?.length ?? 0) === 0 && (
           <Text style={styles.emptySub}>No bookings yet.</Text>
         )}
-        {(bookings.data ?? []).map((b, i) => (
-          <View key={`${b.bookingId}-${i}`} style={styles.bookCard}>
+        {/* Upcoming first, then past — NextBookings returns [] even when a future booking
+            exists, so the split is done here from the full list. */}
+        {myBookings.map(({ b, past }, i) => (
+          <View key={`${b.bookingId}-${i}`} style={[styles.bookCard, past && { opacity: 0.55 }]}>
             <View style={styles.bookIcon}>
-              <Ionicons name="checkmark-done" size={18} color={colors.primary} />
+              <Ionicons name={past ? "time-outline" : "checkmark-done"} size={18} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.slotTitle} numberOfLines={1}>{b.title || "Class"}</Text>
               <Text style={styles.slotMeta} numberOfLines={1}>
                 {new Date(b.trainingDate).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" })} · {b.centerName}
+                {past ? " · past" : ""}
               </Text>
             </View>
             <Text style={[styles.statusTag, { color: /confirm|approv/i.test(b.status) ? colors.success : colors.warning }]}>{b.status || "Pending"}</Text>
@@ -266,19 +382,36 @@ export default function BookClass() {
 
       {/* Confirm */}
       <View style={[styles.footer, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom + 12, 28) }]}>
-        <TouchableOpacity onPress={confirmBooking} disabled={!chosen || booking} activeOpacity={0.9} testID="book-confirm">
+        <TouchableOpacity
+          onPress={confirmBooking}
+          disabled={!chosen || !selectedDate || alreadyBooked || booking}
+          activeOpacity={0.9}
+          testID="book-confirm"
+        >
           <LinearGradient
             colors={colors.gradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            style={[styles.confirmBtn, shadow.strong, (!chosen || booking) && { opacity: 0.5 }]}
+            style={[
+              styles.confirmBtn,
+              shadow.strong,
+              (!chosen || !selectedDate || alreadyBooked || booking) && { opacity: 0.5 },
+            ]}
           >
             {booking ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <>
                 <Ionicons name="add-circle" size={20} color="#fff" />
-                <Text style={styles.confirmTxt}>{chosen ? "Confirm Booking" : "Select a session"}</Text>
+                <Text style={styles.confirmTxt}>
+                  {!chosen
+                    ? "Select a session"
+                    : alreadyBooked
+                      ? "Already booked"
+                      : !selectedDate
+                        ? "Pick a date"
+                        : `Confirm · ${new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" })}`}
+                </Text>
               </>
             )}
           </LinearGradient>
@@ -318,6 +451,13 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     slotTitle: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
     slotMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 3 },
     fullTag: { fontSize: 12, fontWeight: "700", color: colors.danger },
+    warnTxt: { fontSize: 12, color: colors.warning, marginTop: 10, fontWeight: "600" },
+    dateChip: {
+      minWidth: 62, alignItems: "center", paddingVertical: 10, paddingHorizontal: 12,
+      borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+    },
+    dateDay: { fontSize: 17, fontWeight: "800", color: colors.textPrimary },
+    dateMon: { fontSize: 11, fontWeight: "600", color: colors.textSecondary, marginTop: 2 },
 
     bookCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.surface, borderRadius: radius.md, padding: 13, marginBottom: 9, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border, ...shadow.soft },
     bookIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
