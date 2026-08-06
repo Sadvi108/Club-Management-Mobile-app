@@ -25,10 +25,19 @@ type Palette = {
   overlay: string;
   cardShadowColor: string;
   strongShadowColor: string;
+  // Liquid-glass (frosted chrome): translucent fills + BlurView tint for tab bar, sheets,
+  // and cards that overlap the gradient header.
+  glassBg: string;
+  glassBgStrong: string;
+  glassBorder: string;
+  glassTint: "light" | "dark" | "default";
 };
 
+// Internal color grading: brand orange (primary + gradient) is UNCHANGED. What's graded is the
+// neutral ramp around it — a barely-warm page tint so white cards lift off the background, and
+// slightly stronger borders so surfaces separate without heavier shadows. Same theme, more depth.
 export const lightColors: Palette = {
-  background: "#FFFFFF",
+  background: "#FBFAF9", // warm paper white (was pure #FFF) → white surfaces now read as elevated
   surface: "#FFFFFF",
   surfaceAlt: "#FFF7ED",
   surfaceAlt2: "#FFEDD5",
@@ -38,11 +47,11 @@ export const lightColors: Palette = {
   accent: "#FB923C",
   secondary: "#FDBA74",
   textPrimary: "#0F172A",
-  textSecondary: "#64748B",
-  textMuted: "#94A3B8",
+  textSecondary: "#5B6472", // nudged darker for crisper AA contrast on white
+  textMuted: "#9AA1AC",
   textInverse: "#FFFFFF",
-  border: "#F1F5F9",
-  borderLight: "#F8FAFC",
+  border: "#EBEDF0", // a touch stronger than #F1F5F9 so card edges are visible on the warm bg
+  borderLight: "#F4F5F7",
   success: "#10B981",
   warning: "#F59E0B",
   danger: "#EF4444",
@@ -50,63 +59,96 @@ export const lightColors: Palette = {
   gradientSoft: ["#FFF7ED", "#FFEDD5"] as const,
   gold: "#F59E0B",
   overlay: "rgba(15,23,42,0.5)",
-  cardShadowColor: "#0F172A",
+  cardShadowColor: "#1E1B18", // warm-tinted shadow (was cold slate) so elevation matches the brand
   strongShadowColor: "#F97316",
+  glassBg: "rgba(255,255,255,0.60)",
+  glassBgStrong: "rgba(255,255,255,0.80)",
+  glassBorder: "rgba(255,255,255,0.65)",
+  glassTint: "light",
 };
 
 export const darkColors: Palette = {
-  background: "#0A0A0B",
-  surface: "#17171A",
-  surfaceAlt: "#1F1F23",
-  surfaceAlt2: "#27272A",
+  background: "#0B0A0C", // faint warm cast (was neutral #0A0A0B) to match the orange brand
+  surface: "#1A191E", // lifted a step so cards separate from the background
+  surfaceAlt: "#232228",
+  surfaceAlt2: "#2B2A31",
   primary: "#FB923C",
   primaryDark: "#F97316",
   primaryLight: "#FDBA74",
   accent: "#FB923C",
   secondary: "#FDBA74",
   textPrimary: "#FAFAFA",
-  textSecondary: "#A1A1AA",
-  textMuted: "#71717A",
+  textSecondary: "#A8A6AF",
+  textMuted: "#77757E",
   textInverse: "#0A0A0B",
-  border: "#27272A",
-  borderLight: "#1F1F23",
+  border: "#2E2C34", // more visible dividers in dark mode
+  borderLight: "#232228",
   success: "#34D399",
   warning: "#FBBF24",
   danger: "#F87171",
   gradient: ["#FDBA74", "#F97316", "#EA580C"] as const,
-  gradientSoft: ["#1F1F23", "#27272A"] as const,
+  gradientSoft: ["#232228", "#2B2A31"] as const,
   gold: "#FBBF24",
   overlay: "rgba(0,0,0,0.7)",
   cardShadowColor: "#000000",
   strongShadowColor: "#F97316",
+  glassBg: "rgba(26,25,30,0.55)",
+  glassBgStrong: "rgba(26,25,30,0.78)",
+  glassBorder: "rgba(255,255,255,0.10)",
+  glassTint: "dark",
 };
 
 export const radius = { sm: 10, md: 14, lg: 18, xl: 22, xxl: 28, full: 9999 };
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 };
 
 export const makeShadow = (c: Palette) => ({
+  // Diffuse elevation → cards float rather than sit on a hard edge. Deepened for more "shade".
   card: {
     shadowColor: c.cardShadowColor,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    elevation: 5,
   },
   soft: {
     shadowColor: c.cardShadowColor,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  // Deeper ambient shade for hero/elevated surfaces that need real presence.
+  shade: {
+    shadowColor: c.cardShadowColor,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.16,
+    shadowRadius: 30,
+    elevation: 8,
   },
   strong: {
     shadowColor: c.strongShadowColor,
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.3,
-    shadowRadius: 18,
-    elevation: 8,
+    shadowRadius: 26,
+    elevation: 10,
   },
 });
+
+// Motion + press tokens — one rhythm for the whole app so interactions feel unified and smooth.
+// Durations in ms (Material micro-interaction range). Use with Animated / LayoutAnimation.
+export const motion = {
+  fast: 150,
+  base: 220,
+  slow: 320,
+};
+
+// Standard press feedback for tappable cards/buttons: a slightly stronger dim + a subtle
+// scale-down that reads as "pressed" without shifting surrounding layout.
+export const press = {
+  activeOpacity: 0.85,
+  cardActiveOpacity: 0.9,
+  scale: 0.97,
+};
 
 export const font = {
   h1: { fontSize: 28, fontWeight: "800" as const, letterSpacing: -0.5 },

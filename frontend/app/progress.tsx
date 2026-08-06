@@ -1,33 +1,51 @@
 import { useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../src/theme";
-import { skills, achievements, trainerComments, student } from "../src/mockData";
+import { safeBack } from "../src/ui/dialogs";
+import { useAuth } from "../src/api/auth";
+import { api, defaultRange } from "../src/api/endpoints";
+import { useApi } from "../src/api/useApi";
 
-const beltStages = [
-  { name: "White", color: "#E5E7EB", done: true },
-  { name: "Yellow", color: "#FDE68A", done: true },
-  { name: "Orange", color: "#FED7AA", done: true },
-  { name: "Green", color: "#86EFAC", done: true },
-  { name: "Blue", color: "#93C5FD", done: true, current: true },
-  { name: "Purple", color: "#C4B5FD", done: false },
-  { name: "Brown", color: "#D6D3D1", done: false },
-  { name: "Black", color: "#1F2937", done: false },
+const BELTS = [
+  { name: "White", color: "#E5E7EB" },
+  { name: "Yellow", color: "#FDE68A" },
+  { name: "Orange", color: "#FED7AA" },
+  { name: "Green", color: "#86EFAC" },
+  { name: "Blue", color: "#93C5FD" },
+  { name: "Purple", color: "#C4B5FD" },
+  { name: "Brown", color: "#D6D3D1" },
+  { name: "Black", color: "#1F2937" },
 ];
 
 export default function Progress() {
   const router = useRouter();
   const { colors, shadow, mode } = useTheme();
+  const { user } = useAuth();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
+
+  const info = useApi(() => api.myInfo(), []);
+  const range = useMemo(() => defaultRange(), []);
+  const grading = useApi(() => api.gradingSchedule({ fromDate: range.fromDate, toDate: range.toDate }), []);
+  const att = useApi(() => api.attendanceReport({ fromDate: range.fromDate, toDate: range.toDate }), []);
+
+  const grade = info.data?.currentGrade || user?.currentGrade || "—";
+  const beltName = (grade.match(/\(([^)]+)\)/)?.[1] || "White").trim();
+  const currentIdx = Math.max(0, BELTS.findIndex((b) => b.name.toLowerCase() === beltName.toLowerCase()));
+
+  const records = att.data ?? [];
+  const present = records.filter((r) => r.attendanceTypeId === 0 || /present/i.test(r.attendanceType || "")).length;
+  const pct = records.length ? Math.round((present / records.length) * 100) : 0;
+  const gradeRows = grading.data ?? [];
 
   return (
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()} testID="progress-back">
+          <TouchableOpacity style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => safeBack(router)} testID="progress-back">
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.title}>Progress</Text>
@@ -38,65 +56,62 @@ export default function Progress() {
       <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.fitCard, shadow.strong]}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.fitLbl}>FITNESS SCORE</Text>
-            <Text style={styles.fitNum}>{student.fitness}<Text style={styles.fitUnit}>/100</Text></Text>
-            <Text style={styles.fitMsg}>Excellent shape — keep the momentum</Text>
+            <Text style={styles.fitLbl}>CURRENT GRADE</Text>
+            <Text style={styles.fitNum} numberOfLines={1}>{beltName}</Text>
+            <Text style={styles.fitMsg} numberOfLines={2}>{grade}</Text>
           </View>
-          <View style={styles.fitIconWrap}><Ionicons name="fitness" size={48} color="rgba(255,255,255,0.9)" /></View>
+          <View style={styles.fitIconWrap}><Ionicons name="ribbon" size={48} color="rgba(255,255,255,0.9)" /></View>
         </LinearGradient>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Belt Journey</Text>
           <View style={styles.beltLine}>
-            {beltStages.map((b, i) => (
-              <View key={b.name} style={styles.beltItem}>
-                <View style={[styles.beltDot, { backgroundColor: b.color }, b.current && { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.primary }]}>
-                  {b.done && !b.current && <Ionicons name="checkmark" size={12} color="#0F172A" />}
-                  {b.current && <Ionicons name="star" size={14} color="#fff" />}
+            {BELTS.map((b, i) => {
+              const done = i < currentIdx;
+              const current = i === currentIdx;
+              return (
+                <View key={b.name} style={styles.beltItem}>
+                  <View style={[styles.beltDot, { backgroundColor: b.color }, current && { width: 32, height: 32, borderRadius: 16, borderWidth: 2, borderColor: colors.primary, backgroundColor: colors.primary }]}>
+                    {done && <Ionicons name="checkmark" size={12} color="#0F172A" />}
+                    {current && <Ionicons name="star" size={14} color="#fff" />}
+                  </View>
+                  {i < BELTS.length - 1 && <View style={[styles.beltConnector, done && { backgroundColor: colors.primary }]} />}
                 </View>
-                {i < beltStages.length - 1 && <View style={[styles.beltConnector, b.done && { backgroundColor: colors.primary }]} />}
-              </View>
-            ))}
+              );
+            })}
           </View>
           <View style={styles.beltLabels}>
-            {beltStages.map((b) => (<Text key={b.name} style={[styles.beltLbl, b.current && { color: colors.primary, fontWeight: "800" }]}>{b.name[0]}</Text>))}
+            {BELTS.map((b, i) => (<Text key={b.name} style={[styles.beltLbl, i === currentIdx && { color: colors.primary, fontWeight: "800" }]}>{b.name[0]}</Text>))}
           </View>
           <View style={styles.beltStatus}>
-            <View style={{ flex: 1 }}><Text style={styles.beltStatusLbl}>CURRENT BELT</Text><Text style={styles.beltStatusVal}>{student.belt}</Text></View>
-            <View style={{ flex: 1, alignItems: "flex-end" }}><Text style={styles.beltStatusLbl}>NEXT EXAM</Text><Text style={styles.beltStatusVal}>15 Apr 2026</Text></View>
+            <View style={{ flex: 1 }}><Text style={styles.beltStatusLbl}>CURRENT BELT</Text><Text style={styles.beltStatusVal}>{beltName}</Text></View>
+            <View style={{ flex: 1, alignItems: "flex-end" }}><Text style={styles.beltStatusLbl}>NEXT BELT</Text><Text style={styles.beltStatusVal}>{BELTS[Math.min(currentIdx + 1, BELTS.length - 1)].name}</Text></View>
           </View>
         </View>
 
-        <Text style={styles.section}>Skill Breakdown</Text>
+        <Text style={styles.section}>Training Activity</Text>
         <View style={styles.card}>
-          {skills.map((s) => (
-            <View key={s.name} style={styles.skillRow}>
-              <Text style={styles.skillName}>{s.name}</Text>
-              <View style={styles.skillBar}><View style={[styles.skillFill, { width: `${s.value}%`, backgroundColor: s.color }]} /></View>
-              <Text style={[styles.skillVal, { color: s.color }]}>{s.value}</Text>
-            </View>
-          ))}
+          <View style={styles.actRow}>
+            <View style={styles.actStat}><Text style={styles.actNum}>{present}</Text><Text style={styles.actLbl}>Present</Text></View>
+            <View style={styles.actStat}><Text style={styles.actNum}>{records.length}</Text><Text style={styles.actLbl}>Total</Text></View>
+            <View style={styles.actStat}><Text style={[styles.actNum, { color: colors.primary }]}>{pct}%</Text><Text style={styles.actLbl}>Rate</Text></View>
+          </View>
         </View>
 
-        <Text style={styles.section}>Achievement Badges</Text>
-        <View style={styles.achieveRow}>
-          {achievements.map((a) => (
-            <View key={a.id} style={styles.achieveCard}>
-              <View style={[styles.achieveIcon, { backgroundColor: a.color + (mode === "dark" ? "33" : "20") }]}>
-                <Ionicons name={a.icon as any} size={22} color={a.color} />
-              </View>
-              <Text style={styles.achieveLbl}>{a.title}</Text>
-            </View>
-          ))}
-        </View>
-
-        <Text style={styles.section}>Trainer Feedback</Text>
-        {trainerComments.map((c, i) => (
+        <Text style={styles.section}>Grading Schedule</Text>
+        {grading.loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />}
+        {!grading.loading && gradeRows.length === 0 && (
+          <View style={styles.commentCard}>
+            <View style={styles.quoteIcon}><Ionicons name="calendar-outline" size={16} color={colors.primary} /></View>
+            <Text style={styles.commentTxt}>No upcoming grading scheduled. Your academy will notify you when the next exam is set.</Text>
+          </View>
+        )}
+        {gradeRows.map((g: any, i: number) => (
           <View key={i} style={styles.commentCard}>
-            <View style={styles.quoteIcon}><Ionicons name="chatbox-ellipses" size={16} color={colors.primary} /></View>
+            <View style={styles.quoteIcon}><Ionicons name="school" size={16} color={colors.primary} /></View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.commentTxt}>&ldquo;{c.comment}&rdquo;</Text>
-              <Text style={styles.commentMeta}>— {c.trainer} · {c.date}</Text>
+              <Text style={styles.commentTxt} numberOfLines={2}>{g.examName || g.name || g.gradeName || g.centerName || "Grading"}</Text>
+              <Text style={styles.commentMeta} numberOfLines={1}>{g.examDate || g.gradeDate || g.date || g.scheduleDate || ""}</Text>
             </View>
           </View>
         ))}
@@ -114,8 +129,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
 
     fitCard: { flexDirection: "row", borderRadius: radius.xxl, padding: 20 },
     fitLbl: { color: "#FFF7ED", fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
-    fitNum: { color: "#fff", fontSize: 44, fontWeight: "800", marginTop: 4, letterSpacing: -1 },
-    fitUnit: { fontSize: 18, fontWeight: "600", color: "rgba(255,255,255,0.85)" },
+    fitNum: { color: "#fff", fontSize: 38, fontWeight: "800", marginTop: 4, letterSpacing: -1 },
     fitMsg: { color: "rgba(255,255,255,0.9)", fontSize: 12 },
     fitIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" },
 
@@ -133,20 +147,14 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     beltStatusVal: { fontSize: 15, color: colors.textPrimary, fontWeight: "800", marginTop: 4 },
 
     section: { ...font.h4, color: colors.textPrimary, marginTop: 22, marginBottom: 10 },
-    skillRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8 },
-    skillName: { width: 80, fontSize: 13, fontWeight: "600", color: colors.textPrimary },
-    skillBar: { flex: 1, height: 10, backgroundColor: colors.surfaceAlt, borderRadius: 5, overflow: "hidden", marginRight: 10 },
-    skillFill: { height: "100%", borderRadius: 5 },
-    skillVal: { fontSize: 13, fontWeight: "800", width: 30, textAlign: "right" },
+    actRow: { flexDirection: "row" },
+    actStat: { flex: 1, alignItems: "center" },
+    actNum: { fontSize: 22, fontWeight: "800", color: colors.textPrimary },
+    actLbl: { fontSize: 11, color: colors.textSecondary, marginTop: 2, fontWeight: "600" },
 
-    achieveRow: { flexDirection: "row", gap: 10 },
-    achieveCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.md, padding: 12, alignItems: "center", ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
-    achieveIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", marginBottom: 6 },
-    achieveLbl: { fontSize: 10, color: colors.textPrimary, fontWeight: "700", textAlign: "center" },
-
-    commentCard: { flexDirection: "row", gap: 12, backgroundColor: colors.surface, padding: 14, borderRadius: radius.lg, marginBottom: 10, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    commentCard: { flexDirection: "row", gap: 12, backgroundColor: colors.surface, padding: 14, borderRadius: radius.lg, marginBottom: 10, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border, alignItems: "center" },
     quoteIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
-    commentTxt: { fontSize: 13, color: colors.textPrimary, fontWeight: "500", fontStyle: "italic", lineHeight: 18 },
+    commentTxt: { flex: 1, fontSize: 13, color: colors.textPrimary, fontWeight: "500", lineHeight: 18 },
     commentMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 6, fontWeight: "600" },
   });
 }

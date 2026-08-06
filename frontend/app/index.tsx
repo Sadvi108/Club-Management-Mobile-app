@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, Image, Animated, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { LOGO_URL, useTheme, font } from "../src/theme";
+import { useAuth } from "../src/api/auth";
 
 export default function Splash() {
   const router = useRouter();
   const { colors, mode } = useTheme();
+  const { ready, user } = useAuth();
   const fade = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.85)).current;
   const ring = useRef(new Animated.Value(0)).current;
@@ -19,9 +21,12 @@ export default function Splash() {
         Animated.timing(ring, { toValue: 1, duration: 1800, easing: Easing.linear, useNativeDriver: true })
       ),
     ]).start();
-    const t = setTimeout(() => router.replace("/login"), 2400);
+    const t = setTimeout(() => {
+      if (!ready) return; // wait for session restore; effect re-runs when ready flips
+      router.replace(user ? "/(tabs)/home" : "/login");
+    }, 2400);
     return () => clearTimeout(t);
-  }, []);
+  }, [ready, user]);
 
   const rotate = ring.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 

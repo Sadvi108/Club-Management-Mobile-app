@@ -2,6 +2,8 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider, useTheme } from "../src/theme";
+import { AuthProvider } from "../src/api/auth";
+import { NotificationsProvider } from "../src/notifications/NotificationsProvider";
 
 function ThemedStack() {
   const { mode } = useTheme();
@@ -16,6 +18,19 @@ function ThemedStack() {
         <Stack.Screen name="progress" />
         <Stack.Screen name="events" />
         <Stack.Screen name="qr-scan" options={{ presentation: "modal", animation: "fade_from_bottom" }} />
+        <Stack.Screen name="book-class" options={{ animation: "slide_from_bottom" }} />
+        <Stack.Screen name="more" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="edit-profile" />
+        <Stack.Screen name="student-details" />
+        <Stack.Screen name="purchases" />
+        <Stack.Screen name="helpdesk" />
+        <Stack.Screen name="offer-detail" />
+        <Stack.Screen name="chat" />
+        <Stack.Screen name="chat-thread" />
+        <Stack.Screen name="user-guide" options={{ animation: "slide_from_bottom" }} />
+        <Stack.Screen name="new-student" />
+        <Stack.Screen name="student-particulars" />
       </Stack>
     </>
   );
@@ -24,9 +39,13 @@ function ThemedStack() {
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
-        <ThemedStack />
-      </ThemeProvider>
+      <AuthProvider>
+        <NotificationsProvider>
+          <ThemeProvider>
+            <ThemedStack />
+          </ThemeProvider>
+        </NotificationsProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

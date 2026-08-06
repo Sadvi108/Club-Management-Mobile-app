@@ -1,83 +1,243 @@
-import { useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, Switch } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useMemo, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Switch, Modal } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme, LOGO_URL } from "../../src/theme";
-import { student, certificates } from "../../src/mockData";
+import { confirmDialog } from "../../src/ui/dialogs";
+import { useAuth } from "../../src/api/auth";
+import { api } from "../../src/api/endpoints";
+import { useApi } from "../../src/api/useApi";
 
-const settingsItems = [
-  { id: "notif", icon: "notifications-outline", label: "Notifications", badge: "3" },
-  { id: "lang", icon: "language-outline", label: "Language", meta: "English" },
-  { id: "priv", icon: "lock-closed-outline", label: "Privacy & Security" },
-  { id: "help", icon: "help-circle-outline", label: "Help & Support" },
-  { id: "refer", icon: "gift-outline", label: "Refer a Friend", meta: "Earn RM 50" },
-  { id: "about", icon: "information-circle-outline", label: "About D-Clix" },
-];
+// Pick an icon for a MyClubStats row by its label.
+function statIcon(text: string): any {
+  const t = (text || "").toLowerCase();
+  if (t.includes("student")) return "people";
+  if (t.includes("training")) return "time";
+  if (t.includes("grading")) return "ribbon";
+  if (t.includes("tournament")) return "trophy";
+  if (t.includes("slip")) return "receipt";
+  if (t.includes("payment")) return "card";
+  if (t.includes("purchase")) return "bag-handle";
+  if (t.includes("whatsapp")) return "logo-whatsapp";
+  if (t.includes("registration")) return "person-add";
+  return "stats-chart";
+}
 
 export default function Profile() {
   const router = useRouter();
   const { colors, shadow, mode, toggle } = useTheme();
+  const tabBarHeight = useBottomTabBarHeight();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
+  const { user, token, isInstructor, logout } = useAuth();
 
-  const onLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Logout", style: "destructive", onPress: () => router.replace("/login") },
-    ]);
+  // MyInfo works for both roles (grade / center / reg no). Siblings are student-only; club stats +
+  // branch names are instructor-only — gate each so we never fire a call that returns nothing useful.
+  const info = useApi(() => (token ? api.myInfo() : Promise.resolve(null)), [token]);
+  const siblings = useApi(
+    () => (token && !isInstructor ? api.mySiblings() : Promise.resolve([])),
+    [token, isInstructor]
+  );
+  const clubStats = useApi(
+    () => (token && isInstructor ? api.myClubStats() : Promise.resolve([])),
+    [token, isInstructor]
+  );
+  const branches = useApi(
+    () => (token && isInstructor && user?.clubCode ? api.branchesByClubCode(user.clubCode) : Promise.resolve([])),
+    [token, isInstructor, user?.clubCode]
+  );
+
+  const [studentModal, setStudentModal] = useState(false);
+  const [clubModal, setClubModal] = useState(false);
+
+  const qrUrl = user?.id ? api.qrCodeUrl(user.id) : null;
+  const grade = info.data?.currentGrade || user?.currentGrade || "—";
+  const clubName = user?.clubName || user?.clubList?.[0]?.text || "—";
+
+  // Instructor's assigned branches, resolved to names.
+  const myBranches = useMemo(
+    () => (branches.data ?? []).filter((b) => (user?.branchIds ?? []).includes(b.id)),
+    [branches.data, user?.branchIds]
+  );
+  // MyClubStats rows: id = count, text = label, value = display order.
+  const stats = useMemo(
+    () => (clubStats.data ?? []).slice().sort((a, b) => Number(a.value) - Number(b.value)),
+    [clubStats.data]
+  );
+
+  const personalFields = [
+    { icon: "pulse-outline", label: "Account Status", value: user?.status || "—" },
+    { icon: "call-outline", label: "Phone", value: user?.handPhone || "—" },
+    { icon: "ribbon-outline", label: "Belt / Grade", value: grade },
+    { icon: "business-outline", label: "Center", value: info.data?.eCenterName || info.data?.tCenterName || "—" },
+    { icon: "card-outline", label: "Registration No", value: info.data?.registrationNo || "—" },
+  ].filter((f) => f.value && f.value !== "—" ? true : f.label === "Phone" || f.label === "Belt / Grade");
+
+  const onLogout = async () => {
+    const ok = await confirmDialog("Logout", "Are you sure you want to logout?", {
+      confirmLabel: "Logout",
+      destructive: true,
+    });
+    if (ok) {
+      logout();
+      router.replace("/login");
+    }
   };
+
+  const ROWS = isInstructor
+    ? [
+        { id: "help", icon: "headset-outline", label: "Help Desk", onPress: () => router.push("/helpdesk") },
+        { id: "guide", icon: "book-outline", label: "User Guide", onPress: () => router.push("/user-guide" as any) },
+      ]
+    : [
+        { id: "scan", icon: "qr-code-outline", label: "Scan QR to Check In", onPress: () => router.push("/qr-scan") },
+        { id: "help", icon: "headset-outline", label: "Help Desk", onPress: () => router.push("/helpdesk") },
+        { id: "details", icon: "id-card-outline", label: "Student Details", onPress: () => router.push("/student-details") },
+        { id: "purchases", icon: "bag-handle-outline", label: "My Purchases", onPress: () => router.push("/purchases") },
+        { id: "guide", icon: "book-outline", label: "User Guide", onPress: () => router.push("/user-guide" as any) },
+      ];
 
   return (
     <View style={styles.root}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: tabBarHeight + 24 }} showsVerticalScrollIndicator={false}>
         <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.primary }}>
           <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerBg}>
             <View style={styles.topRow}>
               <Text style={styles.topTitle}>My Profile</Text>
-              <TouchableOpacity style={styles.topIcon} testID="profile-settings">
-                <Ionicons name="settings-outline" size={20} color="#fff" />
+              <TouchableOpacity style={styles.topIcon} testID="profile-edit" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => router.push("/edit-profile")}>
+                <Ionicons name="pencil" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
             <View style={styles.profileTop}>
               <View style={styles.avatarRing}>
-                <Image source={{ uri: student.photo }} style={styles.avatar} />
-                <TouchableOpacity style={styles.avatarEdit}>
-                  <Ionicons name="camera" size={12} color={colors.primary} />
-                </TouchableOpacity>
+                {user?.profilePic ? (
+                  <Image source={{ uri: user.profilePic }} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarEmpty]}>
+                    <Ionicons name={isInstructor ? "school" : "person"} size={44} color="rgba(255,255,255,0.5)" />
+                  </View>
+                )}
               </View>
-              <Text style={styles.name}>{student.name}</Text>
-              <Text style={styles.id}>{student.id}</Text>
+              <Text style={styles.name} numberOfLines={1}>{user?.name?.trim() || "Member"}</Text>
+              <Text style={styles.id} numberOfLines={1}>{user?.code || user?.icNo}</Text>
               <View style={styles.memberRow}>
-                <Ionicons name="shield-checkmark" size={14} color="#FFF7ED" />
-                <Text style={styles.memberTxt}>{student.membership} · Since {student.joinDate}</Text>
+                <Ionicons name={isInstructor ? "school" : "shield-checkmark"} size={14} color="#FFF7ED" />
+                <Text style={styles.memberTxt} numberOfLines={1}>{isInstructor ? `Instructor · ${clubName}` : clubName}</Text>
               </View>
             </View>
           </LinearGradient>
         </SafeAreaView>
 
-        {/* Virtual ID */}
+        {/* Virtual ID with QR (staff ID for instructors) */}
         <View style={styles.virtualId}>
           <View style={styles.vidLeft}>
             <View style={styles.vidBrandRow}>
               <Image source={{ uri: LOGO_URL }} style={styles.vidLogo} />
               <Text style={styles.vidBrand}>D-CLIX</Text>
             </View>
-            <Text style={styles.vidName}>{student.name}</Text>
-            <Text style={styles.vidLbl}>{student.level} · {student.belt}</Text>
-            <View style={styles.barcodeRow}>
-              {Array.from({ length: 20 }).map((_, i) => (
-                <View key={i} style={[styles.bar, { height: 20 + ((i * 7) % 12), opacity: i % 3 === 0 ? 1 : 0.6 }]} />
-              ))}
-            </View>
-            <Text style={styles.vidId}>{student.id}</Text>
+            <Text style={styles.vidName} numberOfLines={1}>{user?.name?.trim()}</Text>
+            <Text style={styles.vidLbl} numberOfLines={1}>· {grade}</Text>
+            <Text style={styles.vidId} numberOfLines={1}>{user?.code || user?.icNo}</Text>
           </View>
           <View style={styles.vidQR}>
-            <Ionicons name="qr-code" size={60} color={colors.primary} />
+            {qrUrl ? (
+              <Image source={{ uri: qrUrl }} style={styles.qrImg} resizeMode="contain" />
+            ) : (
+              <Ionicons name="qr-code" size={60} color={colors.primary} />
+            )}
           </View>
         </View>
 
-        {/* Theme toggle card */}
+        {/* ── Instructor: Club Overview dashboard ── */}
+        {isInstructor && (
+          <View style={styles.card}>
+            <View style={styles.cardHeadRow}>
+              <View style={styles.cardHeadLeft}>
+                <View style={styles.cardHeadIcon}><Ionicons name="speedometer" size={18} color={colors.primary} /></View>
+                <Text style={styles.cardTitle}>Club Overview</Text>
+              </View>
+              {clubStats.loading && <Text style={styles.badge}>…</Text>}
+            </View>
+            {clubStats.error && <Text style={styles.errTxt}>{clubStats.error}</Text>}
+            <View style={styles.statGrid}>
+              {stats.map((s) => (
+                <View key={`${s.value}-${s.text}`} style={styles.statCard}>
+                  <View style={styles.statIconWrap}><Ionicons name={statIcon(s.text)} size={16} color={colors.primary} /></View>
+                  <Text style={styles.statNum}>{s.id}</Text>
+                  <Text style={styles.statLbl} numberOfLines={2}>{s.text}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ── Instructor: Branches ── */}
+        {isInstructor && (
+          <View style={styles.card}>
+            <View style={styles.cardHeadRow}>
+              <View style={styles.cardHeadLeft}>
+                <View style={styles.cardHeadIcon}><Ionicons name="business" size={18} color={colors.primary} /></View>
+                <Text style={styles.cardTitle}>Branches</Text>
+              </View>
+              <Text style={styles.badge}>{myBranches.length || user?.branchIds?.length || 0}</Text>
+            </View>
+            {branches.loading && <Text style={styles.emptyTxt}>Loading branches…</Text>}
+            {!branches.loading && myBranches.length === 0 && (
+              <Text style={styles.emptyTxt}>{user?.branchIds?.length ? `${user.branchIds.length} assigned branch(es)` : "No branches assigned."}</Text>
+            )}
+            <View style={styles.branchWrap}>
+              {myBranches.map((b) => (
+                <View key={b.id} style={styles.branchChip}>
+                  <Ionicons name="location" size={12} color={colors.primary} />
+                  <Text style={styles.branchChipTxt} numberOfLines={1}>{b.text}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ── Student: Active Student + Club switchers ── */}
+        {!isInstructor && (
+          <View style={styles.dualRow}>
+            <TouchableOpacity style={styles.dualCard} testID="profile-active-student" onPress={() => setStudentModal(true)} activeOpacity={0.85}>
+              <View style={styles.dualTop}>
+                <View style={styles.dualIcon}><Ionicons name="swap-horizontal" size={18} color={colors.primary} /></View>
+                <Ionicons name="chevron-expand" size={16} color={colors.textMuted} />
+              </View>
+              <Text style={styles.dualLbl}>ACTIVE STUDENT</Text>
+              <Text style={styles.dualVal} numberOfLines={1}>{user?.name?.trim()}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.dualCard} testID="profile-club" onPress={() => setClubModal(true)} activeOpacity={0.85}>
+              <View style={styles.dualTop}>
+                <View style={styles.dualIcon}><Ionicons name="business" size={18} color={colors.primary} /></View>
+                <Ionicons name="chevron-expand" size={16} color={colors.textMuted} />
+              </View>
+              <Text style={styles.dualLbl}>CLUB</Text>
+              <Text style={styles.dualVal} numberOfLines={1}>{clubName}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Personal Info */}
+        <View style={styles.card}>
+          <View style={styles.cardHeadRow}>
+            <View style={styles.cardHeadLeft}>
+              <View style={styles.cardHeadIcon}><Ionicons name="id-card" size={18} color={colors.primary} /></View>
+              <Text style={styles.cardTitle}>Personal Info</Text>
+            </View>
+            <Text style={styles.badge}>{personalFields.length} fields</Text>
+          </View>
+          {personalFields.map((f, i) => (
+            <View key={f.label}>
+              {i > 0 && <View style={styles.divider} />}
+              <Row icon={f.icon} label={f.label} value={f.value} colors={colors} />
+            </View>
+          ))}
+        </View>
+
+        {/* Light / Dark Mode */}
         <View style={styles.card}>
           <View style={styles.themeRow}>
             <View style={styles.themeIcon}>
@@ -98,70 +258,78 @@ export default function Profile() {
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Contact Information</Text>
-          <Row icon="call-outline" label="Phone" value={student.phone} colors={colors} />
-          <Row icon="mail-outline" label="Email" value={student.email} colors={colors} />
-          <Row icon="people-outline" label="Emergency Contact" value={`${student.parent.name} · ${student.parent.phone}`} colors={colors} />
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.cardHeadRow}>
-            <Text style={styles.cardTitle}>Certificates & Achievements</Text>
-            <Text style={styles.badge}>{certificates.length}</Text>
-          </View>
-          {certificates.map((c) => (
-            <View key={c.id} style={styles.certRow} testID={`cert-${c.id}`}>
-              <View style={styles.certIcon}><Ionicons name="ribbon" size={18} color={colors.warning} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.certTitle}>{c.title}</Text>
-                <Text style={styles.certMeta}>{c.issuer} · {c.date}</Text>
-              </View>
-              <TouchableOpacity><Ionicons name="download-outline" size={18} color={colors.primary} /></TouchableOpacity>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Settings</Text>
-          {settingsItems.map((s) => (
-            <TouchableOpacity key={s.id} style={styles.settingRow} testID={`setting-${s.id}`}>
-              <View style={styles.settingIcon}><Ionicons name={s.icon as any} size={18} color={colors.primary} /></View>
-              <Text style={styles.settingLbl}>{s.label}</Text>
-              {s.badge ? (<View style={styles.settingBadge}><Text style={styles.settingBadgeTxt}>{s.badge}</Text></View>)
-                : s.meta ? (<Text style={styles.settingMeta}>{s.meta}</Text>) : null}
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity style={styles.renewBtn} testID="renew-membership">
-          <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.renewInner, shadow.strong]}>
-            <Ionicons name="sparkles" size={18} color="#fff" />
-            <Text style={styles.renewTxt}>Renew Membership — 20% OFF</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+        {/* Action rows */}
+        {ROWS.map((r) => (
+          <TouchableOpacity key={r.id} style={styles.actionRow} testID={`profile-row-${r.id}`} onPress={r.onPress} activeOpacity={0.85}>
+            <View style={styles.actionIcon}><Ionicons name={r.icon as any} size={20} color={colors.primary} /></View>
+            <Text style={styles.actionLbl}>{r.label}</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        ))}
 
         <TouchableOpacity style={styles.logout} onPress={onLogout} testID="logout-btn">
           <Ionicons name="log-out-outline" size={18} color={colors.danger} />
           <Text style={styles.logoutTxt}>Logout</Text>
         </TouchableOpacity>
-
-        <Text style={styles.version}>D-Clix · v1.0.0</Text>
+        <Text style={styles.version}>D-Clix · v2.8.0</Text>
       </ScrollView>
+
+      {/* Student-only switchers */}
+      {!isInstructor && (
+        <>
+          <PickerModal
+            visible={studentModal}
+            title="Switch Student"
+            onClose={() => setStudentModal(false)}
+            items={(siblings.data ?? []).map((s) => ({ id: s.id, label: s.text, active: s.id === user?.id }))}
+            styles={styles}
+            colors={colors}
+          />
+          <PickerModal
+            visible={clubModal}
+            title="Switch Club"
+            onClose={() => setClubModal(false)}
+            items={(user?.clubList ?? []).map((c) => ({ id: c.id, label: c.text, active: c.id === user?.clubId }))}
+            styles={styles}
+            colors={colors}
+          />
+        </>
+      )}
     </View>
+  );
+}
+
+function PickerModal({ visible, title, onClose, items, styles, colors }: any) {
+  const insets = useSafeAreaInsets(); // keep the sheet above the gesture bar / home indicator
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={onClose}>
+        <View style={[styles.modalSheet, { paddingBottom: 20 + insets.bottom }]}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>{title}</Text>
+          {items.length === 0 && <Text style={styles.modalEmpty}>Nothing to switch to.</Text>}
+          {items.map((it: any) => (
+            <View key={it.id} style={styles.pickRow}>
+              <Ionicons name={it.active ? "radio-button-on" : "radio-button-off"} size={20} color={it.active ? colors.primary : colors.textMuted} />
+              <Text style={styles.pickLbl} numberOfLines={1}>{it.label}</Text>
+              {it.active && <Text style={styles.pickActive}>Active</Text>}
+            </View>
+          ))}
+        </View>
+      </TouchableOpacity>
+    </Modal>
   );
 }
 
 function Row({ icon, label, value, colors }: { icon: string; label: string; value: string; colors: any }) {
   return (
-    <View style={{ flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 8 }}>
-      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" }}>
-        <Ionicons name={icon as any} size={16} color={colors.primary} />
+    <View style={{ flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 10 }}>
+      <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" }}>
+        <Ionicons name={icon as any} size={18} color={colors.primary} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: "700", letterSpacing: 0.5 }}>{label.toUpperCase()}</Text>
-        <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: "600", marginTop: 1 }}>{value}</Text>
+        <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: "600" }}>{label}</Text>
+        <Text style={{ fontSize: 15, color: colors.textPrimary, fontWeight: "700", marginTop: 1 }} numberOfLines={1}>{value}</Text>
       </View>
     </View>
   );
@@ -170,59 +338,77 @@ function Row({ icon, label, value, colors }: { icon: string; label: string; valu
 function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.background },
-    headerBg: { paddingHorizontal: spacing.xl, paddingBottom: 50, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+    headerBg: { paddingHorizontal: spacing.xl, paddingBottom: 56, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
     topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },
-    topTitle: { color: "#fff", fontSize: 18, fontWeight: "800" },
-    topIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" },
-    profileTop: { alignItems: "center", marginTop: 16 },
-    avatarRing: { padding: 4, borderRadius: 60, borderWidth: 2, borderColor: "rgba(255,255,255,0.6)" },
-    avatar: { width: 90, height: 90, borderRadius: 45 },
-    avatarEdit: { position: "absolute", right: 2, bottom: 2, width: 26, height: 26, borderRadius: 13, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.primary },
-    name: { color: "#fff", fontSize: 22, fontWeight: "800", marginTop: 12 },
-    id: { color: "rgba(255,255,255,0.85)", fontSize: 12, marginTop: 2 },
-    memberRow: { flexDirection: "row", gap: 4, alignItems: "center", marginTop: 8, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14 },
-    memberTxt: { color: "#FFF7ED", fontSize: 11, fontWeight: "700" },
+    topTitle: { color: "#fff", fontSize: 22, fontWeight: "800" },
+    topIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.22)", alignItems: "center", justifyContent: "center" },
+    profileTop: { alignItems: "center", marginTop: 14 },
+    avatarRing: { padding: 5, borderRadius: 66, borderWidth: 2, borderColor: "rgba(255,255,255,0.55)" },
+    avatar: { width: 104, height: 104, borderRadius: 52, backgroundColor: "rgba(255,255,255,0.18)" },
+    avatarEmpty: { alignItems: "center", justifyContent: "center" },
+    name: { color: "#fff", fontSize: 24, fontWeight: "800", marginTop: 14, textAlign: "center", paddingHorizontal: 10 },
+    id: { color: "rgba(255,255,255,0.9)", fontSize: 13, marginTop: 4 },
+    memberRow: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 10, backgroundColor: "rgba(255,255,255,0.22)", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, maxWidth: "90%" },
+    memberTxt: { color: "#FFF7ED", fontSize: 12, fontWeight: "700", flexShrink: 1 },
 
-    virtualId: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -36, borderRadius: radius.xl, padding: 18, ...shadow.card, overflow: "hidden", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    virtualId: { flexDirection: "row", backgroundColor: colors.surface, marginHorizontal: spacing.xl, marginTop: -34, borderRadius: radius.xl, padding: 18, ...shadow.shade, overflow: "hidden", borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border, alignItems: "center" },
     vidLeft: { flex: 1 },
     vidBrandRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-    vidLogo: { width: 22, height: 22, borderRadius: 6 },
-    vidBrand: { color: colors.primary, fontSize: 11, fontWeight: "900", letterSpacing: 2 },
-    vidName: { color: colors.textPrimary, fontSize: 15, fontWeight: "800", marginTop: 8 },
-    vidLbl: { color: colors.textSecondary, fontSize: 11, marginTop: 2 },
-    barcodeRow: { flexDirection: "row", gap: 2, marginTop: 10, alignItems: "flex-end" },
-    bar: { width: 2, backgroundColor: colors.textPrimary },
-    vidId: { color: colors.textPrimary, fontSize: 10, fontWeight: "700", letterSpacing: 1, marginTop: 4 },
-    vidQR: { width: 90, height: 90, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, alignItems: "center", justifyContent: "center", marginLeft: 14 },
+    vidLogo: { width: 24, height: 24, borderRadius: 7 },
+    vidBrand: { color: colors.primary, fontSize: 13, fontWeight: "900", letterSpacing: 2 },
+    vidName: { color: colors.textPrimary, fontSize: 16, fontWeight: "800", marginTop: 10 },
+    vidLbl: { color: colors.textSecondary, fontSize: 13, marginTop: 4 },
+    vidId: { color: colors.textPrimary, fontSize: 12, fontWeight: "700", letterSpacing: 0.5, marginTop: 10 },
+    vidQR: { width: 96, height: 96, backgroundColor: "#fff", borderRadius: radius.md, alignItems: "center", justifyContent: "center", marginLeft: 14, overflow: "hidden" },
+    qrImg: { width: 92, height: 92 },
 
-    card: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: 18, marginHorizontal: spacing.xl, marginTop: 14, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
-    cardHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-    cardTitle: { ...font.h4, color: colors.textPrimary, marginBottom: 12 },
-    badge: { backgroundColor: colors.surfaceAlt, color: colors.primary, fontSize: 11, fontWeight: "800", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, overflow: "hidden" },
+    dualRow: { flexDirection: "row", gap: 12, marginHorizontal: spacing.xl, marginTop: 14 },
+    dualCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    dualTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    dualIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    dualLbl: { fontSize: 11, color: colors.textSecondary, fontWeight: "700", letterSpacing: 0.5, marginTop: 12 },
+    dualVal: { fontSize: 15, color: colors.textPrimary, fontWeight: "800", marginTop: 3 },
+
+    card: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: 16, marginHorizontal: spacing.xl, marginTop: 14, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    cardHeadRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+    cardHeadLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+    cardHeadIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    cardTitle: { ...font.h4, color: colors.textPrimary },
+    badge: { backgroundColor: colors.surfaceAlt, color: colors.primary, fontSize: 11, fontWeight: "800", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, overflow: "hidden" },
+    divider: { height: 1, backgroundColor: colors.border, marginVertical: 2 },
+    errTxt: { color: colors.danger, fontSize: 13, marginVertical: 6 },
+    emptyTxt: { color: colors.textSecondary, fontSize: 13, marginVertical: 6 },
+
+    statGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 6 },
+    statCard: { width: "47%", backgroundColor: colors.surfaceAlt, borderRadius: radius.md, padding: 12 },
+    statIconWrap: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", marginBottom: 8 },
+    statNum: { fontSize: 22, fontWeight: "800", color: colors.textPrimary },
+    statLbl: { fontSize: 11, color: colors.textSecondary, fontWeight: "600", marginTop: 2 },
+
+    branchWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
+    branchChip: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.surfaceAlt, paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.full, maxWidth: "100%" },
+    branchChipTxt: { fontSize: 12, fontWeight: "700", color: colors.textPrimary, flexShrink: 1 },
 
     themeRow: { flexDirection: "row", gap: 12, alignItems: "center" },
     themeIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
-    themeTitle: { fontSize: 15, fontWeight: "700", color: colors.textPrimary },
-    themeSub: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+    themeTitle: { fontSize: 16, fontWeight: "700", color: colors.textPrimary },
+    themeSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 
-    certRow: { flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 10 },
-    certIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: mode === "dark" ? "#2D1A0A" : "#FEF3C7", alignItems: "center", justifyContent: "center" },
-    certTitle: { fontSize: 13, fontWeight: "700", color: colors.textPrimary },
-    certMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+    actionRow: { flexDirection: "row", gap: 14, alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.lg, padding: 16, marginHorizontal: spacing.xl, marginTop: 12, ...shadow.soft, borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border },
+    actionIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    actionLbl: { flex: 1, fontSize: 16, color: colors.textPrimary, fontWeight: "700" },
 
-    settingRow: { flexDirection: "row", gap: 12, alignItems: "center", paddingVertical: 12 },
-    settingIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
-    settingLbl: { flex: 1, fontSize: 14, color: colors.textPrimary, fontWeight: "600" },
-    settingBadge: { backgroundColor: colors.danger, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 10, marginRight: 6 },
-    settingBadgeTxt: { color: "#fff", fontSize: 10, fontWeight: "800" },
-    settingMeta: { color: colors.textSecondary, fontSize: 11, fontWeight: "600", marginRight: 4 },
+    logout: { flexDirection: "row", gap: 8, alignSelf: "center", paddingVertical: 14, paddingHorizontal: 24, marginTop: 20, borderRadius: radius.md, alignItems: "center" },
+    logoutTxt: { color: colors.danger, fontWeight: "700", fontSize: 15 },
+    version: { textAlign: "center", color: colors.textMuted, fontSize: 11, marginTop: 6 },
 
-    renewBtn: { marginHorizontal: spacing.xl, marginTop: 18 },
-    renewInner: { flexDirection: "row", gap: 8, paddingVertical: 16, borderRadius: radius.md, alignItems: "center", justifyContent: "center" },
-    renewTxt: { color: "#fff", fontWeight: "800", fontSize: 14 },
-
-    logout: { flexDirection: "row", gap: 8, alignSelf: "center", paddingVertical: 14, paddingHorizontal: 24, marginTop: 16, borderRadius: radius.md, alignItems: "center" },
-    logoutTxt: { color: colors.danger, fontWeight: "700", fontSize: 14 },
-    version: { textAlign: "center", color: colors.textMuted, fontSize: 11, marginTop: 8 },
+    modalBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: "flex-end" },
+    modalSheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl, paddingHorizontal: spacing.xl, paddingTop: 12, paddingBottom: 36 },
+    modalHandle: { alignSelf: "center", width: 44, height: 5, borderRadius: 3, backgroundColor: colors.border, marginBottom: 14 },
+    modalTitle: { fontSize: 18, fontWeight: "800", color: colors.textPrimary, marginBottom: 8 },
+    modalEmpty: { color: colors.textSecondary, fontSize: 14, paddingVertical: 16, textAlign: "center" },
+    pickRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+    pickLbl: { color: colors.textPrimary, fontSize: 15, fontWeight: "600", flex: 1 },
+    pickActive: { color: colors.primary, fontSize: 12, fontWeight: "700" },
   });
 }
