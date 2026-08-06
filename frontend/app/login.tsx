@@ -22,14 +22,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { LOGO_URL, radius, spacing, useTheme } from "../src/theme";
 import { useAuth } from "../src/api/auth";
 import { api } from "../src/api/endpoints";
-import { API_ENVIRONMENTS } from "../src/api/config";
 import type { IdValueText } from "../src/api/types";
 
 export default function Login() {
   const router = useRouter();
   const { colors, shadow, mode, toggle } = useTheme();
   const insets = useSafeAreaInsets();
-  const { loginStudent, loginInstructor, apiEnv, switchApiEnv } = useAuth();
+  const { loginStudent, loginInstructor } = useAuth();
 
   // Prefill demo credentials in dev builds ONLY. Production APKs ship with empty fields so a
   // released app never carries working accounts. __DEV__ is false in release bundles.
@@ -297,35 +296,6 @@ export default function Login() {
               <Ionicons name="chevron-forward" size={16} color={colors.primary} />
             </TouchableOpacity>
 
-            {/* API server switcher — one build can be pointed at production or UAT.
-                Switching drops any signed-in session (a token is only valid on its server). */}
-            {API_ENVIRONMENTS.length > 1 && (
-              <View style={styles.envBox} testID="login-env-switcher">
-                <View style={styles.envRow}>
-                  <Ionicons name="server-outline" size={14} color={colors.textSecondary} />
-                  <Text style={styles.envLbl}>Server</Text>
-                  <View style={{ flex: 1 }} />
-                  {API_ENVIRONMENTS.map((e) => {
-                    const on = apiEnv.key === e.key;
-                    return (
-                      <TouchableOpacity
-                        key={e.key}
-                        testID={`login-env-${e.key}`}
-                        style={[styles.envChip, on && styles.envChipOn]}
-                        onPress={async () => { setError(null); await switchApiEnv(e.key); }}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={[styles.envChipTxt, on && styles.envChipTxtOn]}>{e.key.toUpperCase()}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                <Text style={styles.envHint} numberOfLines={2}>
-                  {apiEnv.label} · {apiEnv.baseUrl}
-                </Text>
-              </View>
-            )}
-
             <Text style={styles.footer}>
               New to D-Clix? <Text style={styles.footerLink}>Contact your academy</Text>
             </Text>
@@ -416,15 +386,6 @@ function createStyles(colors: any, shadow: any) {
 
     guideBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 24, paddingVertical: 13, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.primary + "55", backgroundColor: colors.primary + "12" },
     guideTxt: { color: colors.primary, fontWeight: "800", fontSize: 13.5 },
-    envBox: { marginTop: 20, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
-    envRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-    envLbl: { color: colors.textSecondary, fontSize: 11, fontWeight: "800", letterSpacing: 0.6 },
-    envChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border },
-    envChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-    envChipTxt: { fontSize: 10.5, fontWeight: "800", color: colors.textSecondary, letterSpacing: 0.5 },
-    envChipTxtOn: { color: "#fff" },
-    envHint: { marginTop: 8, color: colors.textMuted, fontSize: 11, fontWeight: "600" },
-
     footer: { textAlign: "center", marginTop: 20, color: colors.textSecondary, fontSize: 13 },
     footerLink: { color: colors.primary, fontWeight: "800" },
 

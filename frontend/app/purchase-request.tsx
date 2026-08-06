@@ -44,10 +44,11 @@ export default function PurchaseRequest() {
       // Almost always means the app is signed in to Production, where /Bcpg doesn't exist.
       // Name the server so it's obvious, and say exactly how to move.
       notify(
-        `Boost isn't on ${apiEnv.label}`,
-        `You're signed in to ${apiEnv.label} (${apiEnv.baseUrl.replace(/^https?:\/\//, "")}), which doesn't run the ` +
-          `payment gateway — purchases are raised by paying for them. Sign out and pick the UAT server under ` +
-          `"Server" on the login screen, then try again.`
+        "Purchases aren't available yet",
+        `Purchases are raised by paying for them, and the payment gateway that does it is not ` +
+          `deployed on ${apiEnv.label} (${apiEnv.baseUrl.replace(/^https?:\/\//, "")}) yet. ` +
+          `You can browse the catalogue here; ordering turns on by itself once the gateway is live ` +
+          `on this server — there is nothing to change in the app.`
       );
       return;
     }

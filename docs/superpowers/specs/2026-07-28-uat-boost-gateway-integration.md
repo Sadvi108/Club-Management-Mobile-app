@@ -304,3 +304,60 @@ invalid message now tells the user which poster to scan. Verified in the web pre
 4. `purchaseItems` carries client-supplied `price`/`totalAmount`. If the server bills those
    rather than re-pricing from `productId`, a client can set its own price. Worth checking.
 5. Confirm whether `invoiceIds` are billed when `purchaseItems` is also present (§6.1).
+
+## 7. Third pass — 2026-08-06 (UAT and production share one database)
+
+### 7.1 UAT is not a staging copy — it is a second API over the live data
+
+Probed with a single token from `POST /Account/Authenticate` on UAT (student DARSHANMUTHU):
+
+| Check | `apimac` (prod) | `apimacuat` (uat) |
+|---|---|---|
+| That UAT token on `GET /Profile/MyInfo` | `200` | `200` |
+| Name / grade returned | DARSHAN MUTHUSIGAMANI · Grade 9 (White) | identical |
+| `POST /Outstanding/Fetch` row count | 1 | 1 |
+| Outstanding invoice id | **1542955** | **1542955** |
+
+The token is accepted by both hosts (shared signing key) and both return the same row for the
+same invoice id. So the two hosts are **two deployments of the API over one database**, not a
+staging copy and a production copy.
+
+### 7.2 Why that makes the "point the app at UAT for payments" shortcut unsafe
+
+It is technically possible to leave the app on production and send only `/Bcpg/*` to UAT — the
+token authenticates and the invoice ids match. It should not be done, because UAT's gateway is
+`https://stage-pay.boostconnect.biz`, a **sandbox**. A sandbox checkout that settles against the
+shared live database would mark a **real** invoice paid with no money received. Same hazard class
+as §4.4 (`PaymentMethod=3` settling an invoice with no gateway).
+
+Decision (2026-08-06, revised same day): the cross-host path **was** wired, to keep Boost in a
+single production app rather than losing the feature while the backend catches up. `PROD` declares
+`boostVia: "uat"` in `src/api/config.ts`, and `baseUrlFor()` in `src/api/http.ts` sends only
+`/Bcpg/*` to the UAT host; auth, invoices and everything else stay on prod. On web this reuses the
+existing `/@<key>` proxy route.
+
+This is a stopgap and carries the sandbox risk above: **delete `boostVia` as soon as `/Bcpg` ships
+to production.** §6.8 item 1 is still the real fix and is unchanged.
+
+### 7.3 App state while waiting
+
+- The login server switcher was removed; production is the only server the app uses.
+  `restoreApiEnv()` now discards a persisted non-default choice so no install is stranded on a
+  server it can no longer leave.
+- `POST /Bcpg/PayInvoices` on production answers `404` (UAT answers `401`), which is what
+  `hasBoostGateway: false` encodes in `src/api/config.ts`.
+- Purchase-request explains the gateway is not deployed yet rather than telling the user to pick
+  a server that no longer appears in the UI.
+
+### 7.4 Extra note for the backend team
+
+Because UAT writes to the live database, a sandbox gateway is currently pointed at real
+financial records. Worth confirming that is intended, independently of items 1-5 in §6.8.
+
+### 7.5 What the cross-host path does not fix
+
+`/Bcpg` now resolves for the prod app, but Boost still cannot run on a phone: the UAT host serves a
+self-signed certificate with no SAN for its own hostname, so iOS/Android refuse the connection
+before any request is sent — routing a different path there changes nothing. Boost therefore works
+in the **browser only** until either `/Bcpg` ships to prod or `apimacuat` gets a real certificate.
+`networkErrorMessage()` in `src/api/http.ts` says exactly that when a `/Bcpg` call fails on device.

@@ -1,5 +1,15 @@
 import { Platform } from "react-native";
-import { getApiBaseUrl, getApiEnv } from "./config";
+import { getApiBaseUrl, getApiEnv, getBoostBaseUrl, getBoostEnv } from "./config";
+
+/** `/Bcpg/*` may live on a different host than the rest of the API — see config.boostVia. */
+function isBoostPath(path: string): boolean {
+  return path.startsWith("/Bcpg");
+}
+
+function baseUrlFor(path: string): string {
+  if (isBoostPath(path)) return getBoostBaseUrl() ?? getApiBaseUrl();
+  return getApiBaseUrl();
+}
 
 // Backend envelope: { status, meta: { code }, data }
 export type ApiEnvelope<T> = {
@@ -46,13 +56,24 @@ type Options = { method?: string; body?: unknown; signal?: AbortSignal; auth?: b
  * trust half only. Nothing in the app can fix the hostname half; the host needs a real
  * certificate. Say that instead of "Network error".
  */
-function networkErrorMessage(raw: string): string {
-  const env = getApiEnv();
+function networkErrorMessage(raw: string, path?: string): string {
+  // A Boost call can be aimed at a different host than the rest of the API, so blame the
+  // host the request actually went to rather than the signed-in environment.
+  const boost = !!path && isBoostPath(path);
+  const env = boost ? (getBoostEnv() ?? getApiEnv()) : getApiEnv();
   if (Platform.OS !== "web" && env.selfSignedCert) {
+    const host = new URL(env.baseUrl).host;
+    if (boost) {
+      return (
+        `Online payment isn't available on this device yet. The payment gateway is served from ` +
+        `${host}, whose certificate phones refuse to accept — it works in a browser but not in ` +
+        `the app. This is a server-side fix: the gateway needs to ship to the production API, or ` +
+        `${host} needs a valid certificate.`
+      );
+    }
     return (
-      `Can't reach ${env.label} securely. ${new URL(env.baseUrl).host} is using a self-signed ` +
-      `certificate that phones refuse to accept, so this is a server-side fix — the API host needs ` +
-      `a valid certificate installed. Until then, use the Production server (sign out → Server).`
+      `Can't reach ${env.label} securely. ${host} is using a self-signed certificate that phones ` +
+      `refuse to accept. This is a server-side fix — that host needs a valid certificate installed.`
     );
   }
   return `Network error: ${raw || "request failed"}`;
@@ -81,14 +102,14 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
 
   let res: Response;
   try {
-    res = await fetch(getApiBaseUrl() + path, {
+    res = await fetch(baseUrlFor(path) + path, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal,
     });
   } catch (e: any) {
-    throw new ApiError(networkErrorMessage(e?.message), 0, null);
+    throw new ApiError(networkErrorMessage(e?.message, path), 0, null);
   }
 
   const text = await res.text();
@@ -131,9 +152,9 @@ export const http = {
     if (authToken) headers["Authorization"] = "bearer " + authToken;
     let res: Response;
     try {
-      res = await fetch(getApiBaseUrl() + path, { method: "POST", headers, body: form });
+      res = await fetch(baseUrlFor(path) + path, { method: "POST", headers, body: form });
     } catch (e: any) {
-      throw new ApiError(networkErrorMessage(e?.message), 0, null);
+      throw new ApiError(networkErrorMessage(e?.message, path), 0, null);
     }
     const text = await res.text();
     let parsed: any = text;
@@ -161,14 +182,14 @@ export const http = {
     if (auth && authToken) headers["Authorization"] = "bearer " + authToken;
     let res: Response;
     try {
-      res = await fetch(getApiBaseUrl() + path, {
+      res = await fetch(baseUrlFor(path) + path, {
         method,
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
     } catch (e: any) {
       // Login goes through here — this is where the certificate problem surfaces first.
-      throw new ApiError(networkErrorMessage(e?.message), 0, null);
+      throw new ApiError(networkErrorMessage(e?.message, path), 0, null);
     }
     const text = await res.text();
     let parsed: any = text;

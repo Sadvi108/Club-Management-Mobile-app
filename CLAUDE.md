@@ -8,9 +8,17 @@ backend. Repo is PRIVATE — keep it private (docs + prefilled login hold test c
 - **uat** `https://apimacuat.zyncbook.com` — same 69 endpoints byte-for-byte **plus** the four
   Boost gateway routes (`/Bcpg/PayInvoices|Callback|Redirect|VerifyPayment`).
 
-Pick the default with `EXPO_PUBLIC_API_ENV=prod|uat` in `frontend/.env` (currently **uat**);
-users switch at runtime from the **Server** chips on the login screen, which also drops the
-session. Registry lives in `frontend/src/api/config.ts`.
+The app ships on **prod** and no longer shows a server switcher — the Server chips were removed
+from the login screen, so users never pick a server. Registry lives in `frontend/src/api/config.ts`;
+override the build default with `EXPO_PUBLIC_API_ENV=prod|uat` in `frontend/.env` for local work.
+
+**Boost runs cross-host.** `/Bcpg/*` is not deployed to prod (it 404s there, 401s on UAT), so the
+prod environment declares `boostVia: "uat"` and `src/api/http.ts` sends only those four routes to
+the UAT host — auth, invoices and everything else stay on prod. That is only sound because the two
+hosts are the **same database** (one token authenticates against both; identical invoice ids come
+back from each). **Delete the `boostVia` line the moment `/Bcpg` ships to prod.** Caveat: UAT's
+gateway is the `stage-pay.boostconnect.biz` sandbox pointed at live records, and it is unreachable
+from a phone (self-signed cert), so Boost works in the browser only.
 
 Two known UAT blockers are backend-owned — the host serves a self-signed Plesk certificate, and
 the **invoice/term** paths of `/Bcpg/PayInvoices` 400 while looking the amount up
@@ -40,8 +48,12 @@ machine-specific and is what the preview tool currently uses; the tracked copy i
 copy from `frontend/.env.example` if missing.
 
 ## Git workflow
-- Branch `feat/payments-phase1` (all live-API work). `main` = old mock (unrelated history; don't force-push).
-- `.git/hooks/post-commit` auto-pushes every commit. Just commit; it pushes.
+- **`main` is the live app** — all real work lands here. `feat/payments-phase1` carries the same
+  history and is kept in sync.
+- The pre-2026-08 `main` (the original Emergent mock, unrelated history) is archived on
+  `main-mock-archive`. Nothing references it; it exists so the old snapshot is not lost.
+- `.git/hooks/post-commit` auto-pushes every commit **if the hook is installed** — a fresh clone
+  has no hooks, so push manually there.
 
 ## API quick reference
 - Auth `POST /Account/Authenticate` (multipart? no — JSON). Bearer token. Student `DARSHANMUTHU`/`1234` (userType 3).
