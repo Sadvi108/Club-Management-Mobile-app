@@ -33,11 +33,15 @@ export default function Progress() {
   const att = useApi(() => api.attendanceReport({ fromDate: range.fromDate, toDate: range.toDate }), []);
 
   const grade = info.data?.currentGrade || user?.currentGrade || "—";
-  const beltName = (grade.match(/\(([^)]+)\)/)?.[1] || "White").trim();
-  const currentIdx = Math.max(0, BELTS.findIndex((b) => b.name.toLowerCase() === beltName.toLowerCase()));
+  const beltName = (grade.match(/\(([^)]+)\)/)?.[1] || "—").trim();
+  // findIndex returns -1 for any belt outside the hardcoded list (Red, Brown stripes, …).
+  // Math.max(0, -1) used to map every one of them onto White, so those students were shown
+  // an un-started belt journey and the wrong "next belt". Keep -1 and render it as unknown.
+  const currentIdx = BELTS.findIndex((b) => b.name.toLowerCase() === beltName.toLowerCase());
+  const nextBelt = currentIdx < 0 || currentIdx >= BELTS.length - 1 ? null : BELTS[currentIdx + 1];
 
   const records = att.data ?? [];
-  const present = records.filter((r) => r.attendanceTypeId === 0 || /present/i.test(r.attendanceType || "")).length;
+  const present = records.filter((r) => /present/i.test(r.attendanceType || "")).length;
   const pct = records.length ? Math.round((present / records.length) * 100) : 0;
   const gradeRows = grading.data ?? [];
 
@@ -85,7 +89,7 @@ export default function Progress() {
           </View>
           <View style={styles.beltStatus}>
             <View style={{ flex: 1 }}><Text style={styles.beltStatusLbl}>CURRENT BELT</Text><Text style={styles.beltStatusVal}>{beltName}</Text></View>
-            <View style={{ flex: 1, alignItems: "flex-end" }}><Text style={styles.beltStatusLbl}>NEXT BELT</Text><Text style={styles.beltStatusVal}>{BELTS[Math.min(currentIdx + 1, BELTS.length - 1)].name}</Text></View>
+            <View style={{ flex: 1, alignItems: "flex-end" }}><Text style={styles.beltStatusLbl}>NEXT BELT</Text><Text style={styles.beltStatusVal}>{nextBelt ? nextBelt.name : "—"}</Text></View>
           </View>
         </View>
 

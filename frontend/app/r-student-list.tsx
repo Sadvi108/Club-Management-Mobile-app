@@ -10,10 +10,6 @@ import type { IdValueText } from "../src/api/types";
 
 type Student = IdValueText & { centerName: string; centerId: number | string };
 
-const STATUS_OPTIONS: Option[] = [
-  { id: "Active", text: "Active" },
-  { id: "Inactive", text: "Inactive" },
-];
 
 export default function StudentList() {
   const { colors, shadow, mode } = useTheme();
@@ -21,7 +17,6 @@ export default function StudentList() {
   const { token } = useAuth();
 
   const [centerId, setCenterId] = useState<number | string>(""); // "" = All Centers
-  const [status, setStatus] = useState<number | string>("Active");
   const [name, setName] = useState("");
   const [ic, setIc] = useState("");
   const [qr, setQr] = useState("");
@@ -83,7 +78,6 @@ export default function StudentList() {
           testID="sl-center"
         />
         <View style={styles.row}>
-          <SelectField label="Status" value={status} options={STATUS_OPTIONS} onChange={(id) => setStatus(id)} compact testID="sl-status" />
           <Field label="Name" value={name} onChange={setName} placeholder="Search name" colors={colors} testID="sl-name" />
         </View>
         <View style={styles.row}>

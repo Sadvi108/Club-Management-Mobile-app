@@ -20,10 +20,13 @@ function FabQR({ onPress, gradient }: { onPress: () => void; gradient: readonly 
 }
 
 // filled icon when focused, outline otherwise
-const tabIcon =
-  (name: string) =>
-  ({ color, focused }: { color: string; focused: boolean }) =>
-    <Ionicons name={(focused ? name : `${name}-outline`) as any} size={22} color={color} />;
+const tabIcon = (name: string) => {
+  const TabIcon = ({ color, focused }: { color: string; focused: boolean }) => (
+    <Ionicons name={(focused ? name : `${name}-outline`) as any} size={22} color={color} />
+  );
+  TabIcon.displayName = `TabIcon(${name})`;
+  return TabIcon;
+};
 
 const HIDDEN = { href: null } as const;
 

@@ -13,20 +13,30 @@ export default function Splash() {
   const scale = useRef(new Animated.Value(0.85)).current;
   const ring = useRef(new Animated.Value(0)).current;
 
+  // Animations run once and are stopped on unmount. They used to live in the same effect as
+  // the navigation timer, so every `ready`/`user` change started a second Animated.loop on
+  // the same value while the first kept running.
   useEffect(() => {
-    Animated.parallel([
+    const anim = Animated.parallel([
       Animated.timing(fade, { toValue: 1, duration: 700, useNativeDriver: true }),
       Animated.spring(scale, { toValue: 1, tension: 40, friction: 6, useNativeDriver: true }),
       Animated.loop(
         Animated.timing(ring, { toValue: 1, duration: 1800, easing: Easing.linear, useNativeDriver: true })
       ),
-    ]).start();
-    const t = setTimeout(() => {
-      if (!ready) return; // wait for session restore; effect re-runs when ready flips
-      router.replace(user ? "/(tabs)/home" : "/login");
-    }, 2400);
+    ]);
+    anim.start();
+    return () => anim.stop();
+  }, [fade, scale, ring]);
+
+  // Hold the splash for a fixed minimum from MOUNT, not from the moment the session lands —
+  // restarting the timer on `ready` made the splash last (restore time + 2400ms).
+  const mountedAt = useRef(Date.now()).current;
+  useEffect(() => {
+    if (!ready) return;
+    const remaining = Math.max(0, 2400 - (Date.now() - mountedAt));
+    const t = setTimeout(() => router.replace(user ? "/(tabs)/home" : "/login"), remaining);
     return () => clearTimeout(t);
-  }, [ready, user]);
+  }, [ready, user, router, mountedAt]);
 
   const rotate = ring.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 

@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useColorScheme } from "react-native";
+import { storage } from "./api/storage";
 
 type Palette = {
   background: string;
@@ -179,18 +181,49 @@ type ThemeCtx = {
 
 const Ctx = createContext<ThemeCtx | null>(null);
 
+const THEME_KEY = "dclix.theme.v1";
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setMode] = useState<ThemeMode>("light");
+  // Seed from the OS so a dark-mode phone doesn't get flashed a white app, then let a
+  // stored choice win. Without this the toggle looked like a preference but had no memory.
+  const systemScheme = useColorScheme();
+  const [mode, setMode] = useState<ThemeMode>(systemScheme === "dark" ? "dark" : "light");
+  const [restored, setRestored] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    storage
+      .get(THEME_KEY)
+      .then((saved) => {
+        if (alive && (saved === "dark" || saved === "light")) setMode(saved);
+      })
+      .catch(() => {})
+      .finally(() => alive && setRestored(true));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Follow the OS until the user has expressed a choice of their own.
+  useEffect(() => {
+    if (restored) return;
+    setMode(systemScheme === "dark" ? "dark" : "light");
+  }, [systemScheme, restored]);
+
+  const persist = React.useCallback((m: ThemeMode) => {
+    setMode(m);
+    void storage.set(THEME_KEY, m);
+  }, []);
   const value = useMemo<ThemeCtx>(() => {
     const palette = mode === "light" ? lightColors : darkColors;
     return {
       mode,
       colors: palette,
       shadow: makeShadow(palette),
-      toggle: () => setMode((m) => (m === "light" ? "dark" : "light")),
-      setMode,
+      toggle: () => persist(mode === "light" ? "dark" : "light"),
+      setMode: persist,
     };
-  }, [mode]);
+  }, [mode, persist]);
   return React.createElement(Ctx.Provider, { value }, children);
 }
 

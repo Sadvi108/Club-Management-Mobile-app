@@ -8,6 +8,7 @@ import { safeBack } from "../src/ui/dialogs";
 import { SkeletonList } from "../src/ui/skeleton";
 import { api } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
+import { useAuth } from "../src/api/auth";
 import { useNotifications } from "../src/notifications/NotificationsProvider";
 import type { AppNotification } from "../src/api/types";
 
@@ -26,9 +27,12 @@ function fmtWhen(iso?: string) {
 export default function Notifications() {
   const router = useRouter();
   const { colors, shadow, mode } = useTheme();
+  const { token } = useAuth();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
 
-  const notif = useApi(() => api.myNotifications(), []);
+  // Guarded on token: a cold open via deep link/web URL would otherwise fire unauthenticated,
+  // take a 401, and trip the global handler that wipes the session — a silent logout.
+  const notif = useApi(() => (token ? api.myNotifications() : Promise.resolve([])), [token]);
   const live = useNotifications(); // keeps the home-bell badge in sync when we mark read
   const [readIds, setReadIds] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<number | null>(null);

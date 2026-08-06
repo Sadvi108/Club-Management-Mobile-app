@@ -1,12 +1,26 @@
-import { Stack } from "expo-router";
+import { Redirect, Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider, useTheme } from "../src/theme";
-import { AuthProvider } from "../src/api/auth";
+import { AuthProvider, useAuth } from "../src/api/auth";
 import { NotificationsProvider } from "../src/notifications/NotificationsProvider";
+
+/** Routes reachable without a session. Everything else requires one. */
+const PUBLIC_ROUTES = ["/", "/login", "/user-guide"];
 
 function ThemedStack() {
   const { mode } = useTheme();
+  const { ready, user } = useAuth();
+  const pathname = usePathname();
+
+  // The session gate used to live only in (tabs)/_layout, which left every root route —
+  // edit-profile, notifications, purchases, chat, the r-* reports — renderable with a null
+  // user via a deep link or a web URL. They degraded into blank shells with no way back,
+  // and a 401 mid-session stranded the user wherever they were. Gate the whole stack.
+  if (ready && !user && !PUBLIC_ROUTES.includes(pathname)) {
+    return <Redirect href="/login" />;
+  }
+
   return (
     <>
       <StatusBar style={mode === "dark" ? "light" : "dark"} />

@@ -7,6 +7,7 @@ import {
   Animated,
   Easing,
   Platform,
+  Linking,
   TextInput,
   ActivityIndicator,
 } from "react-native";
@@ -54,10 +55,11 @@ export default function QRScan() {
   const isWeb = Platform.OS === "web";
   const canScan = !isWeb && !!permission?.granted;
 
-  const now = useMemo(
-    () => new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }),
-    [result]
-  );
+  // Stamped at the moment of the check-in, not at render. This was a useMemo keyed on
+  // [result] — which submitCode never reads — so the success card showed the time the
+  // scanner screen was opened, which could be many minutes before the actual scan.
+  const stampNow = () =>
+    new Date().toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
   useEffect(() => {
     const loop = Animated.loop(
@@ -95,7 +97,7 @@ export default function QRScan() {
         const center =
           info.data?.tCenterName || (res.tTimeSession?.[0] as any)?.centerName || "Training Center";
         setClassPick(null);
-        setResult({ ok: true, title: "Check-in Successful!", sub: `${center} · ${now}` });
+        setResult({ ok: true, title: "Check-in Successful!", sub: `${center} · ${stampNow()}` });
         return;
       }
 
@@ -257,18 +259,27 @@ export default function QRScan() {
 
         {/* Native, no permission yet → ask */}
         {!isWeb && permission && !permission.granted && !result && !classPick && (
-          <TouchableOpacity onPress={requestPermission} activeOpacity={0.9} style={styles.doneBtnWrap} testID="qr-permission">
+          <TouchableOpacity
+            onPress={() => (permission.canAskAgain ? requestPermission() : Linking.openSettings())}
+            activeOpacity={0.9}
+            style={styles.doneBtnWrap}
+            testID="qr-permission"
+          >
             <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.doneBtn}>
               <Ionicons name="camera" size={16} color="#fff" />
-              <Text style={styles.doneTxt}>  Enable Camera</Text>
+              <Text style={styles.doneTxt}>{permission.canAskAgain ? "  Enable Camera" : "  Open Settings"}</Text>
             </LinearGradient>
           </TouchableOpacity>
         )}
 
         {/* Web preview has no camera → manual code entry so check-in is still testable */}
-        {isWeb && !result && !classPick && (
+        {(isWeb || !permission?.granted) && !result && !classPick && (
           <View style={styles.manualWrap}>
-            <Text style={styles.manualNote}>Live camera scanning runs in the D-CLIX mobile app.</Text>
+            <Text style={styles.manualNote}>
+              {isWeb
+                ? "Live camera scanning runs in the D-CLIX mobile app."
+                : "Camera unavailable — enter the centre code shown at reception."}
+            </Text>
             <View style={styles.manualRow}>
               <TextInput
                 style={styles.manualInput}

@@ -20,6 +20,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LOGO_URL, radius, spacing, useTheme } from "../src/theme";
+import { notify } from "../src/ui/dialogs";
 import { useAuth } from "../src/api/auth";
 import { api } from "../src/api/endpoints";
 import type { IdValueText } from "../src/api/types";
@@ -137,7 +138,12 @@ export default function Login() {
               <TouchableOpacity style={styles.themeBtn} onPress={toggle} testID="login-theme-toggle" hitSlop={8}>
                 <Ionicons name={mode === "dark" ? "sunny" : "moon"} size={16} color={colors.primary} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.helpBtn} testID="login-help" hitSlop={8}>
+              <TouchableOpacity
+                style={styles.helpBtn}
+                testID="login-help"
+                hitSlop={8}
+                onPress={() => router.push("/user-guide" as any)}
+              >
                 <Ionicons name="help-circle-outline" size={14} color={colors.textSecondary} />
                 <Text style={styles.helpTxt}>Help</Text>
               </TouchableOpacity>
@@ -235,7 +241,14 @@ export default function Login() {
             <View style={styles.fieldGroup}>
               <View style={styles.labelRow}>
                 <Text style={styles.fieldLabel}>Password</Text>
-                <TouchableOpacity testID="login-forgot-password"><Text style={styles.forgot}>Forgot?</Text></TouchableOpacity>
+                <TouchableOpacity
+                  testID="login-forgot-password"
+                  onPress={() =>
+                    notify("Forgot password", "Password resets are handled by your academy — please contact them and they'll reset it for you.")
+                  }
+                >
+                  <Text style={styles.forgot}>Forgot?</Text>
+                </TouchableOpacity>
               </View>
               <View style={[styles.inputLine, focus === "pwd" && { borderBottomColor: colors.primary }]}>
                 <Ionicons name="lock-closed" size={18} color={focus === "pwd" ? colors.primary : colors.textMuted} />
@@ -264,10 +277,12 @@ export default function Login() {
               </View>
             )}
 
-            <TouchableOpacity style={styles.remember} testID="login-remember">
-              <View style={styles.checkbox}><Ionicons name="checkmark" size={12} color="#fff" /></View>
-              <Text style={styles.rememberTxt}>Keep me signed in</Text>
-            </TouchableOpacity>
+            {/* The session is always persisted, so this was a checkbox the user could never
+                uncheck — a privacy affordance that did nothing. Stated as fact instead. */}
+            <View style={styles.remember} testID="login-remember">
+              <Ionicons name="information-circle-outline" size={14} color={colors.textSecondary} />
+              <Text style={styles.rememberTxt}>You&apos;ll stay signed in on this device</Text>
+            </View>
 
             <TouchableOpacity testID="login-submit-button" onPress={onLogin} activeOpacity={0.92} disabled={busy} style={[styles.signInWrap, shadow.strong]}>
               <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.signIn}>

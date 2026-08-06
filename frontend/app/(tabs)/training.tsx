@@ -22,7 +22,7 @@ export default function Training() {
   const att = useApi(() => api.attendanceReport({ fromDate: range.fromDate, toDate: range.toDate }), []);
 
   const records = att.data ?? [];
-  const present = records.filter((r) => r.attendanceTypeId === 0 || /present/i.test(r.attendanceType || "")).length;
+  const present = records.filter((r) => /present/i.test(r.attendanceType || "")).length;
 
   const grade = info.data?.currentGrade || user?.currentGrade || "—";
   const gradeNum = (() => {

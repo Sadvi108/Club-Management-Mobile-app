@@ -8,30 +8,38 @@ import { radius, spacing, font, useTheme } from "../src/theme";
 import { safeBack } from "../src/ui/dialogs";
 import { api, defaultRange } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
+import { useAuth } from "../src/api/auth";
 
 function fmtDate(iso?: string) {
   if (!iso) return "";
   const d = new Date(iso);
   return isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
 }
-function isPresent(t?: string, id?: number) {
-  return id === 0 || /present/i.test(t || "");
+// Presence is decided by the attendanceType STRING only. attendanceTypeId === 0 used to count
+// as present here, which disagreed with r-attendance.tsx and could inflate the percentage.
+function isPresent(t?: string) {
+  return /present/i.test(t || "");
 }
 
 export default function Attendance() {
   const router = useRouter();
   const { colors, shadow, mode } = useTheme();
+  const { token } = useAuth();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
 
   const range = useMemo(() => defaultRange(), []);
-  const att = useApi(() => api.attendanceReport({ fromDate: range.fromDate, toDate: range.toDate }), []);
+  // Guarded on token — see notifications.tsx: an unauthenticated cold open 401s into a silent logout.
+  const att = useApi(
+    () => (token ? api.attendanceReport({ fromDate: range.fromDate, toDate: range.toDate }) : Promise.resolve([])),
+    [token]
+  );
 
   const records = att.data ?? [];
   const total = records.length;
-  const present = records.filter((r) => isPresent(r.attendanceType, r.attendanceTypeId)).length;
+  const present = records.filter((r) => isPresent(r.attendanceType)).length;
   const missed = total - present;
   const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
-  const absentRecords = records.filter((r) => !isPresent(r.attendanceType, r.attendanceTypeId));
+  const absentRecords = records.filter((r) => !isPresent(r.attendanceType));
 
   return (
     <View style={styles.root}>
@@ -84,7 +92,7 @@ export default function Attendance() {
         {att.error && <Text style={styles.errTxt}>{att.error}</Text>}
         {!att.loading && total === 0 && <Text style={styles.emptyTxt}>No attendance records found.</Text>}
         {records.slice(0, 60).map((r, i) => {
-          const ok = isPresent(r.attendanceType, r.attendanceTypeId);
+          const ok = isPresent(r.attendanceType);
           return (
             <View key={i} style={styles.recCard}>
               <View style={[styles.recIcon, { backgroundColor: (ok ? colors.success : colors.danger) + (mode === "dark" ? "33" : "1A") }]}>

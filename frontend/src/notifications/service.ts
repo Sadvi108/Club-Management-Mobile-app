@@ -79,13 +79,21 @@ export async function diffAndAlert(userId: number): Promise<AppNotification[]> {
   const items = Array.isArray(list) ? list : [];
   if (items.length === 0) return items;
 
-  const maxId = Math.max(...items.map((n) => n.id));
+  // Only finite ids can advance the high-water mark. A single malformed id used to make
+  // maxId NaN, which was then persisted as the string "NaN" — after which both the alert
+  // branch and this write-back tested false forever and the user silently stopped getting
+  // notifications for good, with reinstall the only way out.
+  const ids = items.map((n) => Number(n.id)).filter((n) => Number.isFinite(n));
+  const maxId = ids.length ? Math.max(...ids) : null;
   const raw = await storage.get(LAST_SEEN_KEY(userId));
-  const lastSeen = raw ? Number(raw) : null;
+  const parsedSeen = raw != null ? Number(raw) : NaN;
+  const lastSeen = Number.isFinite(parsedSeen) ? parsedSeen : null;
+  // Recover installs already poisoned by a previously stored "NaN".
+  if (raw != null && !Number.isFinite(parsedSeen)) await storage.remove(LAST_SEEN_KEY(userId));
 
   // First run: don't spam alerts for the whole backlog — just set the mark.
-  if (lastSeen != null && Number.isFinite(lastSeen)) {
-    const fresh = items.filter((n) => n.id > lastSeen);
+  if (lastSeen != null) {
+    const fresh = items.filter((n) => Number.isFinite(Number(n.id)) && Number(n.id) > lastSeen);
     for (const n of fresh.slice(0, 3)) {
       await presentAlert(n.text?.trim() || "Club notification", (n.value || "").trim());
     }
@@ -93,6 +101,8 @@ export async function diffAndAlert(userId: number): Promise<AppNotification[]> {
       await presentAlert("Club notifications", `${fresh.length - 3} more new notifications`);
     }
   }
-  if (lastSeen == null || maxId > lastSeen) await storage.set(LAST_SEEN_KEY(userId), String(maxId));
+  if (maxId != null && (lastSeen == null || maxId > lastSeen)) {
+    await storage.set(LAST_SEEN_KEY(userId), String(maxId));
+  }
   return items;
 }

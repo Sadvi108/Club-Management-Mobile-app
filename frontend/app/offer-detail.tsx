@@ -28,7 +28,10 @@ export default function OfferDetail() {
   // Offers only exist inside HomePageStats — refetch and select by code (ids are all 0).
   const stats = useApi(() => api.homePageStats(), []);
   const offers = stats.data?.myoffers ?? [];
-  const offer = offers.find((o) => o.code === code) ?? offers[0];
+  // Select strictly by code. Falling back to offers[0] silently rendered a DIFFERENT offer —
+  // and this screen doubles as the voucher shown at the counter, so a stale link would have
+  // presented someone else's terms and expiry as if they were the user's own.
+  const offer = offers.find((o) => o.code === code);
   const img = offer?.attachments?.[0]?.documentUrl || offer?.previewImages?.[0]?.documentUrl;
   const expired = offer?.expiryDate ? new Date(offer.expiryDate).getTime() < Date.now() : false;
 

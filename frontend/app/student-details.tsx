@@ -19,9 +19,10 @@ export default function StudentDetails() {
   const router = useRouter();
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
-  const { user } = useAuth();
-  const info = useApi(() => api.myInfo(), []);
-  const addtnl = useApi(() => api.studentAddtnlInfo(), []);
+  const { user, token } = useAuth();
+  // Guarded on token — an unauthenticated cold open 401s into a silent logout.
+  const info = useApi(() => (token ? api.myInfo() : Promise.resolve(null as any)), [token]);
+  const addtnl = useApi(() => (token ? api.studentAddtnlInfo() : Promise.resolve(null as any)), [token]);
   const loading = info.loading || addtnl.loading;
 
   const fields: { icon: string; label: string; value: string }[] = [

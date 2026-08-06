@@ -8,6 +8,7 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { radius, spacing, font, useTheme, LOGO_URL } from "../../src/theme";
 import { api, defaultRange } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
+import { ErrorState } from "../../src/ui/errorstate";
 
 const DOW_SHORT = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const DOW_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -79,7 +80,11 @@ export default function Schedule() {
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: tabBarHeight + 92 }} showsVerticalScrollIndicator={false}>
         {details.loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 40 }} />}
 
-        {!details.loading && classes.length === 0 && (
+        {!details.loading && details.error && (
+          <ErrorState message={details.error} onRetry={details.reload} testID="schedule-error" />
+        )}
+
+        {!details.loading && !details.error && classes.length === 0 && (
           <>
             <Text style={styles.restTitle}>Rest Day</Text>
             <View style={styles.emptyCard}>

@@ -2,7 +2,7 @@
   "expo": {
     "name": "frontend",
     "slug": "frontend",
-    "version": "2.9.0",
+    "version": "2.9.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.dclix.clubapp",
-      "versionCode": 11,
+      "versionCode": 12,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"

@@ -108,6 +108,13 @@ function StudentHome() {
           <View style={styles.statRow}>
             {stats.loading && !stats.data ? (
               <SkeletonStatRow />
+            ) : stats.error && !stats.data ? (
+              // Never print "RM 0 / 0 invoices" for a request that failed — that reads as
+              // "you owe nothing" and the student has no way to tell it apart from the truth.
+              <TouchableOpacity onPress={stats.reload} style={styles.stat} testID="home-stats-error" activeOpacity={0.8}>
+                <Ionicons name="cloud-offline-outline" size={20} color="#FFF7ED" />
+                <Text style={styles.statLbl}>Couldn&apos;t load · tap to retry</Text>
+              </TouchableOpacity>
             ) : (
               <>
                 <View style={styles.stat}><Text style={styles.statNum}>{invoiceCount}</Text><Text style={styles.statLbl}>Invoices</Text></View>
