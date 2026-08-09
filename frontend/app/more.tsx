@@ -7,7 +7,7 @@ import { radius, spacing, font, useTheme } from "../src/theme";
 import { safeBack } from "../src/ui/dialogs";
 
 // Full feature catalog — a SUPERSET of the home Quick Access grid plus every other
-// student screen, grouped by section. Icons/colors match the home grid (src/mockData.ts).
+// student screen, grouped by section. Icons/colors match the home grid (app/(tabs)/home.tsx).
 type Option = { id: string; label: string; icon: string; color: string; route: string };
 const SECTIONS: { title: string; items: Option[] }[] = [
   {

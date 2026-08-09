@@ -80,6 +80,44 @@ export function parseCenterQr(value: string): number | null {
   return Number.isFinite(id) && id > 0 ? id : null;
 }
 
+/**
+ * The content a student's D-CLIX QR code has to encode: `ST-` + the student id zero-padded
+ * to 8 digits (`ST-00089623` for student 89623).
+ *
+ * Verified 2026-08-10 by pulling `GET /Utilities/StudentQRCode/49/1128/89623` — the official
+ * QR poster the academy prints — and reading the text layer out of the PDF: it carries the
+ * registration number, `ST-00089623`, and the student's name. A QR of the bare id ("89623")
+ * is not a D-CLIX code and every scanner rejects it as invalid, which is exactly what the
+ * in-app QR used to render.
+ */
+export function studentQrContent(studentId: number | string): string {
+  const id = String(studentId ?? "").trim();
+  return /^\d+$/.test(id) ? `ST-${id.padStart(8, "0")}` : id;
+}
+
+/** Student id encoded in a `ST-00089623` QR, or null when the value isn't a student code. */
+export function parseStudentQr(value: string): number | null {
+  const m = /^\s*ST-?(\d{1,10})\s*$/i.exec(value || "");
+  if (!m) return null;
+  const id = parseInt(m[1], 10);
+  return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+/**
+ * `ReportRequest.reportType` is a string in the swagger, but some report stored procedures
+ * cast it to an int. `/Reports/Reimbursement` and `/Reports/TournamentSummary` both answer
+ * `{"status":400,"meta":{"code":0,"error":"Error converting data type nvarchar to int."}}`
+ * for a word like "Reimbursed" or "upcoming" (verified live 2026-08-10), so a screen that
+ * wants a named filter has to fetch everything and narrow the rows itself.
+ *
+ * Drops any non-numeric reportType rather than letting it reach those routes.
+ */
+function numericReportType(body: ReportRequest): ReportRequest {
+  const rt = body.reportType;
+  if (rt == null || rt === "") return { ...body, reportType: null };
+  return { ...body, reportType: /^-?\d+$/.test(String(rt).trim()) ? String(rt).trim() : null };
+}
+
 // Default report window: last 18 months → end of next year (covers receipts/attendance).
 export function defaultRange(): { fromDate: string; toDate: string } {
   const now = new Date();
@@ -131,10 +169,18 @@ export const api = {
   receipts: (body: ReportRequest) => http.post<Receipt[]>("/Reports/Receipts", body),
   attendanceReport: (body: ReportRequest) =>
     http.post<AttendanceRecord[]>("/Reports/Attendance", body),
+  // NOTE (probed live 2026-08-10, instructor RICK1/RTT): this route ignores every filter in the
+  // body — `fromDate`, `toDate` and `eCenterId` all come back with the identical 713 rows, whether
+  // the window is one week in 2026 or the whole of 2019. Callers must narrow the rows themselves
+  // (see app/r-grading.tsx). It also returns [] for any student token regardless of body, even for
+  // exam centres that do have rows for an instructor — the schedule is instructor-scoped server-side.
   gradingSchedule: (body: ReportRequest) =>
     http.post<ReportRow[]>("/Reports/GradingSchedule", body),
+  // Ignores fromDate/toDate as well, and the rows carry no date — it is a medal summary grouped by
+  // gender, not a list of tournaments. `reportType` is cast to int server-side, so "upcoming"/"past"
+  // 400 the request; they are sanitised away here.
   tournamentSummary: (body: ReportRequest) =>
-    http.post<ReportRow[]>("/Reports/TournamentSummary", body),
+    http.post<ReportRow[]>("/Reports/TournamentSummary", numericReportType(body)),
   purchaseRequests: (body: ReportRequest) =>
     http.post<ReportRow[]>("/Reports/PurchaseRequests", body),
   // structured training schedule rows (dayOfWeek, tTimeFrom/tTimeTo, instructor)
@@ -454,7 +500,10 @@ export const api = {
   reportExamCenters: () => http.get<ExamCenterRow[]>("/Reports/ExamCenters"),
   reportStudentCenters: () => http.get<StudentCenterRow[]>("/Reports/StudentCenters"),
   // POST ReportRequest: filtered list reports (rows are Record<string,any>; screens read known fields).
-  reimbursementReport: (body: ReportRequest) => http.post<ReportRow[]>("/Reports/Reimbursement", body),
+  // `reportType` is cast to int by this route's stored procedure — a status word like
+  // "Reimbursed" 400s it — so the status filter is applied client-side (see app/r-reimbursement.tsx).
+  reimbursementReport: (body: ReportRequest) =>
+    http.post<ReportRow[]>("/Reports/Reimbursement", numericReportType(body)),
   activityReport: (body: ReportRequest) => http.post<ReportRow[]>("/Reports/Activity", body),
   contributionReport: (body: ReportRequest) => http.post<ReportRow[]>("/Reports/Contribution", body),
 

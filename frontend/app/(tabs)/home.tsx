@@ -8,13 +8,33 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../../src/theme";
-import { quickCards } from "../../src/mockData";
 import { useAuth } from "../../src/api/auth";
 import { api } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
 import { useNotifications } from "../../src/notifications/NotificationsProvider";
 import { SkeletonStatRow } from "../../src/ui/skeleton";
 import InstructorHome from "../../src/screens/InstructorHome";
+
+// Student Quick Access grid: fixed navigation shortcuts, each with its own accent colour. This is
+// menu configuration, not content — every number, name and date on this screen comes from the API.
+// (It used to be imported from src/mockData.ts, which has been deleted.) The full catalogue lives
+// in app/more.tsx and shares these icons/colours.
+type QuickCard = { id: string; label: string; icon: keyof typeof Ionicons.glyphMap; color: string; route: string };
+const quickCards: QuickCard[] = [
+  { id: "attendance", label: "Attendance", icon: "checkmark-circle", color: "#10B981", route: "/attendance" },
+  { id: "classes", label: "Today's Classes", icon: "flash", color: "#F59E0B", route: "/(tabs)/schedule" },
+  { id: "trainer", label: "My Trainer", icon: "person-circle", color: "#8B5CF6", route: "/(tabs)/training" },
+  { id: "timetable", label: "Timetable", icon: "calendar", color: "#0EA5E9", route: "/(tabs)/schedule" },
+  { id: "fees", label: "Fees Due", icon: "wallet", color: "#EF4444", route: "/(tabs)/payments" },
+  { id: "payments", label: "Payment History", icon: "receipt", color: "#14B8A6", route: "/(tabs)/payments" },
+  { id: "progress", label: "Progress Report", icon: "trending-up", color: "#6366F1", route: "/progress" },
+  { id: "belt", label: "Belt / Rank", icon: "ribbon", color: "#EAB308", route: "/progress" },
+  { id: "events", label: "Events", icon: "trophy", color: "#F97316", route: "/events" },
+  { id: "competition", label: "Competition", icon: "medal", color: "#DB2777", route: "/events" },
+  { id: "purchase", label: "Purchase Request", icon: "bag-handle", color: "#F59E0B", route: "/purchase-request" },
+  { id: "chat", label: "Chat Academy", icon: "chatbubbles", color: "#22C55E", route: "/chat" },
+  { id: "more", label: "More", icon: "grid", color: "#64748B", route: "/more" },
+];
 
 function initialsOf(name?: string) {
   return (name || "?")

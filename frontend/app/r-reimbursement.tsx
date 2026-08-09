@@ -6,10 +6,21 @@ import { api } from "../src/api/endpoints";
 import { useAuth } from "../src/api/auth";
 import type { ReportRow } from "../src/api/types";
 
+// Status is narrowed here, not by the API. `/Reports/Reimbursement` casts `reportType` to an
+// int server-side, so posting "Reimbursed" answered
+// `{"status":400,...,"error":"Error converting data type nvarchar to int."}` — every search
+// failed, and the screen rendered blank instead of saying so (verified live 2026-08-10).
+const ALL_STATUSES = "";
 const STATUS_OPTS: Option[] = [
+  { id: ALL_STATUSES, text: "All" },
   { id: "Reimbursed", text: "Reimbursed" },
   { id: "Pending", text: "Pending" },
 ];
+
+/** Whatever the row calls its status — the report rows are untyped `Record<string, any>`. */
+function statusOf(row: ReportRow): string {
+  return String(row.status ?? row.reimbursementStatus ?? row.paymentStatus ?? "").trim();
+}
 
 function fmtDate(x?: string) {
   if (!x) return "";
@@ -30,7 +41,7 @@ export default function ReportReimbursement() {
 
   const [from, setFrom] = useState<Date>(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [to, setTo] = useState<Date>(new Date());
-  const [status, setStatus] = useState<number | string>("Reimbursed");
+  const [status, setStatus] = useState<number | string>(ALL_STATUSES);
 
   const [rows, setRows] = useState<ReportRow[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -41,12 +52,15 @@ export default function ReportReimbursement() {
     setSearching(true);
     setSearchError(null);
     try {
+      // reportType is deliberately not sent — see the note on STATUS_OPTS.
       const data = await api.reimbursementReport({
         fromDate: toISODate(from),
         toDate: toISODate(to),
-        reportType: String(status),
+        reportType: null,
       });
-      setRows(data ?? []);
+      const all = Array.isArray(data) ? data : [];
+      const wanted = String(status).trim().toLowerCase();
+      setRows(wanted ? all.filter((r) => statusOf(r).toLowerCase() === wanted) : all);
     } catch (e: any) {
       setSearchError(e?.message || "Failed to load");
       setRows([]);
@@ -83,6 +97,7 @@ export default function ReportReimbursement() {
         renderItem={(item) => {
           const amount = item.amount;
           const date = item.date || item.invoiceDate;
+          const rowStatus = statusOf(item);
           return (
             <View style={styles.card}>
               <Text style={styles.cardTitle} numberOfLines={1}>
@@ -90,7 +105,7 @@ export default function ReportReimbursement() {
               </Text>
               {amount != null && <KV label="Amount" value={fmtAmount(amount)} strong />}
               {date != null && date !== "" && <KV label="Date" value={fmtDate(date)} />}
-              {item.status != null && item.status !== "" && <KV label="Status" value={item.status} />}
+              {!!rowStatus && <KV label="Status" value={rowStatus} />}
             </View>
           );
         }}
