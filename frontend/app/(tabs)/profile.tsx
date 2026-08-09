@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme, LOGO_URL } from "../../src/theme";
 import { confirmDialog } from "../../src/ui/dialogs";
 import { useAuth } from "../../src/api/auth";
-import { api } from "../../src/api/endpoints";
+import { api, studentQrContent } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
 
 // Pick an icon for a MyClubStats row by its label.
@@ -52,7 +52,12 @@ export default function Profile() {
   const [studentModal, setStudentModal] = useState(false);
   const [clubModal, setClubModal] = useState(false);
 
-  const qrUrl = user?.id ? api.qrCodeUrl(user.id) : null;
+  // A student's QR has to encode the D-CLIX student code — `ST-` + the id padded to 8 digits
+  // (`ST-00089623`), the same content the academy's printed QR carries. Rendering a QR of the
+  // bare id ("89623") produced a code every scanner rejected as invalid. Instructors have no
+  // ST- code, so theirs is left as-is.
+  const qrContent = user?.id ? (isInstructor ? String(user.id) : studentQrContent(user.id)) : null;
+  const qrUrl = qrContent ? api.qrCodeUrl(qrContent) : null;
   const grade = info.data?.currentGrade || user?.currentGrade || "—";
   const clubName = user?.clubName || user?.clubList?.[0]?.text || "—";
 

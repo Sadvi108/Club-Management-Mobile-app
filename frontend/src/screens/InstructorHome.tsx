@@ -50,8 +50,23 @@ export default function InstructorHome() {
   const clubStats = useApi(() => (token ? api.myClubStats() : Promise.resolve([])), [token]);
   const { unreadCount } = useNotifications(); // live (60s poll), same source as the student home
 
-  const invoiceCount = stats.data?.invoiceCount ?? 0;
-  const dueAmount = stats.data?.dueAmount ?? 0;
+  /**
+   * The dues card counts the very invoices it navigates to.
+   *
+   * It used to read `invoiceCount` / `dueAmount` off `/Reports/HomePageStats`, whose totals do
+   * not agree with the `/Outstanding/Fetch` list behind the card — probed live 2026-08-10 on
+   * RTT/KCP, HomePageStats answered 3 invoices / RM 420 while the outstanding list held 649
+   * invoices / RM 47,365. Tapping a headline figure and landing on a different one is the bug;
+   * one query now feeds both, so the number is always the list the user is about to see.
+   */
+  const dues = useApi(
+    () => (token ? api.outstanding({ studentId: null, startDate: null, endDate: null }) : Promise.resolve([])),
+    [token]
+  );
+  const dueRows = useMemo(() => (Array.isArray(dues.data) ? dues.data : []), [dues.data]);
+  const invoiceCount = dueRows.length;
+  const dueAmount = useMemo(() => dueRows.reduce((s, r) => s + Number(r.dueAmount || 0), 0), [dueRows]);
+
   const offers = stats.data?.myoffers ?? [];
   const hasUnread = unreadCount > 0;
 
@@ -148,14 +163,22 @@ export default function InstructorHome() {
               <Ionicons name="notifications" size={22} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              {stats.loading ? (
+              {dues.loading && !dues.data ? (
                 <ActivityIndicator color={colors.primary} style={{ alignSelf: "flex-start", marginVertical: 6 }} />
+              ) : dues.error && !dues.data ? (
+                // Never print "0 invoices are due" for a request that failed — that reads as
+                // "the club is all paid up" and nothing distinguishes it from the truth.
+                <Text style={styles.dueTitle}>Dues couldn&apos;t be loaded</Text>
               ) : (
                 <Text style={styles.dueTitle}>
                   {invoiceCount} invoice{invoiceCount === 1 ? "" : "s"} {invoiceCount === 1 ? "is" : "are"} due
                 </Text>
               )}
-              <Text style={styles.dueSub}>RM {dueAmount.toLocaleString()} total due amount</Text>
+              <Text style={styles.dueSub}>
+                {dues.error && !dues.data
+                  ? "Tap to open Pay Your Dues"
+                  : `RM ${dueAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total due amount`}
+              </Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={mode === "dark" ? "#FDBA74" : "#9A3412"} />
           </LinearGradient>

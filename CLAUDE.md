@@ -85,6 +85,39 @@ copy from `frontend/.env.example` if missing.
   returns `data` = DP url; photo then comes back as `user.profilePic`).
 - Full details: `docs/superpowers/` and the project memory.
 
+## Report-route quirks (all probed live on prod 2026-08-10, instructor RICK1/RTT branch KCP)
+These are the contract, not bugs in the app — screens work around them, so don't "simplify" the
+workarounds away.
+- **`reportType` is cast to an int** by `/Reports/Reimbursement` and `/Reports/TournamentSummary`.
+  A word ("Reimbursed", "upcoming") returns `{"status":400,"meta":{"code":0,"error":"Error
+  converting data type nvarchar to int."}}`. `api.reimbursementReport` / `api.tournamentSummary`
+  strip non-numeric values; those screens filter their rows client-side instead.
+- **Failure envelopes carry `meta.code: 0` with the real code in `status`.** `http.ts` inspects
+  both slots — reading `meta.code` first made failed requests look successful and handed screens
+  the error envelope where they expected an array.
+- **An envelope may omit `data` entirely** (`GET /Listing/DropdownListByType/6` →
+  `{"status":200,"meta":{"code":200}}`). `http.ts` unwraps that to `null`; never key off
+  `"data" in parsed` alone or callers get the envelope object and `.map` throws.
+- **`/Reports/GradingSchedule` applies none of its filters** — `fromDate`, `toDate` and `eCenterId`
+  are accepted and ignored (one week in 2026 and the whole of 2019 both return the same 713 rows).
+  `app/r-grading.tsx` narrows the rows itself. It also returns `[]` for **any student token**,
+  whatever the body — the schedule is instructor-scoped server-side, which is why students have no
+  upcoming-grading list. Backend-owned.
+- **`/Reports/TournamentSummary` is a medal summary, not a schedule** — rows are
+  `{id, name, gender, playerCount, medal*}` grouped by gender, with `name` empty and **no date at
+  all**, and dates in the body are ignored. "Upcoming" vs "Past" cannot be told apart from it.
+- **`/Outstanding/Fetch` with null dates defaults to the current month** (7 rows for RTT in
+  Aug-2026); an explicit wide range returns the full history (649 rows). `/Reports/HomePageStats`
+  answers a *different* question again — it returned 3 / RM 420, exactly the current month's
+  `Advanced*` invoices, while the list held 7 / RM 785. Anything that shows a dues headline must
+  read the same query as the list it links to.
+- **No route returns a student photo for a list.** DPs are `Files/DP/<guid>.png` keyed by a
+  per-student GUID (`AuthUser.profilePic`), so a roster photo URL cannot be derived from a student
+  id; `/Listing/StudentListByTcId` returns `{id, value, text}` only.
+- **Student QR content is `ST-` + the student id padded to 8 digits** (`ST-00089623`) — read out of
+  the text layer of the official `GET /Utilities/StudentQRCode/{clubId}/{branchId}/{id}` poster.
+  Use `studentQrContent()`; a QR of the bare id is not a D-CLIX code and scanners reject it.
+
 ## State note
 DARSHAN's demo invoices were consumed by testing Bank-In (now pending payment slips → Fees Due RM 0).
 Admin rejecting the slips restores them. Not a bug.

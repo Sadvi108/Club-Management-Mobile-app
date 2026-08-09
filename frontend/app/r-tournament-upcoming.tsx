@@ -13,15 +13,21 @@ export default function ReportTournamentUpcoming() {
   const { token } = useAuth();
   const [name, setName] = useState<string>("");
 
+  // `reportType: "upcoming"` used to be sent here. The route casts reportType to an int, so it
+  // answered `{"status":400,...,"error":"Error converting data type nvarchar to int."}`, and the
+  // error envelope was handed back as the payload — `allRows.forEach` then threw on an object and
+  // took the screen down. Both halves are fixed (src/api/http.ts + api.tournamentSummary); the
+  // request now carries no reportType, which is what actually returns rows.
   const { data, loading, error } = useApi<TournamentRow[]>(
     () =>
       token
-        ? (api.tournamentSummary({ reportType: "upcoming", fromDate: null, toDate: null }) as Promise<TournamentRow[]>)
+        ? (api.tournamentSummary({ fromDate: null, toDate: null }) as Promise<TournamentRow[]>)
         : Promise.resolve([]),
     [token]
   );
 
-  const allRows = data ?? [];
+  // Never assume the shape of a report payload — one bad response should not crash a screen.
+  const allRows = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   const nameOptions: Option[] = useMemo(() => {
     const seen = new Set<string>();
@@ -57,11 +63,15 @@ export default function ReportTournamentUpcoming() {
         />
       }
       renderItem={(item) => (
+        // The route returns a medal summary grouped by gender — name/ageGroup/category come back
+        // empty on live data, so the gender group is the honest heading when there is no name.
         <View style={styles.card}>
-          <Text style={styles.cardTitle} numberOfLines={2}>{item.category || item.ageGroup || "—"}</Text>
-          <KV label="Age Group" value={item.ageGroup} />
-          <KV label="Gender" value={item.gender} />
-          <KV label="Players" value={item.playerCount} />
+          <Text style={styles.cardTitle} numberOfLines={2}>
+            {item.name?.trim() || item.category?.trim() || item.gender?.trim() || "Tournament"}
+          </Text>
+          {!!item.ageGroup && <KV label="Age Group" value={item.ageGroup} />}
+          {!!item.gender && <KV label="Gender" value={item.gender} />}
+          <KV label="Players" value={item.playerCount ?? 0} />
           <Text style={styles.medals}>
             Gold {item.medalGold ?? 0} · Silver {item.medalSilver ?? 0} · Bronze {item.medalBronze ?? 0}
           </Text>

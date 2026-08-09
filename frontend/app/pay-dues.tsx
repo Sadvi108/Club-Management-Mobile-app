@@ -22,7 +22,11 @@ export default function PayDues() {
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
 
   const [type, setType] = useState<string>("");
-  const [pendingOnly, setPendingOnly] = useState(true);
+  // Opens showing every outstanding invoice, which is what the home dues card counts. Defaulting
+  // this on silently dropped the "Approval Pending" rows — invoices whose payment slip is with the
+  // admin — so the screen contradicted the headline it was reached from (probed live 2026-08-10 on
+  // RTT/KCP: 649 outstanding vs 631 "Pending", the 18 hidden ones worth RM 1,455).
+  const [pendingOnly, setPendingOnly] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
   const [paying, setPaying] = useState(false);
 
@@ -50,7 +54,7 @@ export default function PayDues() {
     [token, type]
   );
 
-  const rows = inv.data ?? [];
+  const rows = useMemo(() => (Array.isArray(inv.data) ? inv.data : []), [inv.data]);
   const filtered = useMemo(
     () => (pendingOnly ? rows.filter((r) => r.paymentStatus === "Pending") : rows),
     [rows, pendingOnly]
@@ -61,6 +65,10 @@ export default function PayDues() {
     () => filtered.filter((r) => selected.includes(r.invoiceId)).reduce((s, r) => s + Number(r.dueAmount || 0), 0),
     [filtered, selected]
   );
+
+  // An invoice whose slip is already with the admin must not be paid a second time while they
+  // review it. These rows are listed (they are money still owed) but not selectable.
+  const isAwaitingApproval = (r: Invoice) => r.paymentStatus === "Approval Pending";
 
   const toggle = (id: number) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -88,11 +96,21 @@ export default function PayDues() {
   };
 
   const renderItem = ({ item }: { item: Invoice }) => {
-    const on = selected.includes(item.invoiceId);
+    const locked = isAwaitingApproval(item);
+    const on = !locked && selected.includes(item.invoiceId);
     return (
-      <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={() => toggle(item.invoiceId)}>
+      <TouchableOpacity
+        style={[styles.card, locked && styles.cardLocked]}
+        activeOpacity={locked ? 1 : 0.85}
+        disabled={locked}
+        onPress={() => toggle(item.invoiceId)}
+      >
         <View style={styles.checkCol}>
-          <Ionicons name={on ? "checkbox" : "square-outline"} size={22} color={colors.primary} />
+          <Ionicons
+            name={locked ? "time-outline" : on ? "checkbox" : "square-outline"}
+            size={22}
+            color={locked ? colors.textMuted : colors.primary}
+          />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.cardTitle} numberOfLines={1}>{item.studentName || "—"}</Text>
@@ -100,6 +118,7 @@ export default function PayDues() {
           <KV label="Period" value={item.period} />
           <KV label="Due Amt" value={money(item.dueAmount)} strong />
           <KV label="Status" value={item.paymentStatus} />
+          {locked && <Text style={styles.lockedTxt}>Payment slip submitted — waiting for the club to approve it.</Text>}
           {item.invoiceDescription ? (
             <Text style={styles.desc} numberOfLines={2}>{item.invoiceDescription}</Text>
           ) : null}
@@ -202,9 +221,11 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
       backgroundColor: colors.surface, borderRadius: radius.lg, padding: 14, ...shadow.soft,
       borderWidth: mode === "dark" ? 1 : 0, borderColor: colors.border,
     },
+    cardLocked: { opacity: 0.72 },
     checkCol: { paddingTop: 1 },
     cardTitle: { fontSize: 15, fontWeight: "800", color: colors.textPrimary },
     desc: { fontSize: 12, color: colors.textSecondary, marginTop: 6 },
+    lockedTxt: { fontSize: 11.5, color: colors.textSecondary, fontWeight: "600", marginTop: 6, fontStyle: "italic" },
     center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 10 },
     emptyTxt: { color: colors.textSecondary, fontSize: 14, textAlign: "center" },
     errTxt: { color: colors.danger, fontSize: 14, textAlign: "center" },

@@ -13,15 +13,18 @@ export default function ReportTournamentPast() {
   const { token } = useAuth();
   const [name, setName] = useState<string>("");
 
+  // `reportType: "past"` 400'd this route (it casts reportType to an int) and the error envelope
+  // came back as the payload, crashing the screen on `allRows.forEach`. Same fix as the upcoming
+  // screen — see app/r-tournament-upcoming.tsx.
   const { data, loading, error } = useApi<TournamentRow[]>(
     () =>
       token
-        ? (api.tournamentSummary({ reportType: "past", fromDate: null, toDate: null }) as Promise<TournamentRow[]>)
+        ? (api.tournamentSummary({ fromDate: null, toDate: null }) as Promise<TournamentRow[]>)
         : Promise.resolve([]),
     [token]
   );
 
-  const allRows = data ?? [];
+  const allRows = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   const nameOptions: Option[] = useMemo(() => {
     const seen = new Set<string>();
@@ -58,10 +61,12 @@ export default function ReportTournamentPast() {
       }
       renderItem={(item) => (
         <View style={styles.card}>
-          <Text style={styles.cardTitle} numberOfLines={2}>{item.category || item.ageGroup || "—"}</Text>
-          <KV label="Age Group" value={item.ageGroup} />
-          <KV label="Gender" value={item.gender} />
-          <KV label="Players" value={item.playerCount} />
+          <Text style={styles.cardTitle} numberOfLines={2}>
+            {item.name?.trim() || item.category?.trim() || item.gender?.trim() || "Tournament"}
+          </Text>
+          {!!item.ageGroup && <KV label="Age Group" value={item.ageGroup} />}
+          {!!item.gender && <KV label="Gender" value={item.gender} />}
+          <KV label="Players" value={item.playerCount ?? 0} />
           <Text style={styles.medals}>
             Gold {item.medalGold ?? 0} · Silver {item.medalSilver ?? 0} · Bronze {item.medalBronze ?? 0}
           </Text>

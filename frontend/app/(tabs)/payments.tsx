@@ -345,27 +345,9 @@ export default function Payments() {
                     </View>
                     <Text style={styles.invAmt} numberOfLines={1}>RM {(inv.dueAmount || 0).toLocaleString()}</Text>
                   </TouchableOpacity>
-                  {isActive && <TouchableOpacity
-                    style={styles.invDownload}
-                    testID={`invoice-pdf-${inv.invoiceId}`}
-                    disabled={busyPdf === key}
-                    onPress={() =>
-                      openPdf(
-                        key,
-                        api.receiptPdfUrl(user!.clubId, 0, inv.invoiceId),
-                        `INVOICE_${inv.invoiceId}.pdf`
-                      )
-                    }
-                  >
-                    {busyPdf === key ? (
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    ) : (
-                      <>
-                        <Ionicons name="document-text-outline" size={14} color={colors.primary} />
-                        <Text style={styles.invDownloadTxt}>Invoice PDF</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>}
+                  {/* No per-invoice PDF link here by request — an unpaid invoice is something to
+                      pay, not to download. The PDF affordance lives on History, where a receipt
+                      is the document a member actually needs to keep. */}
                 </View>
               );
             })}

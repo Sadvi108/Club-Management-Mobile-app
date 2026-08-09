@@ -10,6 +10,12 @@ import { useAuth } from "../src/api/auth";
 import { api, defaultRange } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
 
+function fmtExamDate(iso?: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 const BELTS = [
   { name: "White", color: "#E5E7EB" },
   { name: "Yellow", color: "#FDE68A" },
@@ -40,10 +46,29 @@ export default function Progress() {
   const currentIdx = BELTS.findIndex((b) => b.name.toLowerCase() === beltName.toLowerCase());
   const nextBelt = currentIdx < 0 || currentIdx >= BELTS.length - 1 ? null : BELTS[currentIdx + 1];
 
-  const records = att.data ?? [];
+  const records = useMemo(() => (Array.isArray(att.data) ? att.data : []), [att.data]);
   const present = records.filter((r) => /present/i.test(r.attendanceType || "")).length;
   const pct = records.length ? Math.round((present / records.length) * 100) : 0;
-  const gradeRows = grading.data ?? [];
+
+  // Rows are GradingRow: { resultId, ecName, examDate, closingDate, examTime }. The old code read
+  // examName/name/gradeName/centerName — none of which this route returns — so every row rendered
+  // as the word "Grading" over a raw ISO timestamp. Show the exam centre, the formatted date and
+  // the time, keep only exams that haven't happened yet, and put the soonest first.
+  const gradeRows = useMemo(() => {
+    const all = Array.isArray(grading.data) ? grading.data : [];
+    const today = new Date();
+    const cutoff = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const at = (iso?: string) => {
+      const d = iso ? new Date(iso) : null;
+      return d && !isNaN(d.getTime()) ? d.getTime() : null;
+    };
+    return all
+      .filter((g: any) => {
+        const t = at(g.examDate);
+        return t == null || t >= cutoff; // undated rows stay — better shown than silently dropped
+      })
+      .sort((a: any, b: any) => (at(a.examDate) ?? 0) - (at(b.examDate) ?? 0));
+  }, [grading.data]);
 
   return (
     <View style={styles.root}>
@@ -102,20 +127,33 @@ export default function Progress() {
           </View>
         </View>
 
-        <Text style={styles.section}>Grading Schedule</Text>
+        <Text style={styles.section}>Upcoming Grading</Text>
         {grading.loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />}
-        {!grading.loading && gradeRows.length === 0 && (
+        {!grading.loading && grading.error && (
+          // A failed fetch is not an empty schedule — saying "nothing scheduled" here would be a
+          // confident lie the student has no way to see through.
+          <TouchableOpacity style={styles.commentCard} onPress={grading.reload} activeOpacity={0.8} testID="progress-grading-error">
+            <View style={styles.quoteIcon}><Ionicons name="cloud-offline-outline" size={16} color={colors.primary} /></View>
+            <Text style={styles.commentTxt}>Couldn&apos;t load the grading schedule — tap to try again.</Text>
+          </TouchableOpacity>
+        )}
+        {!grading.loading && !grading.error && gradeRows.length === 0 && (
           <View style={styles.commentCard}>
             <View style={styles.quoteIcon}><Ionicons name="calendar-outline" size={16} color={colors.primary} /></View>
             <Text style={styles.commentTxt}>No upcoming grading scheduled. Your academy will notify you when the next exam is set.</Text>
           </View>
         )}
         {gradeRows.map((g: any, i: number) => (
-          <View key={i} style={styles.commentCard}>
+          <View key={`${g.resultId ?? g.id ?? "g"}-${i}`} style={styles.commentCard}>
             <View style={styles.quoteIcon}><Ionicons name="school" size={16} color={colors.primary} /></View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.commentTxt} numberOfLines={2}>{g.examName || g.name || g.gradeName || g.centerName || "Grading"}</Text>
-              <Text style={styles.commentMeta} numberOfLines={1}>{g.examDate || g.gradeDate || g.date || g.scheduleDate || ""}</Text>
+              <Text style={styles.commentTxt} numberOfLines={2}>{g.ecName?.trim() || "Grading exam"}</Text>
+              <Text style={styles.commentMeta} numberOfLines={1}>
+                {[fmtExamDate(g.examDate), g.examTime].filter(Boolean).join(" · ") || "Date to be confirmed"}
+              </Text>
+              {!!g.closingDate && (
+                <Text style={styles.commentMeta} numberOfLines={1}>Registration closes {fmtExamDate(g.closingDate)}</Text>
+              )}
             </View>
           </View>
         ))}

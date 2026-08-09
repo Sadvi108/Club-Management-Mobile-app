@@ -79,14 +79,36 @@ function networkErrorMessage(raw: string, path?: string): string {
   return `Network error: ${raw || "request failed"}`;
 }
 
-// The backend answers HTTP 200 with an error *inside* the envelope
-// ({ status: 400, meta: { code: 400, error: "..." } }). Pull that code out so callers
-// see the real failure instead of a silently empty result. `status` is sometimes a
-// string on non-enveloped routes (e.g. /Bcpg/VerifyPayment → { status: "NotFound" }),
-// so only numeric codes count.
+// The backend answers HTTP 200 with an error *inside* the envelope. Pull that code out so
+// callers see the real failure instead of a silently empty result. `status` is sometimes a
+// string on non-enveloped routes (e.g. /Bcpg/VerifyPayment → { status: "NotFound" }), so only
+// numeric codes count.
+//
+// Both slots have to be inspected, not just the first one that happens to be a number. A
+// failed report answers `{ status: 400, meta: { code: 0, error: "..." } }` — `meta.code` is a
+// perfectly good number (0) that is not an error code, and preferring it hid the 400 behind
+// it. The request then "succeeded" with the error envelope as its payload, which is what
+// handed screens an object where they expected an array (`rows.forEach is not a function`).
 function innerErrorCode(parsed: any): number | null {
-  const code = typeof parsed?.meta?.code === "number" ? parsed.meta.code : parsed?.status;
-  return typeof code === "number" && code >= 400 ? code : null;
+  const codes = [parsed?.meta?.code, parsed?.status].filter(
+    (c): c is number => typeof c === "number" && c >= 400
+  );
+  return codes.length ? Math.max(...codes) : null;
+}
+
+/**
+ * Does this response carry the standard `{ status, meta, data }` envelope?
+ *
+ * `data` is omitted entirely when a route has nothing to return (e.g.
+ * `GET /Listing/DropdownListByType/6` → `{"status":200,"meta":{"code":200}}`), so keying off
+ * `"data" in parsed` alone made those calls resolve with the envelope itself — an object handed
+ * to callers expecting a list. Anything carrying a `meta` block is an envelope; its absent
+ * `data` unwraps to null. Non-enveloped payloads (`/Bcpg/VerifyPayment` → `{ status: "NotFound" }`)
+ * have no `meta` and are still returned untouched.
+ */
+function isEnvelope(parsed: any): boolean {
+  if (!parsed || typeof parsed !== "object") return false;
+  return "data" in parsed || (!!parsed.meta && typeof parsed.meta === "object");
 }
 
 function innerErrorMessage(parsed: any, code: number): string {
@@ -134,9 +156,7 @@ async function request<T>(path: string, opts: Options = {}): Promise<T> {
   if (inner) throw new ApiError(innerErrorMessage(parsed, inner), inner, parsed);
 
   // Unwrap the standard envelope when present.
-  if (parsed && typeof parsed === "object" && "data" in parsed) {
-    return (parsed as ApiEnvelope<T>).data as T;
-  }
+  if (isEnvelope(parsed)) return ((parsed as ApiEnvelope<T>).data ?? null) as T;
   return parsed as T;
 }
 
@@ -171,7 +191,7 @@ export const http = {
       const code = inner || res.status;
       throw new ApiError(innerErrorMessage(parsed, code), code, parsed);
     }
-    if (parsed && typeof parsed === "object" && "data" in parsed) return parsed.data as T;
+    if (isEnvelope(parsed)) return (parsed.data ?? null) as T;
     return parsed as T;
   },
   // Returns the full envelope (used by auth, which needs status + data together).
