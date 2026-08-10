@@ -69,8 +69,12 @@ export default function Payments() {
   const [activeAccount, setActiveAccount] = useState<{ id: number; name: string } | null>(null);
   const accountId = activeAccount?.id ?? user?.id ?? null;
 
-  // Default the active account to the logged-in student
-  useMemo(() => { if (user && !activeAccount) setActiveAccount({ id: user.id, name: user.name }); }, [user]);
+  // Default the active account to the logged-in student. This has to be an effect: a useMemo
+  // that calls setState is a side effect during render, and React is free to drop or re-run a
+  // memo, so the default could be re-applied over a chip the user had just tapped.
+  useEffect(() => {
+    if (user && !activeAccount) setActiveAccount({ id: user.id, name: user.name });
+  }, [user, activeAccount]);
 
   const range = useMemo(() => defaultRange(), []);
 
@@ -97,6 +101,12 @@ export default function Payments() {
 
   const invoiceIds = useMemo(
     () => cart.items.map((i) => i.invoice.invoiceId).filter((id) => id > 0),
+    [cart.items]
+  );
+  // Distinct accounts represented in the cart — the cart is deliberately cross-account
+  // (each row carries its own studentName), so a payment can span several siblings.
+  const payingAccountIds = useMemo(
+    () => Array.from(new Set(cart.items.map((i) => i.studentId).filter((id) => id > 0))),
     [cart.items]
   );
 
@@ -196,10 +206,14 @@ export default function Payments() {
 
         // Back from the gateway. The browser result never says whether the payment went
         // through, so ask the server: verify by reference, then reconcile the invoice list.
+        // Reconcile against every account in this payment, not just the chip that happens to
+        // be active — the cart can hold a sibling's invoices, and those live under their own
+        // studentId in Outstanding/Fetch.
         const verdict = await api.confirmPayment({
           referenceId: res.referenceId,
           invoiceIds: payingIds,
           studentId: accountId,
+          studentIds: termPay ? termPay.studentIds : payingAccountIds,
         });
         afterPaid();
         notify(verdict.outcome === "paid" ? "Payment received" : "Payment", verdict.message);
@@ -596,7 +610,9 @@ function PrepaySegment({
       [{ id: user.id, name: user.name }, ...siblings.map((s) => ({ id: s.id, name: s.text }))].filter(
         (a, i, arr) => arr.findIndex((x) => x.id === a.id) === i
       ),
-    [user.id, siblings]
+    // user.name belongs here too — without it the sibling checklist kept showing the old name
+    // after an Edit Profile rename, since user.id never changes.
+    [user.id, user.name, siblings]
   );
   const [selAccts, setSelAccts] = useState<Set<number>>(new Set([user.id]));
   const [selMonths, setSelMonths] = useState<Set<number>>(new Set());
@@ -609,7 +625,14 @@ function PrepaySegment({
         : Promise.resolve([] as any[]),
     [year, acctKey, refreshKey]
   );
-  const rows = terms.data ?? [];
+  // Month numbers mean different invoices in a different year, and different amounts for a
+  // different set of siblings — carrying a selection across either change means the Pay button
+  // bills months the user picked while looking at something else. Drop it on both.
+  useEffect(() => {
+    setSelMonths(new Set());
+  }, [year, acctKey]);
+
+  const rows = useMemo(() => (Array.isArray(terms.data) ? terms.data : []), [terms.data]);
   // Rows with a real invoiceId are billable by any gateway. Rows with invoiceId 0 are months
   // the academy hasn't invoiced yet: the legacy route can never charge them (probed live —
   // no PayTermPayments query binding makes the backend create those invoices), but /Bcpg

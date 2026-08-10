@@ -48,12 +48,31 @@ export default function UpdateAttendance() {
     [token, centerId, timeId, date]
   );
 
-  const presentSet = useMemo(
-    () => new Set((attendance.data ?? []).map((a) => (a.name || "").trim().toUpperCase())),
-    [attendance.data]
-  );
-  const roster_ = roster.data ?? [];
-  const presentCount = roster_.filter((s) => presentSet.has((s.text || "").trim().toUpperCase())).length;
+  /**
+   * Who is actually checked in, keyed by student id.
+   *
+   * This used to key on the uppercased name, which marks the wrong people present: names are
+   * not unique in a roster (training centre 3303 alone has two students called "TEST"), so one
+   * student checking in flagged every namesake as present too. `AttendanceRecord.id` and the
+   * roster row's `id` are both the student id, which is the only reliable join — the roster's
+   * `value` is the registration code (RTT/KCP/2025/00208) while the attendance row's `icNo` is
+   * the IC number, so those two don't match either.
+   *
+   * Rows that explicitly record an absence are excluded rather than requiring the word
+   * "present": the full set of attendanceType values isn't documented, and treating an
+   * unrecognised one as absent would hide genuinely present students.
+   */
+  const presentIds = useMemo(() => {
+    const rows = Array.isArray(attendance.data) ? attendance.data : [];
+    return new Set(
+      rows
+        .filter((a) => !/absent|leave|excused/i.test(String(a.attendanceType || "")))
+        .map((a) => a.id)
+        .filter((id) => id != null)
+    );
+  }, [attendance.data]);
+  const roster_ = Array.isArray(roster.data) ? roster.data : [];
+  const presentCount = roster_.filter((s) => presentIds.has(s.id)).length;
 
   const centerOptions: Option[] = (centers.data ?? []).map((o) => ({ id: o.id, text: o.text }));
   const timeOptions: Option[] = [{ id: "", text: "All times" }, ...(times.data ?? []).map((o) => ({ id: o.id, text: o.text }))];
@@ -128,7 +147,7 @@ export default function UpdateAttendance() {
           </View>
         }
         renderItem={({ item, index }) => {
-          const present = presentSet.has((item.text || "").trim().toUpperCase());
+          const present = presentIds.has(item.id);
           return (
             <View style={styles.card}>
               <Text style={styles.sno}>{index + 1}</Text>

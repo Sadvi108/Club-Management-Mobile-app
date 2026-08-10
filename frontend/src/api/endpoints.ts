@@ -311,12 +311,26 @@ export const api = {
     referenceId?: string | null;
     invoiceIds?: number[];
     studentId?: number | null;
+    /**
+     * Every account whose invoices are in this payment.
+     *
+     * A parent can put their own and their siblings' invoices in one cart, but
+     * `Outstanding/Fetch` is scoped to a single studentId. Reconciling the whole payment
+     * against just the active account found none of the *other* children's invoices still
+     * due, concluded they had been settled, and told the user "Payment received" for a
+     * payment that may never have gone through. Each account is queried and the results
+     * unioned. Falls back to `studentId` when only one account is being paid.
+     */
+    studentIds?: (number | null | undefined)[];
     /** Number of purchase-request rows before the payment — a new row means it went through. */
     purchaseBaseline?: number | null;
     attempts?: number;
     delayMs?: number;
   }): Promise<PaymentOutcome> => {
     const { referenceId, invoiceIds = [], studentId = null, purchaseBaseline = null, attempts = 3, delayMs = 2000 } = args;
+    const accounts = Array.from(
+      new Set((args.studentIds?.length ? args.studentIds : [studentId]).map((id) => id ?? null))
+    );
     let gatewayStatus: string | null = null;
 
     if (referenceId) {
@@ -344,12 +358,14 @@ export const api = {
     if (payable.length) {
       try {
         const range = defaultRange();
-        const rows = await api.outstanding({
-          studentId,
-          startDate: range.fromDate,
-          endDate: range.toDate,
-        });
-        const stillDue = new Set((rows ?? []).map((r) => r.invoiceId));
+        // One fetch per account in the payment; a single failure must not shrink the
+        // "still due" set, because a smaller set reads as "more invoices were settled".
+        const lists = await Promise.all(
+          accounts.map((id) =>
+            api.outstanding({ studentId: id, startDate: range.fromDate, endDate: range.toDate })
+          )
+        );
+        const stillDue = new Set(lists.flatMap((rows) => (rows ?? []).map((r) => r.invoiceId)));
         const remaining = payable.filter((id) => stillDue.has(id));
         if (remaining.length === 0) {
           return { outcome: "paid", gatewayStatus, message: "Payment received — these invoices are settled." };
