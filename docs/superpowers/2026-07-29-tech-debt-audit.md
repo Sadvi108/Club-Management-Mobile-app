@@ -81,7 +81,8 @@ Impact 2 · Risk 3 · Effort 1 → **priority 25**
 | New Student approval (`new-student.tsx`, `student-particulars.tsx`) | Full UI built against a proposed contract; every endpoint 404s | **Backend** (4 routes) |
 | Cancel a class booking | No route exists in the mobile API | **Backend** |
 | `ClassBooking/NextBookings` | Always `[]`; app derives upcoming from `GetBookings` | **Backend** |
-| Bulk "mark attendance" for instructors | Only QR self check-in exists; no studentId/bulk route | **API limit** |
+| Bulk "mark attendance" for instructors | **Confirmed impossible on this API** (prod probe 2026-08-12, instructor RICK1, centre 3303): `/Attendance/Add`'s `qrCode` is only parsed as a CENTRE code, so the subject is always the bearer-token holder. `attendanceType: 2` with a student's `ST-` code, bare id and registration code each returned `-1 "Invalid QR Code"` — notably *not* "Invalid Instructor details", so the instructor check passed and the QR was the problem. Needs `POST /Attendance/Add` to accept `{ studentIds: int[], tTimeId, attendanceDate }` under an instructor token, plus a way to undo a mistake. Mitigated by the live register board + centre-QR display in `update-attendance.tsx`. | **Backend** (1 route) |
+| Instructor viewing anyone's attendance (`r-attendance.tsx`) | **`/Reports/Attendance` is self-scoped** (prod probe 2026-08-12): instructor RICK1 gets 0 rows with *no filters at all*, while student 89623 — in that instructor's own roster for centre 1639 — sees their two "Present" rows there via their own token. The instructor Attendance Report is therefore permanently empty, and no live register board is possible. | **Backend** |
 | Chat: seeing your own sent message | No endpoint returns it; app keeps a local echo | **API limit** |
 | Instructor tiles **Activities**, **Fee Master** | `notify("coming soon")` | Not built (2 of 12 tiles) |
 

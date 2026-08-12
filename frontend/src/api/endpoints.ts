@@ -104,6 +104,20 @@ export function parseStudentQr(value: string): number | null {
 }
 
 /**
+ * The content a training centre's check-in QR encodes: `TC-` + the centre id zero-padded to
+ * 8 digits. This is the code `/Attendance/Add` accepts — the inverse of `parseCenterQr`.
+ *
+ * Verified 2026-08-12 by rendering the official posters
+ * (`GET /Utilities/TrainingCenterQRCode/49/{tcid}`) and decoding the QR bitmaps: centre 3303
+ * → `TC-00003303`, centre 1636 → `TC-00001636`. Both `Listing/DropdownListByType/3` ids and
+ * `Reports/TrainingCenters` ids work, so the id shown in the centre picker is safe to use.
+ */
+export function centerQrContent(tCenterId: number | string): string {
+  const id = String(tCenterId ?? "").trim();
+  return /^\d+$/.test(id) ? `TC-${id.padStart(8, "0")}` : id;
+}
+
+/**
  * `ReportRequest.reportType` is a string in the swagger, but some report stored procedures
  * cast it to an int. `/Reports/Reimbursement` and `/Reports/TournamentSummary` both answer
  * `{"status":400,"meta":{"code":0,"error":"Error converting data type nvarchar to int."}}`
@@ -167,6 +181,13 @@ export const api = {
   // ── Home / Reports ──
   homePageStats: () => http.get<HomePageStats>("/Reports/HomePageStats"),
   receipts: (body: ReportRequest) => http.post<Receipt[]>("/Reports/Receipts", body),
+  // SELF-SCOPED — returns only the CALLER's own attendance, whatever you filter on.
+  // Probed live on prod 2026-08-12: instructor RICK1 gets 0 rows with no filters at all, and 0
+  // for tCenterId 1639 / sCenterId 2754 / sourceKeyId 89623 / any date range — while student
+  // 89623, who is in that instructor's own roster for centre 1639, sees their two "Present" rows
+  // at that very centre through their own token. So this route cannot drive an instructor-facing
+  // register: `app/r-attendance.tsx` is permanently empty for instructors, and
+  // `app/update-attendance.tsx` deliberately shows no register for that reason.
   attendanceReport: (body: ReportRequest) =>
     http.post<AttendanceRecord[]>("/Reports/Attendance", body),
   // NOTE (probed live 2026-08-10, instructor RICK1/RTT): this route ignores every filter in the
@@ -445,6 +466,28 @@ export const api = {
   //
   // data.status: 0 = checked in, 1 = "Select your training class time" (resend with tTimeId),
   // -1 = the QR isn't a D-CLIX centre code.
+  //
+  // ── THIS ROUTE CANNOT MARK SOMEONE ELSE PRESENT (probed live on PROD 2026-08-12) ──
+  //
+  // Instructor RICK1 (id 2347, userType 2, isAllowAttendance: true), centre 3303, student
+  // 55674 "TEST". Every call `attendanceType: 2` under an INSTRUCTOR bearer token:
+  //
+  //   {"qrCode":"ST-00055674",      "tTimeId":null} → status -1 "Invalid QR Code"
+  //   {"qrCode":"55674",            "tTimeId":5250} → status -1 "Invalid QR Code"
+  //   {"qrCode":"RTT/KCP/2025/00212","tTimeId":5250} → status -1 "Invalid QR Code"
+  //
+  // Note what did NOT come back: "Invalid Instructor details". That is the answer the same
+  // call gives a *student* token, so the instructor identity check passes — it is the QR that
+  // is unrecognised. Combined with the 2026-07-29 result that a student `ST-` code is rejected
+  // under type 1 too, `qrCode` is only ever parsed as a CENTRE code: it says WHERE, never WHO.
+  // The WHO always comes from the bearer token, which is why the schema has no studentId.
+  //
+  // So /Attendance/Add can only ever check in the token holder, and a bulk "mark the register"
+  // feature is not buildable on this API. It needs a new backend route — see
+  // docs/superpowers/2026-07-29-tech-debt-audit.md. Until then the instructor screen shows the
+  // centre QR for students to scan and watches the register fill in (app/update-attendance.tsx).
+  // None of the probes above created a row (all returned `attendance: []`); centre 3303 still
+  // has zero attendance records.
   addAttendance: (body: { qrCode?: string | null; attendanceType?: number; tTimeId?: number | null }) =>
     http.post<AttendanceResult>("/Attendance/Add", {
       ...body,

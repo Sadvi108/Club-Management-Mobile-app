@@ -79,6 +79,16 @@ copy from `frontend/.env.example` if missing.
   **`TC-` + tcid padded to 8 digits** (`TC-00001945`); the student QR encodes `ST-00035842` and is NOT
   accepted. `data.status`: 0 = checked in, 1 = "Select your training class time" → resend with a
   `tTimeId` from `Listing/TrainingTimeByTcId/{tcid}`, -1 = not a centre code.
+  **This route can only ever check in the token holder** (probed on prod 2026-08-12 with instructor
+  RICK1): `attendanceType: 2` + a student's `ST-` code, bare id, or registration code all answer
+  `-1 "Invalid QR Code"` — and *not* the "Invalid Instructor details" a student token gets, so the
+  instructor check passes and it is the QR that is unrecognised. `qrCode` is only parsed as a
+  CENTRE code: it says WHERE, never WHO. A bulk "mark the register" feature needs a new backend
+  route; until then `app/update-attendance.tsx` shows the class list + the centre QR to scan.
+  **`/Reports/Attendance` is self-scoped the same way** — instructor RICK1 gets 0 rows with *no
+  filters at all*, while student 89623 (in that instructor's own roster for centre 1639) sees
+  their two "Present" rows there via their own token. So `r-attendance.tsx` is permanently empty
+  for instructors, and an instructor-facing register board is not possible either.
 - Receipt/invoice PDF (public): `GET /Utilities/ReceiptAsPDF/{clubId}/0/{invoiceId}` (the id from
   Reports/Receipts is an **invoiceId** → use the 3rd slot, not paymentId, or you get a BLANK PDF).
 - Profile edit + photo: `POST /Profile/UpdateProfile` multipart (PascalCase fields + `files` photo →

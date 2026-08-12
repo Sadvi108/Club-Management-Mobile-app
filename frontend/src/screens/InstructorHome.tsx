@@ -26,7 +26,11 @@ type Tile = { id: string; label: string; icon: any; color: string };
 const TILES: Tile[] = [
   { id: "training-time", label: "Training Time", icon: "time-outline", color: "#F59E0B" },
   { id: "activities", label: "Activities", icon: "pulse-outline", color: "#10B981" },
-  { id: "update-attendance", label: "Update Attendance", icon: "checkmark-done-circle-outline", color: "#4F46E5" },
+  // "Update Attendance" would be a lie: the attendance subsystem is self-scoped in both
+  // directions — /Attendance/Add only ever checks in the token holder, and /Reports/Attendance
+  // returns nothing to an instructor. The screen shows the class list + the centre QR students
+  // scan. See the contract notes on api.addAttendance / api.attendanceReport for the prod probes.
+  { id: "update-attendance", label: "Class Check-In", icon: "checkmark-done-circle-outline", color: "#4F46E5" },
   { id: "receipt", label: "Receipt", icon: "receipt-outline", color: "#0EA5E9" },
   { id: "grading-schedule", label: "Grading Schedule", icon: "school-outline", color: "#9333EA" },
   { id: "tournament-schedule", label: "Tournament Schedule", icon: "trophy-outline", color: "#EF4444" },
