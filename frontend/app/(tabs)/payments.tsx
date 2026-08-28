@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as WebBrowser from "expo-web-browser";
 import * as ImagePicker from "expo-image-picker";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../../src/theme";
 import { notify } from "../../src/ui/dialogs";
 import { SkeletonList } from "../../src/ui/skeleton";
@@ -49,6 +50,7 @@ function fmtDate(iso?: string) {
 }
 
 export default function Payments() {
+  const router = useRouter();
   const { colors, shadow, mode } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
   const { user, apiEnv } = useAuth();
@@ -311,6 +313,20 @@ export default function Payments() {
                 );
               })}
           </ScrollView>
+        )}
+
+        {/* Auto Pay entry point. UI shell — see src/payments/autopay.ts. */}
+        {seg === "pay" && (
+          <TouchableOpacity style={styles.autopayRow} onPress={() => router.push("/autopay")} testID="pay-autopay">
+            <View style={styles.autopayIcon}>
+              <Ionicons name="sync-circle-outline" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.autopayTitle} numberOfLines={1}>Auto Pay</Text>
+              <Text style={styles.autopaySub} numberOfLines={1}>Settle your fees automatically each month</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
         )}
 
         {seg === "pay" && (
@@ -838,6 +854,29 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     emptyTxt: { color: colors.textSecondary, fontSize: 13, textAlign: "center", marginVertical: 30 },
 
     // Account switcher chips (Task 5)
+    autopayRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      backgroundColor: colors.surface,
+      padding: 13,
+      borderRadius: radius.md,
+      marginBottom: 14,
+      ...shadow.soft,
+      borderWidth: mode === "dark" ? 1 : 0,
+      borderColor: colors.border,
+    },
+    autopayIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.surfaceAlt,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    autopayTitle: { fontSize: 13, fontWeight: "700", color: colors.textPrimary },
+    autopaySub: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+
     chipRow: { gap: 8, paddingBottom: 12 },
     chip: {
       flexDirection: "row",

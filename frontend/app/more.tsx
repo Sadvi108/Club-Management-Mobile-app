@@ -28,6 +28,7 @@ const SECTIONS: { title: string; items: Option[] }[] = [
       { id: "feesdue", label: "Fees Due", icon: "wallet", color: "#EF4444", route: "/(tabs)/payments" },
       { id: "payments", label: "Payment History", icon: "receipt", color: "#14B8A6", route: "/(tabs)/payments" },
       { id: "prepay", label: "Advance Payment", icon: "card", color: "#8B5CF6", route: "/(tabs)/payments" },
+      { id: "autopay", label: "Auto Pay", icon: "sync-circle", color: "#0EA5E9", route: "/autopay" },
       { id: "purchase", label: "Purchase Request", icon: "bag-handle", color: "#F59E0B", route: "/purchase-request" },
       { id: "purchases", label: "My Purchases", icon: "bag-check", color: "#F97316", route: "/purchases" },
     ],
