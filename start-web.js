@@ -16,10 +16,10 @@ const proxy = path.join(frontend, "scripts", "cors-proxy.js");
 const proxyProc = spawn(process.execPath, [proxy], { cwd: frontend, stdio: "inherit", env: process.env });
 
 // 2) Expo web dev server on :8081
-const expoProc = spawn(process.execPath, [cli, "start", "--web", "--port", "8081"], {
+const expoProc = spawn(process.execPath, [cli, "start", "--web", "--port", "8081", "--non-interactive"], {
   cwd: frontend,
   stdio: "inherit",
-  env: process.env,
+  env: { ...process.env, CI: "1" },
 });
 
 function shutdown(code) {

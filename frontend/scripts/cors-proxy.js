@@ -105,13 +105,23 @@ const server = http.createServer((req, res) => {
     );
 
     upReq.on("error", (e) => {
-      res.writeHead(502, { ...cors, "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "proxy_upstream_failed", target: target.href, message: String(e && e.message) }));
+      if (!res.headersSent) {
+        try {
+          res.writeHead(502, { ...cors, "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "proxy_upstream_failed", target: target.href, message: String(e && e.message) }));
+        } catch {}
+      } else {
+        try { res.destroy(e); } catch {}
+      }
     });
 
     if (body.length) upReq.write(body);
     upReq.end();
   }
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("CORS proxy non-fatal error:", err?.message || err);
 });
 
 server.listen(PORT, () => {
