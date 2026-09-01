@@ -31,6 +31,7 @@ function ThemedStack() {
         <Stack.Screen name="attendance" options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="progress" />
         <Stack.Screen name="events" />
+        <Stack.Screen name="competition" />
         <Stack.Screen name="qr-scan" options={{ presentation: "modal", animation: "fade_from_bottom" }} />
         <Stack.Screen name="book-class" options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="more" />
