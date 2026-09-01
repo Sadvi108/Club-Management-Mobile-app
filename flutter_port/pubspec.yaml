@@ -1,0 +1,45 @@
+name: dclix_app
+description: D-Clix — Premium sports academy student app (Flutter port).
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # Navigation
+  go_router: ^14.6.2
+
+  # State management
+  provider: ^6.1.2
+
+  # UI & assets
+  google_fonts: ^6.2.1
+  cached_network_image: ^3.4.1
+  flutter_svg: ^2.0.16
+
+  # Useful helpers
+  intl: ^0.19.0
+  percent_indicator: ^4.2.4
+
+  # QR (when you wire up the real scanner)
+  mobile_scanner: ^5.2.3
+
+  # Persistence (theme choice, etc.)
+  shared_preferences: ^2.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+  # Download the logo to assets/images/logo.png before running:
+  # https://customer-assets.emergentagent.com/job_training-portal-126/artifacts/d0r3ioz1_dclix%20logo%202026.png

@@ -1,0 +1,65 @@
+name: Build Android APK
+
+# Builds an installable Android APK on GitHub's runners (no local Android SDK / Expo
+# login needed) and publishes it. Push a tag like v1.0.0 to also attach it to a Release.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate native Android project (prebuild)
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
+
+      - name: Build release APK
+        working-directory: frontend/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dclix-android-apk
+          path: frontend/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: frontend/android/app/build/outputs/apk/release/app-release.apk
+          tag_name: ${{ github.ref_name }}
+          name: D-CLIX ${{ github.ref_name }}
+          generate_release_notes: true
