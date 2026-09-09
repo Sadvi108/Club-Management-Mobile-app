@@ -59,7 +59,7 @@ void main() {
       await expectLater(
         BoostPayment.start(const PaymentIntent(
           invoiceIds: [1542955],
-          purchaseItems: [PurchaseItem(id: 7)],
+          purchaseItems: [PurchaseItem(productId: 7, price: 50, totalAmount: 50)],
         )),
         throwsA(predicate((e) =>
             e is BoostPaymentException && e.message.contains('on their own'))),
@@ -70,7 +70,7 @@ void main() {
       await expectLater(
         BoostPayment.start(PaymentIntent(
           term: const TermPayment(studentIds: [1], year: 2026, months: [9]),
-          purchaseItems: const [PurchaseItem(id: 7)],
+          purchaseItems: const [PurchaseItem(productId: 7, price: 50, totalAmount: 50)],
         )),
         throwsA(isA<BoostPaymentException>()),
       );

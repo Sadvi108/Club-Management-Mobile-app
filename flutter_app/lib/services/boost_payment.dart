@@ -28,17 +28,41 @@ class TermPayment {
   Map<String, dynamic> toJson() => {'studentIds': studentIds, 'year': year, 'months': months};
 }
 
-/// One line of a purchase request (belt, uniform, exam fee...).
+/// One line of a purchase request — the API's `PurchaseRequestLineViewModel`.
+///
+/// Field names are the server's, verified against the UAT Swagger: `qty` and `price`,
+/// not `quantity`/`amount`. Getting these wrong would have the gateway bill a line the
+/// server read as zero.
 class PurchaseItem {
   final int id;
-  final int quantity;
-  final double? amount;
-  const PurchaseItem({required this.id, this.quantity = 1, this.amount});
+  final int purchaseRequestId;
+  final int productId;
+  final int qty;
+  final double price;
+  final double? unitTax;
+  final double? totalTax;
+  final double totalAmount;
+
+  const PurchaseItem({
+    this.id = 0,
+    this.purchaseRequestId = 0,
+    required this.productId,
+    this.qty = 1,
+    required this.price,
+    this.unitTax,
+    this.totalTax,
+    required this.totalAmount,
+  });
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'quantity': quantity,
-        if (amount != null) 'amount': amount,
+        'purchaseRequestId': purchaseRequestId,
+        'productId': productId,
+        'qty': qty,
+        'price': price,
+        'unitTax': unitTax,
+        'totalTax': totalTax,
+        'totalAmount': totalAmount,
       };
 }
 
