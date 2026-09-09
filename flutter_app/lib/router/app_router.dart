@@ -10,6 +10,7 @@ import '../screens/schedule_screen.dart';
 import '../screens/payments_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/attendance_screen.dart';
+import '../screens/book_class_screen.dart';
 import '../screens/progress_screen.dart';
 import '../screens/events_screen.dart';
 import '../screens/qr_scan_screen.dart';
@@ -224,6 +225,10 @@ final GoRouter appRouter = GoRouter(
         path: '/invoices',
         pageBuilder: (_, s) =>
             _fadeThrough(s.pageKey, const OutstandingInvoicesScreen())),
+    GoRoute(
+        path: '/book-class',
+        pageBuilder: (_, s) =>
+            _fadeThrough(s.pageKey, const BookClassScreen())),
     GoRoute(path: '/debug', builder: (_, __) => const DebugScreen()),
     GoRoute(
         path: '/attendance',
