@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ImageBackground, ActivityIndicator, useWindowDimensions,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground, ActivityIndicator, useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../../src/theme";
+import { Avatar } from "../../src/ui/avatar";
 import { useAuth } from "../../src/api/auth";
 import { api } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
@@ -82,13 +83,13 @@ function StudentHome() {
             <View style={styles.userRow}>
               {/* avatar with a status ring (green = active, red = inactive) per the design spec */}
               <View style={[styles.avatarRing, { borderColor: isActive ? "#4ADE80" : "#FCA5A5" }]}>
-                {user?.clubPic ? (
-                  <Image source={{ uri: user.clubPic }} style={styles.avatar} />
-                ) : (
-                  <View style={[styles.avatar, styles.avatarInitials]}>
-                    <Text style={styles.avatarInitialsTxt}>{initialsOf(user?.name)}</Text>
-                  </View>
-                )}
+                <Avatar
+                  uri={user?.clubPic}
+                  initials={initialsOf(user?.name)}
+                  imageStyle={styles.avatar}
+                  fallbackStyle={styles.avatarInitials}
+                  initialsStyle={styles.avatarInitialsTxt}
+                />
               </View>
               <View style={styles.nameCol}>
                 <Text style={styles.hi}>Hello,</Text>
@@ -107,13 +108,14 @@ function StudentHome() {
             </View>
             <View style={styles.headerActions}>
               {/* student's own photo (was the D-CLIX logo); falls back to initials */}
-              {user?.profilePic ? (
-                <Image source={{ uri: user.profilePic }} style={styles.headerLogo} testID="home-profile-pic" />
-              ) : (
-                <View style={[styles.headerLogo, styles.headerPicEmpty]}>
-                  <Text style={styles.headerPicTxt}>{initialsOf(user?.name)}</Text>
-                </View>
-              )}
+              <Avatar
+                uri={user?.profilePic}
+                initials={initialsOf(user?.name)}
+                imageStyle={styles.headerLogo}
+                fallbackStyle={styles.headerPicEmpty}
+                initialsStyle={styles.headerPicTxt}
+                testID="home-profile-pic"
+              />
               <TouchableOpacity style={styles.bell} testID="home-notification-btn" onPress={() => router.push("/notifications")}>
                 <Ionicons name="notifications-outline" size={20} color="#fff" />
                 {hasUnread && (

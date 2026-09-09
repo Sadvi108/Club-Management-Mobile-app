@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +15,7 @@ import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme } from "../theme";
 import { api } from "../api/endpoints";
 import { useApi } from "../api/useApi";
+import { Avatar } from "../ui/avatar";
 import { useAuth } from "../api/auth";
 import { useNotifications } from "../notifications/NotificationsProvider";
 import { notify } from "../ui/dialogs";
@@ -105,13 +105,14 @@ export default function InstructorHome() {
         <LinearGradient colors={colors.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerBg}>
           <View style={styles.headerRow}>
             <View style={styles.userRow}>
-              {user?.clubPic ? (
-                <Image source={{ uri: user.clubPic }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarEmpty]}>
-                  <Ionicons name="business" size={26} color="rgba(255,255,255,0.85)" />
-                </View>
-              )}
+              <Avatar
+                uri={user?.clubPic}
+                icon="business"
+                iconSize={26}
+                iconColor="rgba(255,255,255,0.85)"
+                imageStyle={styles.avatar}
+                fallbackStyle={styles.avatarEmpty}
+              />
               <View style={styles.nameCol}>
                 <Text style={styles.hi}>Welcome,</Text>
                 <Text style={styles.name} testID="instr-name" numberOfLines={1}>

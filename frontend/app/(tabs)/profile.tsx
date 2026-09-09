@@ -7,6 +7,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { radius, spacing, font, useTheme, LOGO_SOURCE } from "../../src/theme";
 import { confirmDialog } from "../../src/ui/dialogs";
+import { Avatar } from "../../src/ui/avatar";
 import { useAuth } from "../../src/api/auth";
 import { api, studentQrContent } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
@@ -117,13 +118,15 @@ export default function Profile() {
             </View>
             <View style={styles.profileTop}>
               <View style={styles.avatarRing}>
-                {user?.profilePic ? (
-                  <Image source={{ uri: user.profilePic }} style={styles.avatar} />
-                ) : (
-                  <View style={[styles.avatar, styles.avatarEmpty]}>
-                    <Ionicons name={isInstructor ? "school" : "person"} size={44} color="rgba(255,255,255,0.5)" />
-                  </View>
-                )}
+                <Avatar
+                  uri={user?.profilePic}
+                  icon={isInstructor ? "school" : "person"}
+                  iconSize={44}
+                  iconColor="rgba(255,255,255,0.5)"
+                  imageStyle={styles.avatar}
+                  fallbackStyle={styles.avatarEmpty}
+                  testID="profile-avatar"
+                />
               </View>
               <Text style={styles.name} numberOfLines={1}>{user?.name?.trim() || "Member"}</Text>
               <Text style={styles.id} numberOfLines={1}>{user?.code || user?.icNo}</Text>
