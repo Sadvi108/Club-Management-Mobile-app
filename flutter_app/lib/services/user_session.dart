@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'api_service.dart';
+import 'secure_store.dart';
 import 'response_utils.dart';
 
 class UserSession extends ChangeNotifier {
@@ -816,17 +817,33 @@ class UserSession extends ChangeNotifier {
   // Session persistence (survives app kill / cold start)
   // ---------------------------------------------------------------------------
   static const _kAuthKey = 'cm_auth_data_v1';
+  static const _kTokenKey = 'cm_auth_token_v1';
 
-  /// Save the current [authData] to disk so the next cold start can
-  /// restore the session without forcing a re-login.
+  /// Split a session map into the bearer token (keystore) and the profile (prefs).
+  /// Pure so the "no token in plaintext prefs" rule can be asserted in a test.
+  @visibleForTesting
+  static (String, Map<String, dynamic>) splitAuthForStorage(Map<String, dynamic> auth) {
+    final token = (auth['accessToken'] ?? '').toString();
+    final safe = Map<String, dynamic>.from(auth)..remove('accessToken');
+    return (token, safe);
+  }
+
+  /// Save the current [authData] so the next cold start can restore the session.
+  ///
+  /// The bearer token is written to the OS keystore, NOT to SharedPreferences. The prefs
+  /// blob is plaintext on disk, so persisting the whole map put a live production token
+  /// somewhere an ADB backup or another app on a rooted device could read it.
   Future<void> _persistAuth() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (authData == null) {
         await prefs.remove(_kAuthKey);
-      } else {
-        await prefs.setString(_kAuthKey, jsonEncode(authData));
+        await SecureStore.delete(_kTokenKey);
+        return;
       }
+      final (token, safe) = splitAuthForStorage(authData!);
+      if (token.isNotEmpty) await SecureStore.write(_kTokenKey, token);
+      await prefs.setString(_kAuthKey, jsonEncode(safe));
     } catch (e) {
       debugPrint('persistAuth failed: $e');
     }
@@ -846,11 +863,24 @@ class UserSession extends ChangeNotifier {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return false;
       final data = Map<String, dynamic>.from(decoded);
-      final token = (data['accessToken'] ?? '').toString();
+
+      // Normal path: the token lives in the keystore. Migration path: a blob written by a
+      // build that stored the token inline — move it across and rewrite the blob without
+      // it, so the plaintext copy does not survive on devices that already have one.
+      var token = (await SecureStore.read(_kTokenKey)) ?? '';
+      final inlineToken = (data['accessToken'] ?? '').toString();
+      if (inlineToken.isNotEmpty) {
+        token = inlineToken;
+        await SecureStore.write(_kTokenKey, token);
+        data.remove('accessToken');
+        await prefs.setString(_kAuthKey, jsonEncode(data));
+      }
       if (token.isEmpty) return false;
 
       ApiService.setToken(token);
-      authData = data;
+      // Callers read authData['accessToken'] (isLoggedIn, branch switching), so put it back
+      // on the in-memory copy only.
+      authData = Map<String, dynamic>.from(data)..['accessToken'] = token;
       loading = true;
       notifyListeners();
       await _loadAll();
@@ -882,6 +912,8 @@ class UserSession extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_kAuthKey);
     } catch (_) {}
+    // The token lives in the keystore now — clearing prefs alone would leave it behind.
+    await SecureStore.delete(_kTokenKey);
   }
 
   Future<bool> login({

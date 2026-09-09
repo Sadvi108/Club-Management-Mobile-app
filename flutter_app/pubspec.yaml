@@ -37,6 +37,8 @@ dependencies:
 
   # Persistence (theme choice, etc.)
   shared_preferences: ^2.3.3
+  # Encrypted storage for the bearer token (Keychain / Android Keystore).
+  flutter_secure_storage: ^9.2.4
   http: 1.2.2
 
   # BCPG payment gateway — HMAC-SHA256 Basic auth + in-app WebView for FPX flow.
