@@ -37,11 +37,27 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx | null>(null);
 
+/**
+ * The persisted profile, WITHOUT the bearer token.
+ *
+ * `AuthUser` mirrors the /Account/Authenticate response, so it carries `accessToken`.
+ * Persisting the object as-is wrote the JWT a second time into AsyncStorage — plaintext on
+ * device, `localStorage` on web — which cancelled out moving the token into the OS secure
+ * store in the first place. The token now lives ONLY in `secureStore`, and nothing reads it
+ * back off the profile: `loadSession()` takes it from the secure store.
+ */
+type StoredUser = Omit<AuthUser, "accessToken">;
+
+function stripToken(user: AuthUser): StoredUser {
+  const { accessToken: _token, ...rest } = user;
+  return rest;
+}
+
 function persist(session: Session | null) {
   // fire-and-forget: stores are async but callers don't need to wait
   if (session) {
     void secureStore.set(TOKEN_KEY, session.token);
-    void storage.set(USER_KEY, JSON.stringify(session.user));
+    void storage.set(USER_KEY, JSON.stringify(stripToken(session.user)));
   } else {
     void secureStore.remove(TOKEN_KEY);
     void storage.remove(USER_KEY);
@@ -56,7 +72,15 @@ async function loadSession(): Promise<Session | null> {
     const userRaw = await storage.get(USER_KEY);
     if (token && userRaw) {
       const user = JSON.parse(userRaw) as AuthUser;
-      if (user) return { token, user };
+      if (user) {
+        // Self-heal installs that were written by a build which stored the token inside the
+        // profile: drop it from the persisted copy on the next launch, so the plaintext copy
+        // does not linger on devices that already have one.
+        if ("accessToken" in user) {
+          void storage.set(USER_KEY, JSON.stringify(stripToken(user)));
+        }
+        return { token, user: { ...user, accessToken: token } };
+      }
     }
     // Migration: older builds stored { token, user } together in AsyncStorage.
     const legacy = await storage.get(LEGACY_SESSION_KEY);

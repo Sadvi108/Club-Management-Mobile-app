@@ -111,9 +111,30 @@ function isEnvelope(parsed: any): boolean {
   return "data" in parsed || (!!parsed.meta && typeof parsed.meta === "object");
 }
 
+/**
+ * Server error text that must never reach a user's screen.
+ *
+ * Club.Api returns raw persistence-layer errors in `meta.error` — e.g.
+ * `"Error converting data type nvarchar to int."` from /Reports/Reimbursement, and
+ * ADO.NET / stack-shaped strings elsewhere. Those name internal types, columns and
+ * frameworks, which is information disclosure and means nothing to a member. Anything
+ * matching here is replaced with a generic message; the original is still attached to the
+ * thrown ApiError (`.payload`) for logging and debugging.
+ */
+const INTERNAL_ERROR_SIGNATURE =
+  /(nvarchar|varchar|sql|sqlexception|ado\.net|stack trace|at [A-Za-z0-9_.]+\.[A-Za-z0-9_]+\(|System\.|Microsoft\.|Npgsql|ORA-\d|constraint|column name|object reference not set|inner exception|\.cs:line)/i;
+
 function innerErrorMessage(parsed: any, code: number): string {
-  const msg = parsed?.meta?.error || parsed?.meta?.message || parsed?.message || parsed?.title;
-  return String(msg || `Request failed (${code})`).trim();
+  const raw = parsed?.meta?.error || parsed?.meta?.message || parsed?.message || parsed?.title;
+  const msg = String(raw || "").trim();
+  if (!msg) return `Request failed (${code})`;
+  // Leaked internals, or a wall of text that is plainly not a user-facing sentence.
+  if (INTERNAL_ERROR_SIGNATURE.test(msg) || msg.length > 200) {
+    return code >= 500
+      ? "The club server had a problem with that request. Please try again shortly."
+      : "That request couldn't be completed. Please check your details and try again.";
+  }
+  return msg;
 }
 
 async function request<T>(path: string, opts: Options = {}): Promise<T> {

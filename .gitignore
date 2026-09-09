@@ -2,7 +2,7 @@
 
 # IDE and editors
 .idea/
-.vscode/
+.vscode/*
 
 # Dependencies
 node_modules/
@@ -115,3 +115,16 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# Flutter/Dart build cache. `.dart_tool/chrome-device/` is a full Chrome PROFILE — it
+# contains Cookies, Login Data and Trust Tokens SQLite databases. 153 of those files were
+# committed to this repo; the credential tables happened to be empty, but a dev session
+# that signs in anywhere would populate them and they would be committed next time.
+.dart_tool/
+**/.dart_tool/
+
+# Editor settings stay local, but the shared run configuration is committed — it replaced
+# the tool-specific .claude/launch.json and is how the web preview is launched.
+# (The rule above must be `.vscode/*`, not `.vscode/`: git does not descend into an ignored
+# directory, so a negation for a file inside one never matches.)
+!.vscode/launch.json

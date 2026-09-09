@@ -160,7 +160,7 @@ token it works and 302s to `/Payment/Completed/Failed`.
 
 While probing the `PaymentMethod` enum on UAT, `PaymentMethod=3` returned `200` and immediately
 marked the invoice paid — it created **receipt #10100033, RM 85.00, "Cash"** against student
-`DARSHANMUTHU` for July-2026, with no payment taken. UAT data, reversible by an admin, but worth
+`the student test account` for July-2026, with no payment taken. UAT data, reversible by an admin, but worth
 knowing: an authenticated client can mark its own invoices paid as cash. Should be
 instructor/admin-only server-side.
 
@@ -238,7 +238,7 @@ payments are confirmed by **reconciliation** instead (see 6.4).
    row appeared.
 3. Otherwise `"unknown"` with an honest message. It never claims a payment it can't evidence.
 
-### 6.5 Verified live (web preview against UAT, student DARSHANMUTHU)
+### 6.5 Verified live (web preview against UAT, the student test account)
 
 - Advance Payment lists Aug–Dec 2026 as payable with `*`; two months → "Est. Amt 160.00",
   "Pay Now · ~RM 160.00"; sheet shows Boost + Bank-In only.
@@ -309,7 +309,7 @@ invalid message now tells the user which poster to scan. Verified in the web pre
 
 ### 7.1 UAT is not a staging copy — it is a second API over the live data
 
-Probed with a single token from `POST /Account/Authenticate` on UAT (student DARSHANMUTHU):
+Probed with a single token from `POST /Account/Authenticate` on UAT (the student test account):
 
 | Check | `apimac` (prod) | `apimacuat` (uat) |
 |---|---|---|

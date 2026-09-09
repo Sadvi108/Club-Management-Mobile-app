@@ -124,8 +124,13 @@ process.on("uncaughtException", (err) => {
   console.error("CORS proxy non-fatal error:", err?.message || err);
 });
 
-server.listen(PORT, () => {
-  console.log(`CORS proxy listening on http://localhost:${PORT}`);
+// Bind to loopback ONLY. `server.listen(PORT)` with no host binds 0.0.0.0, which put this
+// dev proxy on every network interface — anyone on the same Wi-Fi could relay requests to
+// the live production API through the developer's machine (and it forwards the caller's
+// Authorization header upstream). The log line always claimed localhost; now it is true.
+const HOST = process.env.PROXY_HOST || "127.0.0.1";
+server.listen(PORT, HOST, () => {
+  console.log(`CORS proxy listening on http://${HOST}:${PORT}`);
   for (const [k, v] of Object.entries(ENVIRONMENTS)) {
     console.log(`  /@${k}${k === DEFAULT_KEY ? " (default)" : ""} → ${v}`);
   }

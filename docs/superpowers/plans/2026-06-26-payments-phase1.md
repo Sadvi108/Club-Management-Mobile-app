@@ -16,9 +16,9 @@
 - **Node probes** run from the scratchpad and hit the proxy (`http://localhost:8082`) or the API directly. Auth helper used throughout:
 
 ```js
-// probe-auth.js (scratchpad) — returns a fresh bearer + user for DARSHANMUTHU
+// probe-auth.js (scratchpad) — returns a fresh bearer + user for the student test account
 const BASE = process.env.PROXY ? "http://localhost:8082" : "http://apimac.zyncbook.com";
-async function login(u = "DARSHANMUTHU", p = "1234") {
+async function login(u = TEST_USER, p = TEST_PASSWORD) {
   const r = await fetch(BASE + "/Account/Authenticate", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userType: 3, username: u, password: p, accessMethod: 0, branchId: 0 }),
@@ -29,7 +29,7 @@ async function login(u = "DARSHANMUTHU", p = "1234") {
 module.exports = { login };
 ```
 
-- Test accounts: `DARSHANMUTHU`/`1234` (11 invoices, RM 900 due), `Aunty1`/`1234` (siblings: TTT id 34655, KHAIRUL SHAMIN id 46908).
+- Test accounts: the student test account (11 invoices, RM 900 due), `Aunty1`/the test password (siblings: TTT id 34655, KHAIRUL SHAMIN id 46908).
 - Repo is **not** git-initialized yet — Task 0 fixes that so commit steps work.
 
 ---
@@ -508,7 +508,7 @@ Expected: exit 0.
 
 - [ ] **Step 3: Verify in the web preview**
 
-Ensure the `expo-web` preview is running (proxy + web). In the preview (mobile viewport), log in as `DARSHANMUTHU`/`1234`, open Payments. Screenshot.
+Ensure the `expo-web` preview is running (proxy + web). In the preview (mobile viewport), log in as the student test account, open Payments. Screenshot.
 Expected: "Pay / Prepay / History" segments; Pay shows the 11 invoices with checkboxes + "Invoice PDF" buttons; selecting invoices shows the bottom Pay bar with a running total. Click an "Invoice PDF" button → a PDF opens/downloads in a new browser tab (real `%PDF`). Click "History" → receipts with "Receipt PDF" buttons that also open real PDFs.
 
 - [ ] **Step 4: Commit**
@@ -624,7 +624,7 @@ Expected: exit 0.
 
 - [ ] **Step 5: Verify in preview**
 
-Log in as `Aunty1`/`1234` (has siblings). Payments → Pay: account chips show ROY + TTT + KHAIRUL SHAMIN; tapping a sibling reloads that account's invoices; selecting invoices from two accounts both appear in the bottom total. Prepay tab lists advance months (or the empty message). Screenshot each.
+Log in as `Aunty1`/the test password (has siblings). Payments → Pay: account chips show ROY + TTT + KHAIRUL SHAMIN; tapping a sibling reloads that account's invoices; selecting invoices from two accounts both appear in the bottom total. Prepay tab lists advance months (or the empty message). Screenshot each.
 Expected: account switching works; cart total spans accounts; prepay lists items or the empty state.
 
 - [ ] **Step 6: Commit**
