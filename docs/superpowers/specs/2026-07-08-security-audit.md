@@ -41,7 +41,7 @@ answer unlimited requests. **Fix (backend):** per-IP + per-token rate limits, es
 ## 3. Secrets management — are keys/tokens/credentials exposed?
 
 ✅ **Demo credentials no longer ship in release builds.** `login.tsx` prefilled real working
-accounts (`DARSHANMUTHU`/`1234`, instructor `929645`/`22222`) — shipped inside the public
+accounts (the student test account, the instructor test account) — shipped inside the public
 APK. Now gated behind `__DEV__`, so release builds ship **empty** fields. (Dev/web preview
 still prefills for convenience.)
 ✅ **`.gitignore` hardened.** Both ignore files silently failed to cover `.env`. Now all

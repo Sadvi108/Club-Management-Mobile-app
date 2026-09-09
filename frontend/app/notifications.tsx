@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,6 +10,7 @@ import { api } from "../src/api/endpoints";
 import { useApi } from "../src/api/useApi";
 import { useAuth } from "../src/api/auth";
 import { useNotifications } from "../src/notifications/NotificationsProvider";
+import { clearBadge } from "../src/notifications/service";
 import type { AppNotification } from "../src/api/types";
 
 function fmtWhen(iso?: string) {
@@ -37,6 +38,11 @@ export default function Notifications() {
   const [readIds, setReadIds] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Opening this screen IS reading them, so drop the app-icon badge the alerts set.
+  useEffect(() => {
+    void clearBadge();
+  }, []);
 
   // Instructor MyNotifications can come back without a `data` array — guard so .filter never throws.
   const items: AppNotification[] = Array.isArray(notif.data) ? notif.data : [];
@@ -83,18 +89,27 @@ export default function Notifications() {
     <View style={styles.root}>
       <SafeAreaView edges={["top"]} style={{ backgroundColor: colors.background }}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} hitSlop={8} onPress={() => safeBack(router)} testID="ntf-back">
-            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.backBtn} hitSlop={8} onPress={() => safeBack(router)} testID="ntf-back">
+              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+            </TouchableOpacity>
+            {/* balances the two-button action group on the right so the title stays centred */}
+            <View style={{ width: 42 }} />
+          </View>
           <View style={styles.titleWrap}>
             <Text style={styles.title}>Notifications</Text>
             {unreadCount > 0 && <Text style={styles.titleSub}>{unreadCount} unread</Text>}
           </View>
-          <TouchableOpacity style={styles.markAll} hitSlop={8} onPress={markAll} disabled={busy || unreadCount === 0} testID="ntf-mark-all">
-            {busy ? <ActivityIndicator size="small" color={colors.primary} /> : (
-              <Ionicons name="checkmark-done" size={20} color={unreadCount === 0 ? colors.textMuted : colors.primary} />
-            )}
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.markAll} hitSlop={8} onPress={markAll} disabled={busy || unreadCount === 0} testID="ntf-mark-all">
+              {busy ? <ActivityIndicator size="small" color={colors.primary} /> : (
+                <Ionicons name="checkmark-done" size={20} color={unreadCount === 0 ? colors.textMuted : colors.primary} />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.markAll} hitSlop={8} onPress={() => router.push("/notification-settings")} testID="ntf-settings">
+              <Ionicons name="options-outline" size={20} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
 
@@ -153,6 +168,7 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
     root: { flex: 1, backgroundColor: colors.background },
     header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: 10 },
     backBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surfaceAlt, alignItems: "center", justifyContent: "center" },
+    headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
     titleWrap: { flex: 1, alignItems: "center" },
     title: { ...font.h3, color: colors.textPrimary },
     titleSub: { fontSize: 11, color: colors.primary, fontWeight: "700", marginTop: 1 },

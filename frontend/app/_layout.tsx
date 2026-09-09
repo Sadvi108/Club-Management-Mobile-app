@@ -36,6 +36,7 @@ function ThemedStack() {
         <Stack.Screen name="book-class" options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="more" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="notification-settings" />
         <Stack.Screen name="edit-profile" />
         <Stack.Screen name="student-details" />
         <Stack.Screen name="purchases" />

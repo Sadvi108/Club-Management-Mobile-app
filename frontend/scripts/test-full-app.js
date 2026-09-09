@@ -95,7 +95,7 @@ async function runFullTest() {
       recordResult(vp.name, 'Auth', 'Login Screen', 'PASS', 'Brand header, Student/Instructor tabs, form inputs present', shot);
 
       // ----------------------------------------------------
-      // 2. SIGN IN AS STUDENT (DARSHANMUTHU)
+      // 2. SIGN IN AS STUDENT (uses whatever the login screen is prefilled with)
       // ----------------------------------------------------
       console.log('--- 2. Signing In (Student) ---');
       await safeClick(page, 'login-submit-button', 4000);

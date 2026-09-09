@@ -64,7 +64,7 @@ async function runTestSuite() {
       logResult('Auth', 'Login Screen', vp.name, 'PASS', 'Rendered with Student/Instructor options');
 
       // Click Sign In
-      console.log('2. Signing in as DARSHANMUTHU...');
+      console.log('2. Signing in as the test student...');
       const signInBtn = await page.$('[data-testid="login-submit-button"]') || 
                         await page.evaluateHandle(() => {
                           const buttons = Array.from(document.querySelectorAll('div[role="button"], button'));

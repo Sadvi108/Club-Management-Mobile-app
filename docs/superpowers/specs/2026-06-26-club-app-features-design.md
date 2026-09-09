@@ -105,7 +105,7 @@ A Reports-style header card — **Height / Weight / BMI / Blood Group** — from
 
 - **Web preview (localhost:8081):** verify invoice list + account switcher + prepay listing + **invoice/receipt PDF download (blob)** + notifications list/thread + Quick Access nav + health stats + edit-profile round-trip. The proxy must forward `ReceiptAsPDF` (binary) correctly.
 - **Native-only (verified via logs / device):** Billplz gateway browser handoff, `Payment/Completed` confirm, `expo-file-system` download, `expo-image-picker` upload.
-- Use test accounts: student `DARSHANMUTHU`/`1234`, `Aunty1`/`1234` (has siblings TTT, KHAIRUL SHAMIN).
+- Use test accounts: student the student test account, `Aunty1`/the test password (has siblings TTT, KHAIRUL SHAMIN).
 
 ## Open Items (resolved at implementation, not blockers)
 

@@ -163,6 +163,13 @@ export const api = {
   myClubStats: () => http.get<IdValueText[]>("/Profile/MyClubStats"),
   myNotifications: () => http.get<AppNotification[]>("/Profile/MyNotifications"),
   unreadNotificationCount: () => http.get<number>("/Profile/MyUnreadNotificationCount"),
+  /**
+   * DO NOT RENDER THIS. The route is NOT scoped to the caller: it returns the whole
+   * broadcast batch for the group, including other members' rows. Re-probed on prod
+   * 2026-09-09 with the student token — one groupId came back with 32 rows naming 30
+   * different students. Deliberately unused; a conversation is built from the caller's
+   * own MyNotifications rows instead (see app/chat-thread.tsx).
+   */
   notificationDetails: (groupId: string) =>
     http.get<AppNotification[]>(`/Profile/NotificationDetails/${encodeURIComponent(groupId)}`),
   markNotificationRead: (id: number) =>
@@ -454,7 +461,7 @@ export const api = {
 
   // ── Attendance (self check-in via scanned training-centre QR) ──
   //
-  // Contract probed live on UAT 2026-07-29 (student DARSHANMUTHU, centre 1945):
+  // Contract probed live on UAT 2026-07-29 (the student test account, centre 1945):
   //
   //   attendanceType 1 = student self check-in with the CENTRE QR  ← what the scanner uses
   //   attendanceType 2 = instructor marking (rejects a student token: "Invalid Instructor details")

@@ -25,9 +25,13 @@ function fmtTime(iso: string) {
 // (the API keeps no sender-side copy — see the design doc).
 export default function ChatThread() {
   const router = useRouter();
-  const { g, t } = useLocalSearchParams<{ g?: string; t?: string }>();
+  const { g, t, ro } = useLocalSearchParams<{ g?: string; t?: string; ro?: string }>();
   const threadKey = g || HELPDESK_THREAD;
   const isHelpdesk = threadKey === HELPDESK_THREAD;
+  // Set by the thread list when the conversation has no real groupId to reply into.
+  // Reply2Notification returns 200 for any groupId, so sending here would look like it
+  // worked and then go nowhere — show the messages, hide the composer.
+  const readOnly = ro === "1" && !isHelpdesk;
   const { colors, shadow, mode } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(colors, shadow, mode), [colors, shadow, mode]);
@@ -82,7 +86,7 @@ export default function ChatThread() {
 
   async function send() {
     const text = draft.trim();
-    if (!text || sending || !user?.id) return;
+    if (!text || sending || !user?.id || readOnly) return;
     setSending(true);
     setSendError(null);
     try {
@@ -147,6 +151,14 @@ export default function ChatThread() {
         />
 
         {!!sendError && <Text style={styles.sendErr}>{sendError}</Text>}
+        {readOnly ? (
+          <View style={[styles.readOnly, { paddingBottom: Math.max(insets.bottom, 10) }]} testID="thread-readonly">
+            <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.readOnlyTxt}>
+              This announcement can&apos;t be replied to. Use the Club Help Desk to start a conversation.
+            </Text>
+          </View>
+        ) : (
         <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 10) }]}>
           <TextInput
             style={styles.input}
@@ -166,6 +178,7 @@ export default function ChatThread() {
             {sending ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="send" size={18} color="#fff" />}
           </TouchableOpacity>
         </View>
+        )}
       </KeyboardAvoidingView>
     </View>
   );
@@ -194,6 +207,8 @@ function createStyles(colors: any, shadow: any, mode: "light" | "dark") {
 
     sendErr: { color: colors.danger, fontSize: 12, paddingHorizontal: spacing.xl, paddingBottom: 4 },
     composer: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: spacing.lg, paddingTop: 8, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+    readOnly: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: spacing.lg, paddingTop: 10, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
+    readOnlyTxt: { flex: 1, fontSize: 12, color: colors.textSecondary, lineHeight: 17 },
     input: { flex: 1, minHeight: 42, maxHeight: 120, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, paddingHorizontal: 14, paddingVertical: 10, color: colors.textPrimary, fontSize: 14 },
     sendBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   });

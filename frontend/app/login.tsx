@@ -19,11 +19,24 @@ import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { LOGO_URL, radius, spacing, useTheme } from "../src/theme";
+import { LOGO_SOURCE, radius, spacing, useTheme } from "../src/theme";
 import { notify } from "../src/ui/dialogs";
 import { useAuth } from "../src/api/auth";
 import { api } from "../src/api/endpoints";
 import type { IdValueText } from "../src/api/types";
+
+// Dev-only login prefill. Values come from frontend/.env (gitignored) and are empty unless
+// a developer sets them; EXPO_PUBLIC_* is inlined at build time, and CI never sets these, so
+// release builds compile to empty strings. See .env.example.
+const DEV_STUDENT = {
+  id: process.env.EXPO_PUBLIC_DEV_LOGIN_ID ?? "",
+  password: process.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD ?? "",
+};
+const DEV_INSTRUCTOR = {
+  id: process.env.EXPO_PUBLIC_DEV_INSTRUCTOR_ID ?? "",
+  password: process.env.EXPO_PUBLIC_DEV_INSTRUCTOR_PASSWORD ?? "",
+  clubCode: process.env.EXPO_PUBLIC_DEV_INSTRUCTOR_CLUB ?? "",
+};
 
 export default function Login() {
   const router = useRouter();
@@ -31,10 +44,13 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const { loginStudent, loginInstructor } = useAuth();
 
-  // Prefill demo credentials in dev builds ONLY. Production APKs ship with empty fields so a
-  // released app never carries working accounts. __DEV__ is false in release bundles.
-  const [studentId, setStudentId] = useState(__DEV__ ? "DARSHANMUTHU" : "");
-  const [password, setPassword] = useState(__DEV__ ? "1234" : "");
+  // Optional dev-only prefill, supplied through the gitignored .env — NEVER hardcoded.
+  // Working credentials used to sit in this file behind `__DEV__`. That keeps them out of
+  // release bundles but not out of the repository, and this repo is public, so the accounts
+  // were readable by anyone. Set EXPO_PUBLIC_DEV_LOGIN_* in frontend/.env if you want the
+  // fields prefilled locally; unset (and in CI) they are empty.
+  const [studentId, setStudentId] = useState(__DEV__ ? DEV_STUDENT.id : "");
+  const [password, setPassword] = useState(__DEV__ ? DEV_STUDENT.password : "");
   const [showPwd, setShowPwd] = useState(false);
   const [loginMode, setLoginMode] = useState<"student" | "instructor">("student");
   const [focus, setFocus] = useState<"id" | "pwd" | "club" | null>(null);
@@ -54,16 +70,12 @@ export default function Login() {
   const switchMode = (m: "student" | "instructor") => {
     setLoginMode(m);
     setError(null);
-    if (m === "instructor") {
-      if (__DEV__) {
-        setStudentId((v) => (v === "DARSHANMUTHU" ? "929645" : v));
-        setPassword((v) => (v === "1234" ? "22222" : v));
-        setClubCode((v) => v || "RTT");
-      }
-    } else if (__DEV__) {
-      setStudentId((v) => (v === "929645" ? "DARSHANMUTHU" : v));
-      setPassword((v) => (v === "22222" ? "1234" : v));
-    }
+    if (!__DEV__) return;
+    // Swap the prefill between the two dev accounts, leaving anything the user typed alone.
+    const [from, to] = m === "instructor" ? [DEV_STUDENT, DEV_INSTRUCTOR] : [DEV_INSTRUCTOR, DEV_STUDENT];
+    setStudentId((v) => (v === from.id ? to.id : v));
+    setPassword((v) => (v === from.password ? to.password : v));
+    if (m === "instructor") setClubCode((v) => v || DEV_INSTRUCTOR.clubCode);
   };
 
   const openBranchPicker = async () => {
@@ -132,7 +144,7 @@ export default function Login() {
           >
             {/* Top row: logo + theme toggle */}
             <View style={styles.brandRow}>
-              <Image source={{ uri: LOGO_URL }} style={styles.logoImg} />
+              <Image source={LOGO_SOURCE} style={styles.logoImg} />
               <Text style={styles.brand}>D-CLIX</Text>
               <View style={{ flex: 1 }} />
               <TouchableOpacity style={styles.themeBtn} onPress={toggle} testID="login-theme-toggle" hitSlop={8}>
@@ -228,7 +240,7 @@ export default function Login() {
                   testID="login-id-input"
                   value={studentId}
                   onChangeText={setStudentId}
-                  placeholder={loginMode === "student" ? "e.g. DARSHANMUTHU" : "e.g. 929645"}
+                  placeholder={loginMode === "student" ? "Student ID, phone or email" : "Instructor ID"}
                   placeholderTextColor={colors.textMuted}
                   style={styles.input}
                   autoCapitalize="none"

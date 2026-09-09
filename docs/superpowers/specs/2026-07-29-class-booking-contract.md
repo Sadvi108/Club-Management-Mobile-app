@@ -1,6 +1,6 @@
 # Class booking — API contract and app wiring, 2026-07-29
 
-Probed live on `https://apimacuat.zyncbook.com` as student `DARSHANMUTHU` (id 35842,
+Probed live on `https://apimacuat.zyncbook.com` as student `the student test account` (id 35842,
 club 68, centre 1945 "SMK KK2").
 
 ---

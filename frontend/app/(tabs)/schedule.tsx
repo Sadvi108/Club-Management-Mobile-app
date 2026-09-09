@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { radius, spacing, font, useTheme, LOGO_URL } from "../../src/theme";
+import { radius, spacing, font, useTheme, LOGO_SOURCE } from "../../src/theme";
 import { api, defaultRange } from "../../src/api/endpoints";
 import { useApi } from "../../src/api/useApi";
 import { ErrorState } from "../../src/ui/errorstate";
@@ -56,7 +56,7 @@ export default function Schedule() {
             <Text style={styles.title}>Schedule</Text>
             <Text style={styles.sub}>{monthLabel}</Text>
           </View>
-          <Image source={{ uri: LOGO_URL }} style={styles.logo} />
+          <Image source={LOGO_SOURCE} style={styles.logo} />
         </View>
       </SafeAreaView>
 

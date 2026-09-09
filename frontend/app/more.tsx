@@ -50,6 +50,7 @@ const SECTIONS: { title: string; items: Option[] }[] = [
       { id: "chat", label: "Chat Academy", icon: "chatbubbles", color: "#22C55E", route: "/chat" },
       { id: "helpdesk", label: "Help Desk", icon: "headset", color: "#0EA5E9", route: "/helpdesk" },
       { id: "notifications", label: "Notifications", icon: "notifications", color: "#F59E0B", route: "/notifications" },
+      { id: "notifsettings", label: "Notification Settings", icon: "options", color: "#64748B", route: "/notification-settings" },
     ],
   },
   {

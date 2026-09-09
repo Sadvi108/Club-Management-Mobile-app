@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "frontend",
+    "name": "D-CLIX",
     "slug": "frontend",
-    "version": "2.9.3",
+    "version": "2.10.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.dclix.clubapp",
-      "versionCode": 14,
+      "versionCode": 15,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
@@ -63,8 +63,12 @@
       [
         "expo-notifications",
         {
+          "icon": "./assets/images/notification-icon.png",
           "color": "#F97316",
-          "defaultChannel": "default"
+          "defaultChannel": "default",
+          "sounds": [
+            "./assets/sounds/dclix_alert.wav"
+          ]
         }
       ],
       "expo-secure-store"

@@ -5,7 +5,7 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { radius, spacing, font, useTheme, LOGO_URL } from "../../src/theme";
+import { radius, spacing, font, useTheme, LOGO_SOURCE } from "../../src/theme";
 import { confirmDialog } from "../../src/ui/dialogs";
 import { useAuth } from "../../src/api/auth";
 import { api, studentQrContent } from "../../src/api/endpoints";
@@ -139,7 +139,7 @@ export default function Profile() {
         <View style={styles.virtualId}>
           <View style={styles.vidLeft}>
             <View style={styles.vidBrandRow}>
-              <Image source={{ uri: LOGO_URL }} style={styles.vidLogo} />
+              <Image source={LOGO_SOURCE} style={styles.vidLogo} />
               <Text style={styles.vidBrand}>D-CLIX</Text>
             </View>
             <Text style={styles.vidName} numberOfLines={1}>{user?.name?.trim()}</Text>
