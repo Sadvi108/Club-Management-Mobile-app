@@ -28,6 +28,13 @@ type Thread = {
   preview: string;
   at?: string;
   unread: number;
+  /**
+   * False when the rows carry no groupId, so the key is a synthesised fallback.
+   * Reply2Notification answers 200 to ANY groupId — including one that matches nothing —
+   * so replying on such a thread would be echoed to the user and then silently dropped.
+   * Those threads open read-only instead.
+   */
+  replyable: boolean;
 };
 
 // Conversations = notification groups (server truth) merged with locally-sent messages.
@@ -64,6 +71,7 @@ export default function Chat() {
         preview: (newer ? `You: ${newer.text}` : last.value || "").trim(),
         at: newer ? newer.at : last.notifyDate,
         unread: msgs.filter((m) => !m.isRead).length,
+        replyable: msgs.some((m) => !!m.groupId),
       });
     }
     list.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
@@ -73,8 +81,10 @@ export default function Chat() {
   const helpdeskSent = sentMap[HELPDESK_THREAD] ?? [];
   const helpdeskLast = helpdeskSent[helpdeskSent.length - 1];
 
-  const openThread = (key: string, title: string) =>
-    router.push(`/chat-thread?g=${encodeURIComponent(key)}&t=${encodeURIComponent(title)}` as any);
+  const openThread = (key: string, title: string, replyable = true) =>
+    router.push(
+      `/chat-thread?g=${encodeURIComponent(key)}&t=${encodeURIComponent(title)}${replyable ? "" : "&ro=1"}` as any
+    );
 
   return (
     <View style={styles.root}>
@@ -121,7 +131,7 @@ export default function Chat() {
         )}
 
         {threads.map((t) => (
-          <TouchableOpacity key={t.key} style={styles.row} activeOpacity={0.85} onPress={() => openThread(t.key, t.title)} testID={`chat-thread-${t.key}`}>
+          <TouchableOpacity key={t.key} style={styles.row} activeOpacity={0.85} onPress={() => openThread(t.key, t.title, t.replyable)} testID={`chat-thread-${t.key}`}>
             <View style={styles.avatar}>
               <Ionicons name="chatbubble-ellipses-outline" size={19} color={colors.primary} />
             </View>
