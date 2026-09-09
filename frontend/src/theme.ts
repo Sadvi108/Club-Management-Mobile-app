@@ -166,8 +166,15 @@ export const font = {
 export const colors = lightColors;
 export const shadow = makeShadow(lightColors);
 
-export const LOGO_URL =
-  "https://customer-assets.emergentagent.com/job_training-portal-126/artifacts/d0r3ioz1_dclix%20logo%202026.png";
+/**
+ * The D-CLIX mark, bundled with the app.
+ *
+ * This used to be a URL on a third-party asset CDN, fetched at runtime by four screens —
+ * including the sign-in and splash screens, so the first thing a user saw depended on an
+ * outside host being up and serving the expected bytes. It is now a local asset: no
+ * network round-trip, works offline, and nobody else controls what renders here.
+ */
+export const LOGO_SOURCE = require("../assets/branding/logo.png");
 
 // ── Theme Context ──────────────────────────────────────────────────────────
 type ThemeMode = "light" | "dark";

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { View, Text, StyleSheet, Image, Animated, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { LOGO_URL, useTheme, font } from "../src/theme";
+import { LOGO_SOURCE, useTheme, font } from "../src/theme";
 import { useAuth } from "../src/api/auth";
 
 export default function Splash() {
@@ -55,7 +55,7 @@ export default function Splash() {
         <View style={styles.logoWrap}>
           <Animated.View style={[styles.ring, { transform: [{ rotate }], borderTopColor: colors.primary }]} />
           <View style={[styles.logoCircle, { backgroundColor: mode === "dark" ? "#17171A" : "#FFFFFF", borderColor: colors.primary }]}>
-            <Image source={{ uri: LOGO_URL }} style={styles.logoImg} />
+            <Image source={LOGO_SOURCE} style={styles.logoImg} />
           </View>
         </View>
         <Text style={[styles.brand, { color: colors.textPrimary }]}>D-CLIX</Text>
