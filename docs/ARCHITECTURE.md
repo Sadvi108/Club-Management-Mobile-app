@@ -1,4 +1,4 @@
-# CLAUDE.md — D-CLIX Club Management App
+# Architecture & working notes — D-CLIX Club Management App
 
 Expo Router React Native app for a martial-arts club, wired to the live **Club.Api**
 backend. Repo is PRIVATE — keep it private (docs + prefilled login hold test creds).
@@ -30,7 +30,6 @@ checklist: `docs/superpowers/specs/2026-07-28-uat-boost-gateway-integration.md` 
 - `frontend/` — the app. Screens in `frontend/app`, API layer in `frontend/src/api`, theme in `frontend/src/theme.ts`.
 - `frontend/scripts/cors-proxy.js` — local CORS proxy (port 8082) the web preview needs (API is plain HTTP).
 - `docs/superpowers/` — design specs + plans.
-- `backend/`, `flutter_port/` — unused legacy (mock).
 
 ## Run the web preview (iPhone layout, localhost:8081)
 From `frontend/` (no yarn on the dev box; `npx expo` is broken — use the node cli):
@@ -39,7 +38,8 @@ npm install
 node node_modules/expo/bin/cli start --web --port 8081
 ```
 The CORS proxy must also run (port 8082) for browser API calls. `start-web.js` at the repo root
-launches both (`node start-web.js`, also what `.claude/launch.json` / the preview tool runs).
+launches both (`node start-web.js`); `.vscode/launch.json` runs the same thing from the VS Code
+debugger.
 Resize the preview to 375x812. NOTE: this dev box also has a copy of the launcher one level up,
 outside the repo (`D:\Club-Management-Mobile-app-main (1)\start-web.js`) — that one is
 machine-specific and is what the preview tool currently uses; the tracked copy is the portable one.
@@ -56,7 +56,7 @@ copy from `frontend/.env.example` if missing.
   has no hooks, so push manually there.
 
 ## API quick reference
-- Auth `POST /Account/Authenticate` (multipart? no — JSON). Bearer token. Student `DARSHANMUTHU`/`1234` (userType 3).
+- Auth `POST /Account/Authenticate` (multipart? no — JSON). Bearer token. Student test account (userType 3) — credentials in the team password manager, not here.
 - Payments: `POST /Outstanding/PayInvoices` is **multipart** — `InvoiceIds` (repeated) + `PaymentMethod`
   (2=Online → returns gateway URL; 1=Bank-In → requires `files` slip; **3=Cash, settles the invoice
   instantly with no payment — don't send it**).
@@ -89,6 +89,24 @@ copy from `frontend/.env.example` if missing.
   filters at all*, while student 89623 (in that instructor's own roster for centre 1639) sees
   their two "Present" rows there via their own token. So `r-attendance.tsx` is permanently empty
   for instructors, and an instructor-facing register board is not possible either.
+- Notifications / alerts: **there is NO push-token registration route** — the live Swagger
+  (`/swagger/v1/swagger.json`, 69 paths) has only `MyNotifications`, `MyUnreadNotifications`,
+  `MyUnreadNotificationCount`, `NotificationDetails`, `Reply2Notification`,
+  `UpdateNotification2Read`, `UpdateNotificationAction`. Server-initiated FCM/APNs is therefore
+  impossible; the app polls and raises **local** OS notifications instead (60 s foreground,
+  ~15 min background). `/Profile/MyNotifications` rows (probed prod 2026-09-03, the student test account):
+  **`notificationType` is ALWAYS `""`**, `text` is a short subject from a fixed set
+  (`Reminder`, `Class Activity`, `ClassReplacement`), and the real content is `value` — in
+  **Malay** ("Sila jelaskan yuran tertunggak RM85.00 anda secepat mungkin"). So
+  `categorise()` in `src/notifications/prefs.ts` must match the BODY and both languages;
+  keying off `notificationType` files everything under "general".
+  Sound: `assets/sounds/dclix_alert.wav` is bundled by the expo-notifications plugin's
+  `sounds` array. On Android 8+ the **channel** owns sound/vibration and is frozen at
+  creation, so loudness is baked into the channel id (`dclix-<category>-<alert|vibrate|quiet>-v1`,
+  created lazily) and `channelId` must go on the **trigger**, not the content — `trigger: null`
+  silently falls back to the default channel and loses the sound. Web `Notification` is silent
+  by spec, so `src/notifications/sound.ts` synthesises the same chime via Web Audio (needs one
+  user gesture first).
 - Receipt/invoice PDF (public): `GET /Utilities/ReceiptAsPDF/{clubId}/0/{invoiceId}` (the id from
   Reports/Receipts is an **invoiceId** → use the 3rd slot, not paymentId, or you get a BLANK PDF).
 - Profile edit + photo: `POST /Profile/UpdateProfile` multipart (PascalCase fields + `files` photo →

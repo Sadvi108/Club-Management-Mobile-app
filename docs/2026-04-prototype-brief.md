@@ -1,3 +1,8 @@
+> **Historical — superseded.** This is the original April 2026 prototype brief
+> ("Apex Academy", light theme, mock data, no backend). The shipped app is D-CLIX:
+> orange/black, wired to the live Club.Api, and `src/mockData.ts` no longer exists.
+> Kept for provenance. For current behaviour see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 # Apex Academy — Sports Academy Student App (PRD)
 
 ## Overview
