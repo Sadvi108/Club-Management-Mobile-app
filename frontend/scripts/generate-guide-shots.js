@@ -15,6 +15,8 @@ const OUT = process.argv[2] || "assets/guide";
 const SHOT_WIDTH = 480; // 2x the ~240pt the guide renders them at
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+const DEMO_LOGIN_ID = "alex.tan@email.com";
+
 const DEMO = {
   name: "ALEX TAN",
   code: "DEMO1/KLG/2025/00042",
@@ -63,15 +65,19 @@ const SCREENS = [
   await page.evaluate(() => {
     const id = document.querySelector('[data-testid="login-id-input"]');
     const pw = document.querySelector('[data-testid="login-password-input"]');
-    if (id) id.value = "alex.tan@email.com";
+    if (id) id.value = DEMO_LOGIN_ID;
     if (pw) pw.value = "";
   });
   await sleep(300);
   await page.screenshot({ path: path.join(OUT, "login.png") });
-  const credLeak = await page.evaluate(() =>
-    Array.from(document.querySelectorAll("input")).map((i) => i.value).join(" ")
-  );
-  console.log("captured login" + (/DARSHANMUTHU|1234/.test(credLeak) ? "  !! CREDENTIAL STILL VISIBLE" : "  (credentials blanked)"));
+  const credLeak = await page.evaluate(() => {
+    const pw = document.querySelector('[data-testid="login-password-input"]');
+    const id = document.querySelector('[data-testid="login-id-input"]');
+    return { pw: pw ? pw.value : "", id: id ? id.value : "" };
+  });
+  const blanked = credLeak.pw === "" && credLeak.id === DEMO_LOGIN_ID;
+  console.log("captured login" + (blanked ? "  (credentials blanked)" : "  !! CREDENTIAL STILL VISIBLE"));
+  if (!blanked) throw new Error("refusing to continue: the login capture still shows real credentials");
 
   // 2. Sign in.
   await page.evaluate(() => document.querySelector('[data-testid="login-submit-button"]')?.click());
