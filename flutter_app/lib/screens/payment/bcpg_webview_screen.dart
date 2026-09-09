@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
-import '../../services/bcpg_service.dart';
 
 /// In-app WebView that drives the BCPG payment flow.
 ///
@@ -49,18 +48,18 @@ class _BcpgWebViewScreenState extends State<BcpgWebViewScreen> {
     return url.contains(widget.returnUrlNeedle);
   }
 
+  /// The gateway sent the browser back. Hand control to the caller.
+  ///
+  /// This screen deliberately does NOT decide the outcome. The gateway's redirect carries
+  /// the BROWSER back, not a trustworthy result, and the app previously asked Boost
+  /// directly using a merchant secret compiled into the APK. The caller now confirms
+  /// through the backend (BoostPayment.confirm), which verifies and reconciles.
   Future<void> _handleReturn() async {
     if (_returned) return;
     _returned = true;
     if (!mounted) return;
     setState(() => _verifying = true);
-    final result = await BcpgService.pollUntilTerminal(widget.referenceId);
-    if (!mounted) return;
-    Navigator.of(context).pop({
-      'status': (result['status'] ?? 'unknown').toString(),
-      'verification': result,
-      'referenceId': widget.referenceId,
-    });
+    Navigator.of(context).pop({'returned': true, 'referenceId': widget.referenceId});
   }
 
   Future<bool> _confirmAbort() async {

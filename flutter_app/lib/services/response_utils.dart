@@ -1,5 +1,21 @@
-/// Shared helpers for turning varied API JSON responses into a clean
-/// list of record maps and reading fields out of them.
+// Shared helpers for turning varied API JSON responses into a clean
+// list of record maps and reading fields out of them.
+
+/// Unwrap the backend's `{status, meta, data}` envelope.
+///
+/// `data` is omitted entirely when a route has nothing to return (e.g.
+/// `GET /Listing/DropdownListByType/6` -> `{"status":200,"meta":{"code":200}}`), so keying
+/// off the presence of `data` alone hands callers the envelope itself where they expected a
+/// payload. Anything carrying a `meta` block is an envelope; its absent `data` unwraps to
+/// null. Responses without `meta` (e.g. `/Bcpg/VerifyPayment` -> `{status: "NotFound"}`)
+/// are returned untouched.
+dynamic unwrapData(dynamic resp) {
+  if (resp is Map) {
+    if (resp.containsKey('data')) return resp['data'];
+    if (resp['meta'] is Map) return null;
+  }
+  return resp;
+}
 
 /// Recursively locate the first List of records in an API response.
 /// Handles `{data: [...]}`, `{data: {rows: [...]}}`, bare lists, etc.

@@ -5,6 +5,28 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   static const String baseUrl = 'http://apimac.zyncbook.com';
+
+  /// Host that serves the `/Bcpg` Boost routes on production's behalf.
+  ///
+  /// Probed on prod: `POST /Bcpg/PayInvoices` answers 404 there — the four Boost routes are
+  /// not deployed to production yet — while the UAT deployment serves them against the SAME
+  /// database, so a token issued by prod authenticates and the same invoice ids come back.
+  /// ONLY `/Bcpg/*` is sent here; auth, invoices and everything else stay on [baseUrl].
+  ///
+  /// Delete this the moment `/Bcpg` ships to production. A cross-host payment path is a
+  /// stopgap, not the destination.
+  static const String boostBaseUrl = 'https://apimacuat.zyncbook.com';
+
+  /// The Boost host currently serves a self-signed Plesk certificate, which phones reject.
+  /// Surfaced in the error message so a failure reads as a server problem, not a user one.
+  static const bool boostHostSelfSigned = true;
+
+  static bool isBoostPath(String endpoint) => endpoint.startsWith('/Bcpg');
+
+  /// Base URL for a given endpoint — Boost routes may live on a different host.
+  static String baseUrlFor(String endpoint) =>
+      isBoostPath(endpoint) ? boostBaseUrl : baseUrl;
+
   static String? _token;
 
   /// Network logging — only in debug builds. Release builds must not dump
@@ -28,7 +50,7 @@ class ApiService {
       };
 
   static Future<dynamic> get(String endpoint) async {
-    final url = Uri.parse('$baseUrl$endpoint');
+    final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 GET: $url');
     final response = await http.get(url, headers: _headers);
     _log('📥 Status: ${response.statusCode}');
@@ -37,7 +59,7 @@ class ApiService {
   }
 
   static Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
-    final url = Uri.parse('$baseUrl$endpoint');
+    final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 POST: $url');
     _log('📤 Body: ${jsonEncode(_redactForLog(body))}');
     final response =
@@ -50,7 +72,7 @@ class ApiService {
   /// Raw-bytes GET — for binary endpoints (e.g. ReceiptAsPDF returns a
   /// PDF, not JSON). Never json-decodes.
   static Future<Uint8List> getBytes(String endpoint) async {
-    final url = Uri.parse('$baseUrl$endpoint');
+    final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 GET(bytes): $url');
     final response = await http.get(url, headers: {
       if (_token != null) 'Authorization': 'Bearer $_token',
@@ -74,7 +96,7 @@ class ApiService {
   /// them so the receipt opens for every student/instructor, not just the
   /// ones whose gateway happens to stream raw bytes.
   static Future<Uint8List> getPdfSmart(String endpoint) async {
-    final url = Uri.parse('$baseUrl$endpoint');
+    final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 GET(pdf): $url');
     final response = await http.get(url, headers: {
       'Accept': 'application/pdf, application/json, */*',
@@ -173,7 +195,7 @@ class ApiService {
   /// (e.g. /Profile/UpdateProfile). Only non-empty string fields are sent.
   static Future<dynamic> postMultipart(
       String endpoint, Map<String, String> fields) async {
-    final url = Uri.parse('$baseUrl$endpoint');
+    final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 POST(multipart): $url');
     final req = http.MultipartRequest('POST', url);
     if (_token != null) req.headers['Authorization'] = 'Bearer $_token';
@@ -187,7 +209,7 @@ class ApiService {
   }
 
   static Future<dynamic> put(String endpoint, Map<String, dynamic> body) async {
-    final url = Uri.parse('$baseUrl$endpoint');
+    final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 PUT: $url');
     final response =
         await http.put(url, headers: _headers, body: jsonEncode(body));
@@ -197,7 +219,7 @@ class ApiService {
   }
 
   static Future<dynamic> delete(String endpoint) async {
-    final url = Uri.parse('$baseUrl$endpoint');
+    final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 DELETE: $url');
     final response = await http.delete(url, headers: _headers);
     _log('📥 Status: ${response.statusCode}');

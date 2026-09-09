@@ -41,8 +41,9 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   http: 1.2.2
 
-  # BCPG payment gateway — HMAC-SHA256 Basic auth + in-app WebView for FPX flow.
-  crypto: ^3.0.3
+  # Boost gateway — the checkout page opens in an in-app WebView. The HMAC signing
+  # (and the `crypto` dependency it needed) is gone: the backend holds the merchant
+  # secret now, so the app never signs anything.
   flutter_inappwebview: ^6.0.0
   nfc_manager: ^4.2.1
 
