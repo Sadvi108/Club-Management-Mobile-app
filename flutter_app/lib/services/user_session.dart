@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'api_service.dart';
 import 'secure_store.dart';
+import 'notification_service.dart';
 import 'response_utils.dart';
 
 class UserSession extends ChangeNotifier {
@@ -895,6 +896,7 @@ class UserSession extends ChangeNotifier {
       }
       _previousUnread = unreadNotifications;
       startNotificationPolling();
+      unawaited(NotificationService.requestPermission());
       _checkStoreVersion();
       _registerPushToken();
       return true;
@@ -972,6 +974,7 @@ class UserSession extends ChangeNotifier {
       await _loadAll();
       _previousUnread = unreadNotifications;
       startNotificationPolling();
+      unawaited(NotificationService.requestPermission());
       // Boot-time post-login extras (best-effort, never throw).
       _checkStoreVersion();
       _registerPushToken();
@@ -1233,6 +1236,18 @@ class UserSession extends ChangeNotifier {
       _previousUnread = newCount;
       notifyListeners();
 
+      // Raise real OS notifications (tray + sound), not just an in-app toast. The
+      // high-water mark is by notification id rather than the unread count, so a message
+      // the member reads on the web still alerts once here and never twice.
+      final list = notifications;
+      if (list != null && list.isNotEmpty) {
+        await NotificationService.alertForNew(
+          userId: currentStudentId ?? 0,
+          rows: list,
+        );
+      }
+
+      // Keep the in-app toast for when the app is already frontmost.
       if (newest != null) _showNotificationToast(newest);
     } catch (e) {
       debugPrint('Notification poll failed: $e');

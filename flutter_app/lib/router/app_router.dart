@@ -13,6 +13,7 @@ import '../screens/attendance_screen.dart';
 import '../screens/book_class_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/chat_thread_screen.dart';
+import '../screens/notification_settings_screen.dart';
 import '../screens/progress_screen.dart';
 import '../screens/events_screen.dart';
 import '../screens/qr_scan_screen.dart';
@@ -233,6 +234,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
         path: '/chat',
         pageBuilder: (_, s) => _fadeThrough(s.pageKey, const ChatScreen())),
+    GoRoute(
+        path: '/notification-settings',
+        pageBuilder: (_, s) =>
+            _fadeThrough(s.pageKey, const NotificationSettingsScreen())),
     GoRoute(path: '/debug', builder: (_, __) => const DebugScreen()),
     GoRoute(
         path: '/attendance',

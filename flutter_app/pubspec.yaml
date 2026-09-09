@@ -39,6 +39,9 @@ dependencies:
   shared_preferences: ^2.3.3
   # Encrypted storage for the bearer token (Keychain / Android Keystore).
   flutter_secure_storage: ^9.2.4
+  # OS notifications with a bundled sound (Android channels / iOS UNNotification).
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
   http: 1.2.2
 
   # Boost gateway — the checkout page opens in an in-app WebView. The HMAC signing
