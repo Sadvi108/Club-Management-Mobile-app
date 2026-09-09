@@ -236,6 +236,13 @@ class Api {
   static Future<dynamic> profileMyUnreadNotificationCount() =>
       ApiService.get('/Profile/MyUnreadNotificationCount');
 
+  /// DO NOT RENDER THIS.
+  ///
+  /// The route is NOT scoped to the caller: it returns the whole broadcast batch for the
+  /// group, including other members' rows. Probed on prod with a student token — one
+  /// groupId came back with 32 rows naming 30 different students and their fee amounts.
+  /// Build a conversation from the caller's own MyNotifications rows instead
+  /// (see lib/services/chat_store.dart, buildThread).
   static Future<dynamic> profileNotificationDetails(Object groupId) =>
       ApiService.get('/Profile/NotificationDetails/${_enc(groupId)}');
 

@@ -11,11 +11,12 @@ import '../screens/payments_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/attendance_screen.dart';
 import '../screens/book_class_screen.dart';
+import '../screens/chat_screen.dart';
+import '../screens/chat_thread_screen.dart';
 import '../screens/progress_screen.dart';
 import '../screens/events_screen.dart';
 import '../screens/qr_scan_screen.dart';
 import '../screens/debug_screen.dart';
-import '../screens/notification_detail_screen.dart';
 import '../screens/outstanding_invoices_screen.dart';
 import '../screens/instructor_tabs_shell.dart';
 import '../screens/instructor_attendance_screen.dart';
@@ -229,6 +230,9 @@ final GoRouter appRouter = GoRouter(
         path: '/book-class',
         pageBuilder: (_, s) =>
             _fadeThrough(s.pageKey, const BookClassScreen())),
+    GoRoute(
+        path: '/chat',
+        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const ChatScreen())),
     GoRoute(path: '/debug', builder: (_, __) => const DebugScreen()),
     GoRoute(
         path: '/attendance',
@@ -237,12 +241,16 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
         path: '/events',
         pageBuilder: (_, s) => _fadeThrough(s.pageKey, const EventsScreen())),
+    // Was NotificationDetailScreen, which rendered GET /Profile/NotificationDetails —
+    // a route that is NOT scoped to the caller and returned other members' rows. The
+    // conversation is now built from the member's own MyNotifications rows.
     GoRoute(
       path: '/notification/:groupId',
       pageBuilder: (_, state) => _fadeThrough(
         state.pageKey,
-        NotificationDetailScreen(
-          groupId: state.pathParameters['groupId'] ?? '',
+        ChatThreadScreen(
+          threadKey: state.pathParameters['groupId'] ?? '',
+          title: 'Conversation',
         ),
       ),
     ),
