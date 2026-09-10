@@ -1,0 +1,221 @@
+{
+ "/Account/Authenticate": [
+  "POST"
+ ],
+ "/Account/ChangeClub": [
+  "POST"
+ ],
+ "/Account/ChangeStudent": [
+  "POST"
+ ],
+ "/Account/ForgotPassword": [
+  "POST"
+ ],
+ "/Account/GetBranchesByClubCode/{clubCode}": [
+  "GET"
+ ],
+ "/Attendance/Add": [
+  "POST"
+ ],
+ "/Bcpg/Callback": [
+  "POST"
+ ],
+ "/Bcpg/PayInvoices": [
+  "POST"
+ ],
+ "/Bcpg/Redirect": [
+  "GET"
+ ],
+ "/Bcpg/VerifyPayment/{referenceId}": [
+  "GET"
+ ],
+ "/ClassBooking/BookNow": [
+  "POST"
+ ],
+ "/ClassBooking/BookingCountByPackageSession/{packageTypeId}/{packageId}/{studentId}/{month}/{year}": [
+  "GET"
+ ],
+ "/ClassBooking/BookingsByInstructor/{instructorId}/{month}/{year}": [
+  "GET"
+ ],
+ "/ClassBooking/GetBookings": [
+  "GET"
+ ],
+ "/ClassBooking/NextBookings": [
+  "GET"
+ ],
+ "/ClassBooking/PackageInfo/{studentId}": [
+  "GET"
+ ],
+ "/ClassBooking/SessionOrPackages/{typeId}": [
+  "GET"
+ ],
+ "/ClassBooking/TrainingTimeWithDateAndInstructor/{month}/{year}/{tCenterId}/{instructorId}": [
+  "GET"
+ ],
+ "/Listing/DropdownListByType/{reportTypeId}": [
+  "GET"
+ ],
+ "/Listing/GetBranchesByClubCode/{clubCode}": [
+  "GET"
+ ],
+ "/Listing/Instructors": [
+  "GET"
+ ],
+ "/Listing/InvoceTypes": [
+  "GET"
+ ],
+ "/Listing/MySiblings": [
+  "GET"
+ ],
+ "/Listing/StoreVersion/{platform}": [
+  "GET"
+ ],
+ "/Listing/StudentCenters": [
+  "GET"
+ ],
+ "/Listing/StudentListByTcId/{TCenterId}": [
+  "GET"
+ ],
+ "/Listing/TrainingCenters": [
+  "GET"
+ ],
+ "/Listing/TrainingCentersByScId/{SCenterId}": [
+  "GET"
+ ],
+ "/Listing/TrainingTimeByTcId/{TCenterId}": [
+  "GET"
+ ],
+ "/Outstanding/CollectionCount": [
+  "GET"
+ ],
+ "/Outstanding/CollectionCountList/{typeId}": [
+  "GET"
+ ],
+ "/Outstanding/Fetch": [
+  "POST"
+ ],
+ "/Outstanding/FetchOsManualCollection": [
+  "POST"
+ ],
+ "/Outstanding/FetchTermPayments": [
+  "POST"
+ ],
+ "/Outstanding/FetchTranxCharges": [
+  "POST"
+ ],
+ "/Outstanding/PayInvoices": [
+  "POST"
+ ],
+ "/Outstanding/UpdateCollectionCount/{typeId}": [
+  "GET"
+ ],
+ "/Payment/Callback": [
+  "POST"
+ ],
+ "/Payment/Completed/{status}": [
+  "GET"
+ ],
+ "/Payment/Finalizing": [
+  "GET"
+ ],
+ "/Payment/Initiate": [
+  "GET"
+ ],
+ "/Profile/MyClubStats": [
+  "GET"
+ ],
+ "/Profile/MyInfo": [
+  "GET"
+ ],
+ "/Profile/MyNotifications": [
+  "GET"
+ ],
+ "/Profile/MyUnreadNotificationCount": [
+  "GET"
+ ],
+ "/Profile/MyUnreadNotifications": [
+  "GET"
+ ],
+ "/Profile/NotificationDetails/{groupid}": [
+  "GET"
+ ],
+ "/Profile/Reply2Notification": [
+  "POST"
+ ],
+ "/Profile/Send2ClubHelpDesk": [
+  "POST"
+ ],
+ "/Profile/StudentAddtnlInfo": [
+  "GET"
+ ],
+ "/Profile/UpdateNotification2Read": [
+  "GET"
+ ],
+ "/Profile/UpdateNotificationAction": [
+  "POST"
+ ],
+ "/Profile/UpdateProfile": [
+  "POST"
+ ],
+ "/Profile/UpdateToken/{newBranchId}": [
+  "POST"
+ ],
+ "/PurchaseRequest/FetchProducts": [
+  "POST"
+ ],
+ "/Reports/Activity": [
+  "POST"
+ ],
+ "/Reports/Attendance": [
+  "POST"
+ ],
+ "/Reports/Contribution": [
+  "POST"
+ ],
+ "/Reports/ExamCenters": [
+  "GET"
+ ],
+ "/Reports/GradingSchedule": [
+  "POST"
+ ],
+ "/Reports/HomePageStats": [
+  "GET"
+ ],
+ "/Reports/PaymentSlips": [
+  "POST"
+ ],
+ "/Reports/PurchaseRequests": [
+  "POST"
+ ],
+ "/Reports/Receipts": [
+  "POST"
+ ],
+ "/Reports/Reimbursement": [
+  "POST"
+ ],
+ "/Reports/StudentCenters": [
+  "GET"
+ ],
+ "/Reports/StudentDetails": [
+  "POST"
+ ],
+ "/Reports/TournamentSummary": [
+  "POST"
+ ],
+ "/Reports/TrainingCenters": [
+  "GET"
+ ],
+ "/Utilities/QRCode/{width}/{height}/{content}": [
+  "GET"
+ ],
+ "/Utilities/ReceiptAsPDF/{clubId}/{paymentId}/{invoiceId}": [
+  "GET"
+ ],
+ "/Utilities/StudentQRCode/{clubId}/{branchId}/{studentIds}": [
+  "GET"
+ ],
+ "/Utilities/TrainingCenterQRCode/{clubId}/{tcid}": [
+  "GET"
+ ]
+}

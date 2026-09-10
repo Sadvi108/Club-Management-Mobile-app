@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Protects the notification chime from resource shrinking.
+
+  `res/raw/dclix_alert.wav` is referenced ONLY at runtime, by name:
+  flutter_local_notifications resolves it through
+  RawResourceAndroidNotificationSound('dclix_alert') -> getIdentifier(). The shrinker sees
+  no compile-time reference, so it stripped the file from the release APK even though the
+  resource was merged and had an id assigned (int raw dclix_alert 0x7f0e0000). Notifications
+  then fell back to the system default sound with no build error and no warning.
+
+  Verified by inspecting the built APK: without this file there is no .wav entry at all.
+
+  `res/raw/uat_apimacuat.pem` is listed as belt-and-braces. It IS referenced at compile time
+  (manifest -> xml/network_security_config -> @raw/uat_apimacuat), so the shrinker should
+  trace it — but the chime taught us that a stripped resource here fails silently, and this
+  one failing means every Boost payment dies with CertPathValidatorException. The APK is
+  checked after each build either way.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/dclix_alert,@raw/uat_apimacuat" />

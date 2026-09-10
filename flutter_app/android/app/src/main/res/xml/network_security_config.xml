@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ported from the Expo app's plugins/withUatCertificate.js.
+
+  WHY: the Boost payment gateway lives on https://apimacuat.zyncbook.com, which serves the
+  stock self-signed Plesk certificate (subject C=CH, O=Plesk, CN=Plesk, issued by itself,
+  no SAN for the host). Android rejects it with CertPathValidatorException, so WITHOUT this
+  every /Bcpg call fails before it leaves the device — meaning no online invoice payment and
+  no purchases. Plain HTTP is not an option: the host 301-redirects http to https.
+
+  System CAs are listed FIRST in both blocks, so the moment a properly issued certificate is
+  installed this keeps working with no app change. Nothing here weakens TLS for any other
+  host, and production is untouched.
+
+  REMOVE the raw certificate and the apimacuat domain-config once the backend team installs
+  a real certificate. It is a testing accommodation, not a shipping practice.
+  Refresh with:
+    openssl s_client -connect apimacuat.zyncbook.com:443 -servername apimacuat.zyncbook.com \
+      </dev/null | openssl x509 -outform PEM > android/app/src/main/res/raw/uat_apimacuat.pem
+-->
+<network-security-config>
+    <!-- Production API is plain HTTP; keep cleartext allowed and use system CAs everywhere. -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- UAT/staging only: also trust the self-signed certificate that host currently serves. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">apimacuat.zyncbook.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/uat_apimacuat" />
+        </trust-anchors>
+    </domain-config>
+
+    <!-- Production + the club web host: plain HTTP, system trust. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">apimac.zyncbook.com</domain>
+        <domain includeSubdomains="true">maclubsystem.com</domain>
+    </domain-config>
+</network-security-config>
