@@ -17,6 +17,10 @@ const kQuickCards = <QuickCard>[
   QuickCard('payments', 'Payments', Icons.receipt_long, Color(0xFF14B8A6), '/payments'),
   QuickCard('progress', 'Progress', Icons.trending_up, Color(0xFF6366F1), '/progress'),
   QuickCard('events', 'Events', Icons.emoji_events, Color(0xFFF97316), '/events'),
+  // Last tile, as in the Expo app: the door to the full catalogue. Screens with no
+  // tile of their own (Book a Class, Chat Academy, My Invoices, Notification
+  // Settings, Scan QR) are reachable ONLY through here.
+  QuickCard('more', 'More', Icons.grid_view, Color(0xFF64748B), '/more'),
 ];
 
 // Supported payment methods shown in the pay sheet.
