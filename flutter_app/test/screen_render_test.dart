@@ -35,14 +35,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Signing in'), findsOneWidget);
-      expect(find.text('Step 1 of 11'), findsOneWidget);
+      expect(find.text('Step 1 of 12'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       // Walk every page: each one lays out its own steps, tips and callout.
-      for (var i = 2; i <= 11; i++) {
+      for (var i = 2; i <= 12; i++) {
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
-        expect(find.text('Step $i of 11'), findsOneWidget,
+        expect(find.text('Step $i of 12'), findsOneWidget,
             reason: 'stuck before page $i');
         expect(tester.takeException(), isNull, reason: 'page $i threw');
       }

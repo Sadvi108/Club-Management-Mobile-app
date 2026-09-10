@@ -3,9 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dclix_app/data/guide_content.dart';
 
 void main() {
-  test('all 11 pages survived the port', () {
-    expect(kGuideSteps, hasLength(11));
-    expect(kGuideSteps.map((s) => s.key).toSet(), hasLength(11),
+  test('all pages are present and distinct', () {
+    // 11 ported from Expo + the Auto Pay page this app added.
+    expect(kGuideSteps, hasLength(12));
+    expect(kGuideSteps.map((s) => s.key).toSet(), hasLength(12),
         reason: 'duplicate keys would mean a page was overwritten');
   });
 
@@ -29,21 +30,45 @@ void main() {
     }
   });
 
-  test('the guide does not promise Auto Pay', () {
-    // Auto Pay is not built in this app: the Expo screen is a disclosed UI shell and
-    // Club.Api has no recurring-payment routes. Telling a member their fees settle
-    // automatically would have them stop paying.
-    for (final s in kGuideSteps) {
-      final blob = [
-        s.intro,
-        s.note,
-        ...s.tips,
-        ...s.details.map((d) => '${d.title} ${d.text}'),
+  String _blob(dynamic s) => [
+        s.intro as String,
+        s.note as String,
+        ...(s.tips as List<String>),
+        ...(s.details as List).map((d) => '${d.title} ${d.text}'),
       ].join(' ').toLowerCase();
-      expect(blob, isNot(contains('auto pay')), reason: '${s.key} mentions Auto Pay');
-      expect(blob, isNot(contains('automatically')),
-          reason: '${s.key} implies payments happen on their own');
+
+  test('no page claims fees are paid without the member', () {
+    // Club.Api has no recurring-payment route, so nothing can charge a member on a timer.
+    // A member who believes their fees settle on their own stops checking and falls into
+    // arrears — that is the harm, and it comes from the CLAIM, not from the feature name.
+    // (Naming Auto Pay is fine and necessary; promising automatic payment is not.)
+    final banned = [
+      'settles fees',
+      'paid automatically',
+      'pays automatically',
+      'charged automatically',
+      'taken automatically from',
+      'deducted automatically',
+    ];
+    for (final s in kGuideSteps) {
+      final blob = _blob(s);
+      for (final phrase in banned) {
+        expect(blob, isNot(contains(phrase)),
+            reason: '${s.key} claims payment happens on its own: "$phrase"');
+      }
     }
+  });
+
+  test('the Auto Pay page states the limitation outright', () {
+    // The disclaimer is the whole reason the page is safe to ship. If it is ever edited
+    // away, this fails rather than quietly shipping a false promise.
+    final page = kGuideSteps.firstWhere((s) => s.key == 'autopay');
+    final blob = _blob(page);
+    expect(blob, contains('never taken automatically'));
+    expect(blob, contains('tap pay'),
+        reason: 'the member must be told they still confirm each payment');
+    expect(page.note.trim(), isNotEmpty,
+        reason: 'this belongs in the highlighted callout, not buried in a step');
   });
 
   test('the sign-in page comes first', () {

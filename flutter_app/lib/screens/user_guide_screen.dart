@@ -4,7 +4,7 @@ import '../data/guide_content.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 
-/// User Guide — 11 pages, swipeable, no network.
+/// User Guide — swipeable pages, no network.
 ///
 /// Deliberately makes no API calls: the guide is linked from the sign-in screen, so it has
 /// to work for someone who does not have an account yet.
@@ -101,11 +101,35 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
           const SizedBox(height: Gaps.md),
           Text(s.intro,
               style: TextStyle(color: c.textSecondary, fontSize: 14, height: 1.55)),
+          if (s.shot.isNotEmpty) _shot(c, s.shot),
           const SizedBox(height: Gaps.lg),
           for (final d in s.details) _detail(c, d),
           if (s.note.isNotEmpty) _note(c, s.note),
           if (s.tips.isNotEmpty) _tips(c, s.tips),
         ],
+      );
+
+  /// A capture of the real screen.
+  ///
+  /// Height-capped and top-aligned: these are full-length screens, and letting one run to
+  /// its natural height would push every numbered step below the fold.
+  Widget _shot(AppColors c, String asset) => Padding(
+        padding: const EdgeInsets.only(top: Gaps.md),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(Radii.lg),
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 320),
+            width: double.infinity,
+            decoration: BoxDecoration(border: Border.all(color: c.border)),
+            child: Image.asset(
+              asset,
+              fit: BoxFit.fitWidth,
+              alignment: Alignment.topCenter,
+              // A missing asset must not blank the page the member is reading.
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          ),
+        ),
       );
 
   Widget _detail(AppColors c, GuideDetail d) => Padding(

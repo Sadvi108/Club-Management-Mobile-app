@@ -61,6 +61,9 @@ flutter:
   assets:
     - assets/images/
     - assets/branding/
+    # User-guide screenshots. Regenerate with:
+    #   flutter test tool/capture_guide_shots.dart --dart-define=CAPTURE=true
+    - assets/guide/
 
 # Launcher icon generation:  dart run flutter_launcher_icons
 # Sources are the same D-CLIX assets the Expo app ships, produced by
