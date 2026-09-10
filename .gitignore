@@ -97,6 +97,16 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# One narrow exception to *.pem above. This is a SERVER'S PUBLIC CERTIFICATE — the same
+# bytes apimacuat.zyncbook.com hands to every client that connects — not a private key, and
+# it is checked for that (no PRIVATE KEY block). The app must trust it to reach the Boost
+# payment routes, so the Android build needs it as a resource.
+#
+# The blanket rule silently swallowed it once: the APK built fine locally because the file
+# was on disk, and CI failed with "resource raw/uat_apimacuat not found". Keep the blanket
+# rule; keep this exception narrow.
+!flutter_app/android/app/src/main/res/raw/uat_apimacuat.pem
 -e 
 # Environment and credential files
 .env
@@ -106,6 +116,16 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# One narrow exception to *.pem above. This is a SERVER'S PUBLIC CERTIFICATE — the same
+# bytes apimacuat.zyncbook.com hands to every client that connects — not a private key, and
+# it is checked for that (no PRIVATE KEY block). The app must trust it to reach the Boost
+# payment routes, so the Android build needs it as a resource.
+#
+# The blanket rule silently swallowed it once: the APK built fine locally because the file
+# was on disk, and CI failed with "resource raw/uat_apimacuat not found". Keep the blanket
+# rule; keep this exception narrow.
+!flutter_app/android/app/src/main/res/raw/uat_apimacuat.pem
 -e 
 # Environment and credential files
 .env
@@ -115,6 +135,16 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# One narrow exception to *.pem above. This is a SERVER'S PUBLIC CERTIFICATE — the same
+# bytes apimacuat.zyncbook.com hands to every client that connects — not a private key, and
+# it is checked for that (no PRIVATE KEY block). The app must trust it to reach the Boost
+# payment routes, so the Android build needs it as a resource.
+#
+# The blanket rule silently swallowed it once: the APK built fine locally because the file
+# was on disk, and CI failed with "resource raw/uat_apimacuat not found". Keep the blanket
+# rule; keep this exception narrow.
+!flutter_app/android/app/src/main/res/raw/uat_apimacuat.pem
 
 # Flutter/Dart build cache. `.dart_tool/chrome-device/` is a full Chrome PROFILE — it
 # contains Cookies, Login Data and Trust Tokens SQLite databases. 153 of those files were
