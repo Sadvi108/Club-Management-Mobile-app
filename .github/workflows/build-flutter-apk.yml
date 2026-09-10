@@ -1,0 +1,86 @@
+name: Build Flutter APK
+
+# Builds the Flutter app in flutter_app/ on GitHub's runners.
+#
+# Kept separate from build-apk.yml (the Expo app) and NOT triggered by `v*` tags, so the
+# two do not both fire on one release tag while the Expo build is still what ships.
+# Trigger manually, or push a `flutter-v*` tag to also attach the APK to a Release.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "flutter-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-flutter-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Pin the version the app was developed and verified against.
+          flutter-version: "3.41.7"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        # Style lints are inherited debt; fail only on real errors.
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Test
+        run: flutter test
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Verify the APK ships what it should
+        # The notification chime is referenced only at runtime by name, so resource
+        # shrinking silently stripped it once already — with no build error. Fail the
+        # build rather than ship a release whose alerts fall back to the system sound.
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          echo "size: $(stat -c%s "$APK") bytes"
+          if ! unzip -l "$APK" | grep -qE '\.wav$'; then
+            echo "::error::notification chime missing from the APK (resource shrinking?)"
+            exit 1
+          fi
+          if unzip -p "$APK" resources.arsc | strings | grep -q dclix_alert; then
+            echo "chime resource present"
+          else
+            echo "::error::dclix_alert not in resources.arsc"
+            exit 1
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dclix-flutter-apk
+          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          tag_name: ${{ github.ref_name }}
+          name: D-CLIX Flutter ${{ github.ref_name }}
+          generate_release_notes: true
