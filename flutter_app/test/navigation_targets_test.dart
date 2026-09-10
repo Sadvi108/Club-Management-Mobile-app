@@ -80,11 +80,26 @@ void main() {
 
     // The list is lazy, so the lower sections only build once scrolled to. Walking to
     // each one also exercises the nested-GridView layout at every offset.
-    final list = find.byType(Scrollable).last;
+    //
+    // The list is lazy, so the lower sections only build once scrolled to. Walking to
+    // each one also exercises the nested-GridView layout at every offset.
+    //
+    // A hand-rolled drag loop rather than scrollUntilVisible: each section's GridView is
+    // itself a (non-scrolling) Scrollable, and the interaction between that and the
+    // helper's own finder handling made it throw "Bad state: No element" on a section
+    // that plain drags reach without trouble.
+    Future<void> scrollTo(String text) async {
+      for (var i = 0; i < 40 && find.text(text).evaluate().isEmpty; i++) {
+        await tester.drag(find.byType(Scrollable).first, const Offset(0, -250));
+        await tester.pump();
+      }
+    }
+
     for (final section in ['PAYMENTS', 'PROGRESS', 'CLUB', 'ACCOUNT']) {
-      await tester.scrollUntilVisible(find.text(section), 200, scrollable: list);
+      await scrollTo(section);
       expect(find.text(section), findsOneWidget, reason: '$section heading missing');
     }
+    await scrollTo('Profile');
     expect(find.text('Profile'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

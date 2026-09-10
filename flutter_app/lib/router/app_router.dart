@@ -14,7 +14,12 @@ import '../screens/book_class_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/chat_thread_screen.dart';
 import '../screens/more_screen.dart';
+import '../screens/competition_screen.dart';
 import '../screens/edit_profile_screen.dart';
+import '../screens/helpdesk_screen.dart';
+import '../screens/notifications_screen.dart';
+import '../screens/offer_detail_screen.dart';
+import '../screens/offers_screen.dart';
 import '../screens/student_details_screen.dart';
 import '../screens/purchases_screen.dart';
 import '../screens/purchase_request_screen.dart';
@@ -256,6 +261,27 @@ final GoRouter appRouter = GoRouter(
         path: '/student-details',
         pageBuilder: (_, s) =>
             _fadeThrough(s.pageKey, const StudentDetailsScreen())),
+    GoRoute(
+        path: '/helpdesk',
+        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const HelpDeskScreen())),
+    GoRoute(
+        path: '/competition',
+        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const CompetitionScreen())),
+    GoRoute(
+        path: '/notifications',
+        pageBuilder: (_, s) =>
+            _fadeThrough(s.pageKey, const NotificationsScreen())),
+    GoRoute(
+        path: '/offers',
+        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const OffersScreen())),
+    // Keyed by offer code: every myoffers row has id 0, so the code is the only identity.
+    GoRoute(
+      path: '/offer/:code',
+      pageBuilder: (_, state) => _fadeThrough(
+        state.pageKey,
+        OfferDetailScreen(code: state.pathParameters['code'] ?? ''),
+      ),
+    ),
     GoRoute(
         path: '/notification-settings',
         pageBuilder: (_, s) =>

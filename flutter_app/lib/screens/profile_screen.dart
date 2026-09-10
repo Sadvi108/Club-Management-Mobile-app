@@ -122,69 +122,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _openHelpDesk() async {
-    final c = context.appColors;
-    final subjectCtrl = TextEditingController();
-    final messageCtrl = TextEditingController();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
-          ),
-          padding: EdgeInsets.fromLTRB(22, 14, 22, 28 + MediaQuery.of(ctx).padding.bottom),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
-            const SizedBox(height: 14),
-            Text('Help Desk', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 12),
-            TextField(controller: subjectCtrl, decoration: const InputDecoration(labelText: 'Subject')),
-            const SizedBox(height: 10),
-            TextField(controller: messageCtrl, maxLines: 4, decoration: const InputDecoration(labelText: 'Message')),
-            const SizedBox(height: 16),
-            InkWell(
-              onTap: () async {
-                try {
-                  // Send2ClubHelpDesk takes the Notification model: subject ->
-                  // `text`, message -> `value` (subject/message keys are
-                  // ignored server-side, leaving the ticket blank).
-                  await Api.profileSend2ClubHelpDesk(<String, dynamic>{
-                    'text': subjectCtrl.text,
-                    'value': messageCtrl.text,
-                  });
-                  if (!mounted) return;
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Help desk message sent')),
-                  );
-                } catch (e) {
-                  debugPrint('Send2HelpDesk failed: $e');
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-                }
-              },
-              borderRadius: BorderRadius.circular(Radii.md),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: c.gradient),
-                  borderRadius: BorderRadius.circular(Radii.md),
-                  boxShadow: Shadows.strong(c),
-                ),
-                child: const Text('Send', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
-              ),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
 
 
 
@@ -609,7 +546,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 12),
             _actionTile(c, Icons.qr_code_scanner, 'Scan QR to Check In',
                 () => context.push('/qr-scan')),
-            _actionTile(c, Icons.support_agent, 'Help Desk', _openHelpDesk),
+            _actionTile(c, Icons.support_agent, 'Help Desk',
+                () => context.push('/helpdesk')),
             _actionTile(c, Icons.badge_outlined, 'Student Details',
                 () => context.push('/student-details')),
             _actionTile(c, Icons.shopping_bag_outlined, 'My Purchases',

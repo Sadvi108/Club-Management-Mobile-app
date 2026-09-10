@@ -35,7 +35,11 @@ class MoreScreen extends StatelessWidget {
     ]),
     _Section('Club', [
       _Item('Events', Icons.event, Color(0xFFF97316), '/events'),
+      _Item('Competition', Icons.military_tech, Color(0xFFDB2777), '/competition'),
+      _Item('Offers', Icons.local_offer, Color(0xFFEC4899), '/offers'),
       _Item('Chat Academy', Icons.forum, Color(0xFF22C55E), '/chat'),
+      _Item('Help Desk', Icons.support_agent, Color(0xFF0EA5E9), '/helpdesk'),
+      _Item('Notifications', Icons.notifications, Color(0xFFF59E0B), '/notifications'),
       _Item('Notification Settings', Icons.tune, Color(0xFF64748B), '/notification-settings'),
     ]),
     _Section('Account', [
