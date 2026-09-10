@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../config/app_version.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
@@ -557,7 +558,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 18),
             _logoutBtn(context, c),
             const SizedBox(height: 8),
-            Text('D-Clix · v1.0.0', style: TextStyle(color: c.textMuted, fontSize: 11)),
+            Text('D-CLIX · v$kAppVersion ($kAppBuild)',
+                style: TextStyle(color: c.textMuted, fontSize: 11)),
           ],
         ),
       ),

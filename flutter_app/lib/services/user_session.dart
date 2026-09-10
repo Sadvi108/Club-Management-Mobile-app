@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
+import 'background_poll.dart';
 import 'autopay.dart';
 import 'api_service.dart';
 import 'secure_store.dart';
@@ -836,8 +837,14 @@ class UserSession extends ChangeNotifier {
   // ---------------------------------------------------------------------------
   // Session persistence (survives app kill / cold start)
   // ---------------------------------------------------------------------------
-  static const _kAuthKey = 'cm_auth_data_v1';
-  static const _kTokenKey = 'cm_auth_token_v1';
+  /// Public so the background isolate reads the SAME keys. It restores the session by
+  /// hand (no providers exist there), and a duplicated string literal that drifted would
+  /// silently stop every closed-app alert with nothing to show for it.
+  static const sessionKey = 'cm_auth_data_v1';
+  static const tokenKey = 'cm_auth_token_v1';
+
+  static const _kAuthKey = sessionKey;
+  static const _kTokenKey = tokenKey;
 
   /// Split a session map into the bearer token (keystore) and the profile (prefs).
   /// Pure so the "no token in plaintext prefs" rule can be asserted in a test.
@@ -915,6 +922,9 @@ class UserSession extends ChangeNotifier {
       }
       _previousUnread = unreadNotifications;
       startNotificationPolling();
+      // Closed-app alerts. Registered here rather than at app start so it only runs for a
+      // signed-in member, and so a fresh sign-in re-arms it.
+      unawaited(BackgroundPoll.register());
       unawaited(NotificationService.requestPermission());
       _checkStoreVersion();
       _registerPushToken();
@@ -993,6 +1003,9 @@ class UserSession extends ChangeNotifier {
       await _loadAll();
       _previousUnread = unreadNotifications;
       startNotificationPolling();
+      // Closed-app alerts. Registered here rather than at app start so it only runs for a
+      // signed-in member, and so a fresh sign-in re-arms it.
+      unawaited(BackgroundPoll.register());
       unawaited(NotificationService.requestPermission());
       // Boot-time post-login extras (best-effort, never throw).
       _checkStoreVersion();
@@ -1483,6 +1496,8 @@ class UserSession extends ChangeNotifier {
 
   void logout() {
     stopNotificationPolling();
+    // Otherwise a signed-out device keeps waking up to poll with a token that is gone.
+    unawaited(BackgroundPoll.cancel());
     _clearPersistedAuth();
     authData = null;
     myInfo = null;

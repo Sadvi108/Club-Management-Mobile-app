@@ -68,6 +68,21 @@ jobs:
             echo "::error::dclix_alert not in resources.arsc"
             exit 1
           fi
+          # The UAT certificate. Without it every /Bcpg call dies with
+          # CertPathValidatorException, which means no online payment and no purchases —
+          # and, like the chime, it would be stripped with no build error at all.
+          if unzip -p "$APK" resources.arsc | strings | grep -q uat_apimacuat; then
+            echo "UAT certificate resource present"
+          else
+            echo "::error::uat_apimacuat not in resources.arsc — Boost payments will fail"
+            exit 1
+          fi
+          if unzip -l "$APK" | grep -qE '\.pem$'; then
+            echo "certificate file present"
+          else
+            echo "::error::no .pem in the APK (resource shrinking?)"
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

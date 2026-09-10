@@ -1,7 +1,12 @@
 name: dclix_app
 description: D-Clix — Premium sports academy student app (Flutter port).
 publish_to: "none"
-version: 1.1.5+7
+# 2.12.0+18 — MUST stay above the Expo app's 2.11.1+17.
+#
+# Both ship as applicationId com.dclix.clubapp, so this APK replaces the Expo one on a
+# member's phone. Android refuses to install a lower versionCode, so 7 would have failed
+# to update every existing install with "app not installed" and no further explanation.
+version: 2.12.0+18
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -41,6 +46,13 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   # OS notifications with a bundled sound (Android channels / iOS UNNotification).
   flutter_local_notifications: ^18.0.1
+  # Background notification polling — WorkManager on Android, BGTaskScheduler on iOS.
+  # Matches the Expo app's expo-background-task job: without it, alerts only arrive while
+  # the app is open, so a member closing the app stops receiving fee reminders entirely.
+  # 0.5.x still used Flutter's v1 embedding (ShimPluginRegistry,
+  # PluginRegistrantCallback), which no longer exists — it fails to compile on
+  # Flutter 3.41. 0.10.x is the current line.
+  workmanager: ^0.10.3
   timezone: ^0.9.4
   http: 1.2.2
 

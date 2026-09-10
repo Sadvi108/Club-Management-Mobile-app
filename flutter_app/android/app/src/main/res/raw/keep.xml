@@ -10,6 +10,12 @@
   then fell back to the system default sound with no build error and no warning.
 
   Verified by inspecting the built APK: without this file there is no .wav entry at all.
+
+  `res/raw/uat_apimacuat.pem` is listed as belt-and-braces. It IS referenced at compile time
+  (manifest -> xml/network_security_config -> @raw/uat_apimacuat), so the shrinker should
+  trace it — but the chime taught us that a stripped resource here fails silently, and this
+  one failing means every Boost payment dies with CertPathValidatorException. The APK is
+  checked after each build either way.
 -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/dclix_alert" />
+    tools:keep="@raw/dclix_alert,@raw/uat_apimacuat" />
