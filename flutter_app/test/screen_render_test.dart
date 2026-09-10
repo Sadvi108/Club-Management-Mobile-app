@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import 'package:dclix_app/screens/offer_detail_screen.dart';
 import 'package:dclix_app/screens/offers_screen.dart';
+import 'package:dclix_app/screens/student_details_screen.dart';
 import 'package:dclix_app/screens/user_guide_screen.dart';
 import 'package:dclix_app/services/user_session.dart';
 
@@ -106,6 +107,41 @@ void main() {
       expect(find.text('D-123'), findsOneWidget);
       expect(find.text('01 Jun 2099'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('StudentDetailsScreen', () {
+    // Both API calls fail in a test (no network), which is exactly the flaky-connection
+    // case this guards.
+    testWidgets('a failed refresh does not put a red error over good cached data',
+        (tester) async {
+      UserSession.instance.myInfo = {
+        'name': 'Alex Tan',
+        'registrationNo': 'DCX-0001',
+        'currentGrade': 'Green Belt',
+      };
+      await tester.pumpWidget(_wrap(const StudentDetailsScreen()));
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+
+      expect(find.text('Alex Tan'), findsOneWidget);
+      expect(find.textContaining('Could not load'), findsNothing,
+          reason: 'the details rendered fine; an error banner reads as "my record is broken"');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('with nothing cached it DOES report the failure', (tester) async {
+      // The opposite case still has to work — silence here would be a blank screen with
+      // no explanation.
+      UserSession.instance.myInfo = null;
+      UserSession.instance.studentAddtnlInfo = null;
+      UserSession.instance.authData = null;
+      await tester.pumpWidget(_wrap(const StudentDetailsScreen()));
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      expect(find.textContaining('Could not load'), findsOneWidget);
     });
   });
 }

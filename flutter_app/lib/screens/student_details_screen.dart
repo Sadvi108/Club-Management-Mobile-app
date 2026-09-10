@@ -55,11 +55,19 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = friendlyError(e);
+        // Only alarm the member when there is genuinely nothing to show. This screen
+        // renders from UserSession, which is usually already populated from sign-in — so
+        // a failed REFRESH would otherwise put a red error above their correct, complete
+        // details. On a flaky connection that reads as "my record is broken".
+        _error = _hasSomethingToShow(session) ? null : friendlyError(e);
         _loading = false;
       });
     }
   }
+
+  /// Is there already enough in the session to render a useful screen?
+  bool _hasSomethingToShow(UserSession s) =>
+      (s.myInfo?.isNotEmpty ?? false) || (s.studentAddtnlInfo?.isNotEmpty ?? false);
 
   static const _months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
