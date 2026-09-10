@@ -464,6 +464,23 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
+                        // Readable before you have an account — which is exactly when
+                        // "how does this app work?" gets asked.
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: () => context.push('/user-guide'),
+                            icon: Icon(Icons.menu_book_outlined,
+                                size: 16, color: c.textSecondary),
+                            label: Text(
+                              'How to use this app',
+                              style: TextStyle(
+                                color: c.textSecondary,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),

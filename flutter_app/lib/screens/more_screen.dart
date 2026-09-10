@@ -46,6 +46,7 @@ class MoreScreen extends StatelessWidget {
       _Item('Profile', Icons.account_circle, Color(0xFF64748B), '/profile'),
       _Item('Student Details', Icons.badge, Color(0xFF0EA5E9), '/student-details'),
       _Item('Edit Profile', Icons.edit, Color(0xFF8B5CF6), '/edit-profile'),
+      _Item('User Guide', Icons.menu_book, Color(0xFF14B8A6), '/user-guide'),
     ]),
   ];
 

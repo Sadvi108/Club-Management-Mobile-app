@@ -20,6 +20,7 @@ import '../screens/helpdesk_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/offer_detail_screen.dart';
 import '../screens/offers_screen.dart';
+import '../screens/user_guide_screen.dart';
 import '../screens/student_details_screen.dart';
 import '../screens/purchases_screen.dart';
 import '../screens/purchase_request_screen.dart';
@@ -264,6 +265,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
         path: '/helpdesk',
         pageBuilder: (_, s) => _fadeThrough(s.pageKey, const HelpDeskScreen())),
+    // Linked from the sign-in screen, so it must open for someone with no account. The
+    // redirect above only guards /instructor, so nothing here needs to change — but keep
+    // it that way if a general auth guard is ever added.
+    GoRoute(
+        path: '/user-guide',
+        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const UserGuideScreen())),
     GoRoute(
         path: '/competition',
         pageBuilder: (_, s) => _fadeThrough(s.pageKey, const CompetitionScreen())),

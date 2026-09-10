@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:dclix_app/router/app_router.dart';
+import 'package:dclix_app/screens/instructor_reports_screen.dart';
 import 'package:dclix_app/screens/more_screen.dart';
 import 'package:dclix_app/data/mock_data.dart';
 
@@ -45,6 +46,13 @@ void main() {
     final dead =
         MoreScreen.catalogueRoutes.where((r) => !registered.contains(r)).toSet();
     expect(dead, isEmpty, reason: 'dead tiles in the All Features catalogue: $dead');
+  });
+
+  test('every instructor report tile points at a registered route', () {
+    final dead = InstructorReportsScreen.reportRoutes
+        .where((r) => !registered.contains(r))
+        .toSet();
+    expect(dead, isEmpty, reason: 'dead tiles on the instructor reports list: $dead');
   });
 
   test('every home quick-access tile points at a registered route', () {

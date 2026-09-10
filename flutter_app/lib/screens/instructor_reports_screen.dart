@@ -7,6 +7,11 @@ import '../widgets/app_header.dart';
 class InstructorReportsScreen extends StatelessWidget {
   const InstructorReportsScreen({super.key});
 
+  /// Every report route this screen offers. Exposed so a test can assert each one is
+  /// registered — 20 hand-written paths against a hand-written router is exactly where a
+  /// typo hides until an instructor taps a tile and nothing happens.
+  static List<String> get reportRoutes => [for (final i in _items) i.route];
+
   static const _items = <_ReportItem>[
     _ReportItem(Icons.location_city,        'Student Centers',     '/instructor/reports/student-centers'),
     _ReportItem(Icons.fitness_center,       'Training Centers',    '/instructor/reports/training-centers'),
