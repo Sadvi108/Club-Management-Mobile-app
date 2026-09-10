@@ -14,6 +14,8 @@ import '../screens/book_class_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/chat_thread_screen.dart';
 import '../screens/more_screen.dart';
+import '../screens/edit_profile_screen.dart';
+import '../screens/student_details_screen.dart';
 import '../screens/purchases_screen.dart';
 import '../screens/purchase_request_screen.dart';
 import '../screens/notification_settings_screen.dart';
@@ -247,6 +249,13 @@ final GoRouter appRouter = GoRouter(
         path: '/purchase-request',
         pageBuilder: (_, s) =>
             _fadeThrough(s.pageKey, const PurchaseRequestScreen())),
+    GoRoute(
+        path: '/edit-profile',
+        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const EditProfileScreen())),
+    GoRoute(
+        path: '/student-details',
+        pageBuilder: (_, s) =>
+            _fadeThrough(s.pageKey, const StudentDetailsScreen())),
     GoRoute(
         path: '/notification-settings',
         pageBuilder: (_, s) =>

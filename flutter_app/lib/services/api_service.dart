@@ -192,16 +192,32 @@ class ApiService {
   }
 
   /// multipart/form-data POST — for endpoints that reject JSON
-  /// (e.g. /Profile/UpdateProfile). Only non-empty string fields are sent.
+  /// (e.g. /Profile/UpdateProfile).
+  ///
+  /// By default empty fields are omitted, which is what the prepay call wants. An EDIT
+  /// FORM must pass [sendEmptyFields]: dropping an empty value there makes clearing a
+  /// field impossible — the member deletes their email, nothing is sent for it, and the
+  /// server keeps the old address while the app reports "Saved".
+  ///
+  /// [files] attaches uploads under [fileField]; the server names it `files` for
+  /// /Profile/UpdateProfile.
   static Future<dynamic> postMultipart(
-      String endpoint, Map<String, String> fields) async {
+    String endpoint,
+    Map<String, String> fields, {
+    bool sendEmptyFields = false,
+    List<String> files = const [],
+    String fileField = 'files',
+  }) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 POST(multipart): $url');
     final req = http.MultipartRequest('POST', url);
     if (_token != null) req.headers['Authorization'] = 'Bearer $_token';
     fields.forEach((k, v) {
-      if (v.isNotEmpty) req.fields[k] = v;
+      if (sendEmptyFields || v.isNotEmpty) req.fields[k] = v;
     });
+    for (final path in files) {
+      req.files.add(await http.MultipartFile.fromPath(fileField, path));
+    }
     final streamed = await req.send();
     final response = await http.Response.fromStream(streamed);
     _log('📥 Status: ${response.statusCode}');

@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../services/api.dart';
 import '../services/user_session.dart';
@@ -28,256 +27,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  /// Ask whether to take a new photo (camera) or pick one from the device
-  /// (gallery). Returns the chosen [ImageSource], or null if dismissed.
-  Future<ImageSource?> _pickPhotoSource(BuildContext ctx, AppColors c) {
-    return showModalBottomSheet<ImageSource>(
-      context: ctx,
-      backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => Container(
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          Text('Profile photo',
-              style: TextStyle(color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 14),
-          _photoSourceTile(sheetCtx, c, Icons.camera_alt_outlined,
-              'Take a photo', ImageSource.camera),
-          const SizedBox(height: 8),
-          _photoSourceTile(sheetCtx, c, Icons.photo_library_outlined,
-              'Choose from device', ImageSource.gallery),
-        ]),
-      ),
-    );
-  }
 
-  Widget _photoSourceTile(
-      BuildContext ctx, AppColors c, IconData icon, String label, ImageSource src) {
-    return InkWell(
-      onTap: () => Navigator.pop(ctx, src),
-      borderRadius: BorderRadius.circular(Radii.md),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: c.surfaceAlt,
-          borderRadius: BorderRadius.circular(Radii.md),
-          border: Border.all(color: c.border),
-        ),
-        child: Row(children: [
-          Container(
-            width: 38, height: 38,
-            decoration: BoxDecoration(color: c.primary.withOpacity(0.12), shape: BoxShape.circle),
-            child: Icon(icon, color: c.primary, size: 19),
-          ),
-          const SizedBox(width: 12),
-          Text(label, style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
-        ]),
-      ),
-    );
-  }
 
-  Future<void> _openEditSheet() async {
-    final session = UserSession.instance;
-    final info = session.myInfo ?? <String, dynamic>{};
-    final addtnl = session.studentAddtnlInfo ?? <String, dynamic>{};
-    final c = context.appColors;
-
-    final ctrls = <String, TextEditingController>{
-      'Name': TextEditingController(text: (info['name'] ?? '').toString()),
-      'IcNo': TextEditingController(text: (info['icNo'] ?? '').toString()),
-      'Gender': TextEditingController(text: (info['gender'] ?? '').toString()),
-      'EmailAddress':
-          TextEditingController(text: (info['email'] ?? info['emailAddress'] ?? '').toString()),
-      'HandPhone': TextEditingController(
-          text: (info['handPhone'] ?? info['phone'] ?? '').toString()),
-      'Address1': TextEditingController(text: (info['address1'] ?? '').toString()),
-      'Address2': TextEditingController(text: (info['address2'] ?? '').toString()),
-      'Address3': TextEditingController(text: (info['address3'] ?? '').toString()),
-      'Address4': TextEditingController(text: (info['address4'] ?? '').toString()),
-      'PostalCode': TextEditingController(text: (info['postalCode'] ?? '').toString()),
-      'Height': TextEditingController(text: (addtnl['height'] ?? '').toString()),
-      'Weight': TextEditingController(text: (addtnl['weight'] ?? '').toString()),
-    };
-    const labels = {
-      'Name': 'Full name', 'IcNo': 'IC / Reg No', 'Gender': 'Gender',
-      'EmailAddress': 'Email', 'HandPhone': 'Phone',
-      'Address1': 'Address line 1', 'Address2': 'Address line 2',
-      'Address3': 'Address line 3', 'Address4': 'Address line 4',
-      'PostalCode': 'Postal code', 'Height': 'Height (cm)', 'Weight': 'Weight (kg)',
-    };
-
-    Uint8List? pickedBytes;
-    bool saving = false;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setSheet) {
-        ImageProvider? avatarProvider;
-        if (pickedBytes != null) {
-          avatarProvider = MemoryImage(pickedBytes!);
-        } else if (session.localPhotoB64.isNotEmpty) {
-          try {
-            avatarProvider = MemoryImage(base64Decode(session.localPhotoB64));
-          } catch (_) {}
-        } else if (session.studentPhoto.startsWith('http')) {
-          avatarProvider = CachedNetworkImageProvider(session.studentPhoto);
-        }
-        return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-          child: Container(
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            ),
-            padding: EdgeInsets.fromLTRB(22, 14, 22, 28 + MediaQuery.of(ctx).padding.bottom),
-            child: DraggableScrollableSheet(
-              expand: false,
-              initialChildSize: 0.85,
-              maxChildSize: 0.95,
-              minChildSize: 0.5,
-              builder: (_, scrollCtrl) => ListView(
-                controller: scrollCtrl,
-                children: [
-                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
-                  const SizedBox(height: 14),
-                  Text('Edit Profile', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 16),
-                  // Avatar picker
-                  Center(
-                    child: Stack(children: [
-                      Container(
-                        width: 92, height: 92,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(colors: c.gradient),
-                        ),
-                        padding: const EdgeInsets.all(3),
-                        child: CircleAvatar(
-                          backgroundColor: c.surfaceAlt,
-                          backgroundImage: avatarProvider,
-                          child: avatarProvider == null
-                              ? Icon(Icons.person, size: 40, color: c.primary)
-                              : null,
-                        ),
-                      ),
-                      Positioned(
-                        right: 0, bottom: 0,
-                        child: InkWell(
-                          onTap: () async {
-                            final src = await _pickPhotoSource(ctx, c);
-                            if (src == null) return;
-                            final x = await ImagePicker().pickImage(
-                                source: src,
-                                maxWidth: 600, imageQuality: 80);
-                            if (x == null) return;
-                            final bytes = await x.readAsBytes();
-                            setSheet(() => pickedBytes = bytes);
-                          },
-                          child: Container(
-                            width: 30, height: 30,
-                            decoration: BoxDecoration(
-                              color: c.primary, shape: BoxShape.circle,
-                              border: Border.all(color: c.surface, width: 2),
-                            ),
-                            child: const Icon(Icons.camera_alt,
-                                size: 15, color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ]),
-                  ),
-                  const SizedBox(height: 18),
-                  for (final key in ctrls.keys) ...[
-                    TextField(
-                      controller: ctrls[key],
-                      keyboardType: (key == 'Height' || key == 'Weight')
-                          ? const TextInputType.numberWithOptions(decimal: true)
-                          : (key == 'HandPhone'
-                              ? TextInputType.phone
-                              : TextInputType.text),
-                      decoration: InputDecoration(
-                        labelText: labels[key],
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                  const SizedBox(height: 8),
-                  InkWell(
-                    onTap: saving
-                        ? null
-                        : () async {
-                            setSheet(() => saving = true);
-                            final fields = <String, String>{
-                              'Id': (info['id'] ?? '').toString(),
-                            };
-                            ctrls.forEach((k, v) {
-                              if (v.text.trim().isNotEmpty) fields[k] = v.text.trim();
-                            });
-                            String? b64;
-                            if (pickedBytes != null) {
-                              b64 = base64Encode(pickedBytes!);
-                              fields['ProfilePic'] = b64;
-                            }
-                            try {
-                              await Api.profileUpdateProfile(fields);
-                              if (b64 != null) {
-                                await session.setLocalPhoto(b64);
-                              }
-                              if (!mounted) return;
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Profile updated')),
-                              );
-                              await session.refresh();
-                            } catch (e) {
-                              debugPrint('UpdateProfile failed: $e');
-                              // Photo still cached locally even if the server
-                              // rejected, so the picked avatar persists.
-                              if (b64 != null) await session.setLocalPhoto(b64);
-                              if (!mounted) return;
-                              setSheet(() => saving = false);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Saved photo locally; server: $e')),
-                              );
-                            }
-                          },
-                    borderRadius: BorderRadius.circular(Radii.md),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: c.gradient),
-                        borderRadius: BorderRadius.circular(Radii.md),
-                      ),
-                      child: saving
-                          ? const SizedBox(
-                              width: 18, height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
-                          : const Text('Save changes',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14)),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ),
-          ),
-        );
-      }),
-    );
-  }
 
   Future<void> _markNotificationRead(dynamic id) async {
     if (id == null) return;
@@ -435,144 +186,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _openStudentDetails() async {
-    final c = context.appColors;
-    final session = UserSession.instance;
-    // Merge myInfo + studentAddtnlInfo into one map, labelling keys properly.
-    final raw = <String, dynamic>{
-      ...?session.myInfo,
-      ...?session.studentAddtnlInfo,
-    };
-    // Remove noisy / internal fields
-    const skip = {'accessToken', 'refreshToken', 'userType', 'clubList', 'branchList'};
-    final entries = raw.entries
-        .where((e) => !skip.contains(e.key) && e.value != null && e.value.toString().isNotEmpty)
-        .toList();
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        maxChildSize: 0.92,
-        minChildSize: 0.35,
-        expand: false,
-        builder: (_, ctrl) => Container(
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-          child: ListView(controller: ctrl, children: [
-            Center(child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 14),
-                decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
-            Text('Student Details', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 16),
-            if (entries.isEmpty)
-              Text('No details available.', style: TextStyle(color: c.textSecondary))
-            else
-              ...entries.map((e) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  SizedBox(
-                    width: 130,
-                    child: Text(_humanizeKey(e.key),
-                        style: TextStyle(color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
-                  ),
-                  Expanded(
-                    child: Text(e.value.toString(),
-                        style: TextStyle(color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
-                  ),
-                ]),
-              )),
-          ]),
-        ),
-      ),
-    );
-  }
 
-  /// Converts camelCase / PascalCase API keys into readable labels.
-  static String _humanizeKey(String key) {
-    final spaced = key.replaceAllMapped(RegExp(r'([A-Z])'), (m) => ' ${m[0]}');
-    final result = spaced[0].toUpperCase() + spaced.substring(1);
-    // Common abbreviation fixes
-    return result
-        .replaceAll('I C ', 'IC ')
-        .replaceAll('T Center', 'Training Center')
-        .replaceAll('S Center', 'Student Center')
-        .replaceAll('Hand Phone', 'Phone')
-        .replaceAll('Addtnl', 'Additional')
-        .trim();
-  }
-
-  Future<void> _openMyPurchases() async {
-    final c = context.appColors;
-    final list = await _safeList(Api.reportsPurchaseRequests);
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
-        ),
-        padding: EdgeInsets.fromLTRB(22, 14, 22, 28 + MediaQuery.of(ctx).padding.bottom),
-        // Min height so a short/empty list still shows a clear sheet (not a
-        // sliver hidden behind the nav); cap at 75% of the screen.
-        constraints: BoxConstraints(
-          minHeight: 220,
-          maxHeight: MediaQuery.of(ctx).size.height * 0.75,
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)))),
-          const SizedBox(height: 14),
-          Text('My Purchases', style: TextStyle(color: c.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
-          Flexible(
-            child: (list == null || list.isEmpty)
-                ? Text('No purchases yet.', style: TextStyle(fontSize: 13, color: c.textSecondary))
-                : ListView(
-                    shrinkWrap: true,
-                    children: list.whereType<Map>().map((p) {
-                      final label = (p['name'] ?? p['description'] ?? p['text'] ?? 'Purchase').toString();
-                      final amt = (p['amount'] ?? p['value'] ?? '').toString();
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Row(children: [
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textPrimary)),
-                            if (amt.isNotEmpty) Text('RM $amt', style: TextStyle(fontSize: 11, color: c.textSecondary)),
-                          ])),
-                          TextButton.icon(
-                            onPressed: () async {
-                              try {
-                                final r = await Api.purchaseRequestFetchProducts();
-                                final products = r is List ? r : (r is Map && r['data'] is List ? r['data'] as List : const <dynamic>[]);
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Loaded ${products.length} products')),
-                                );
-                              } catch (e) {
-                                debugPrint('FetchProducts failed: $e');
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
-                              }
-                            },
-                            icon: Icon(Icons.replay, size: 14, color: c.primary),
-                            label: Text('Reorder', style: TextStyle(color: c.primary, fontSize: 12, fontWeight: FontWeight.w800)),
-                          ),
-                        ]),
-                      );
-                    }).toList(),
-                  ),
-          ),
-        ]),
-      ),
-    );
-  }
 
   Widget _personalInfoCard(AppColors c, UserSession session) {
     // Build rows from live API data — only show non-empty values.
@@ -859,7 +474,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const Spacer(),
                   AppIconButton(
                     icon: Icons.edit,
-                    onPressed: _openEditSheet,
+                    onPressed: () => context.push('/edit-profile'),
                     backgroundColor: Colors.white.withOpacity(0.22),
                     foregroundColor: Colors.white,
                     size: 38,
@@ -995,8 +610,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _actionTile(c, Icons.qr_code_scanner, 'Scan QR to Check In',
                 () => context.push('/qr-scan')),
             _actionTile(c, Icons.support_agent, 'Help Desk', _openHelpDesk),
-            _actionTile(c, Icons.badge_outlined, 'Student Details', _openStudentDetails),
-            _actionTile(c, Icons.shopping_bag_outlined, 'My Purchases', _openMyPurchases),
+            _actionTile(c, Icons.badge_outlined, 'Student Details',
+                () => context.push('/student-details')),
+            _actionTile(c, Icons.shopping_bag_outlined, 'My Purchases',
+                () => context.push('/purchases')),
             const SizedBox(height: 12),
             _notificationsCard(context, c, session),
             const SizedBox(height: 18),

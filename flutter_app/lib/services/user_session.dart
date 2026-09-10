@@ -375,15 +375,32 @@ class UserSession extends ChangeNotifier {
     return '';
   }
 
+  /// Turn whatever the API put in a photo field into something [Image.network] can load.
+  ///
+  /// The server returns these inconsistently: sometimes absolute, more often a path like
+  /// `/Uploads/DP/123.jpg` or even `Uploads\DP\123.jpg`. Requiring `http` dropped every
+  /// relative one on the floor and fell through to the club logo, so a member with a real
+  /// photo saw the club crest and assumed the upload had failed.
+  static String resolvePhotoUrl(String raw, {String base = ApiService.baseUrl}) {
+    final v = raw.trim();
+    if (v.isEmpty) return '';
+    if (v.startsWith('http://') || v.startsWith('https://')) return v;
+    // A data: URI is already renderable; anything else is a server path.
+    if (v.startsWith('data:')) return v;
+    final path = v.replaceAll(r'\', '/');
+    return '$base${path.startsWith('/') ? '' : '/'}$path';
+  }
+
   /// Student's actual profile picture. Checks multiple myInfo / studentAddtnlInfo
   /// fields before falling back to the club logo (clubPic).
   String get studentPhoto {
     const photoKeys = ['photo', 'profilePic', 'pic', 'image', 'avatar', 'photoUrl', 'studentPhoto'];
     for (final k in photoKeys) {
       final v = (myInfo?[k] ?? studentAddtnlInfo?[k] ?? '').toString();
-      if (v.isNotEmpty && v.startsWith('http')) return v;
+      final url = resolvePhotoUrl(v);
+      if (url.isNotEmpty) return url;
     }
-    return clubPic;
+    return resolvePhotoUrl(clubPic);
   }
 
   /// Locally-cached profile photo (base64), keyed by student id. The API

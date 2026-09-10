@@ -223,9 +223,19 @@ class Api {
 
   /// /Profile/UpdateProfile is multipart/form-data (NOT JSON). Pass string
   /// fields (Id, Name, IcNo, Gender, Address1-4, PostalCode, EmailAddress,
-  /// HandPhone, Height, Weight, ProfilePic base64, ...).
-  static Future<dynamic> profileUpdateProfile(Map<String, String> fields) =>
-      ApiService.postMultipart('/Profile/UpdateProfile', fields);
+  /// HandPhone, Height, Weight, ...). [photoPath], when given, is uploaded as the
+  /// display picture and the new URL comes back in the response.
+  ///
+  /// `sendEmptyFields` is ON: this is an edit form, and a field the member cleared has
+  /// to reach the server as empty rather than being dropped from the request.
+  static Future<dynamic> profileUpdateProfile(Map<String, String> fields,
+          {String? photoPath}) =>
+      ApiService.postMultipart(
+        '/Profile/UpdateProfile',
+        fields,
+        sendEmptyFields: true,
+        files: photoPath == null ? const [] : [photoPath],
+      );
 
   static Future<dynamic> profileMyNotifications() =>
       ApiService.get('/Profile/MyNotifications');
