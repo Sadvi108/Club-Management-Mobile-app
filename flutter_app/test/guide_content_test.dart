@@ -1,4 +1,6 @@
 // The user guide is instructions a member acts on, so the content is worth asserting.
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dclix_app/data/guide_content.dart';
 
@@ -79,5 +81,39 @@ void main() {
   test('the pages that carry a warning still carry it', () {
     final withNotes = kGuideSteps.where((s) => s.note.trim().isNotEmpty).map((s) => s.key);
     expect(withNotes, containsAll(['checkin', 'payments', 'profile']));
+  });
+
+  group('screenshots', () {
+    test('every declared shot points at an asset that exists', () {
+      // A missing asset renders as nothing (the guide swallows the error rather than
+      // blanking the page), so a typo would silently cost a picture.
+      final missing = <String>[];
+      for (final step in kGuideSteps) {
+        if (step.shot.isEmpty) continue;
+        if (!File(step.shot).existsSync()) missing.add('${step.key} -> ${step.shot}');
+      }
+      expect(missing, isEmpty, reason: 'declared but not on disk: $missing');
+    });
+
+    test('every shipped asset is referenced by a page', () {
+      // The other direction: an orphan PNG is dead weight in the APK.
+      final dir = Directory('assets/guide');
+      if (!dir.existsSync()) return;
+      final referenced = kGuideSteps.map((s) => s.shot).toSet();
+      final orphans = dir
+          .listSync()
+          .whereType<File>()
+          .map((f) => 'assets/guide/${f.uri.pathSegments.last}')
+          .where((p) => !referenced.contains(p))
+          .toList();
+      expect(orphans, isEmpty, reason: 'unreferenced assets: $orphans');
+    });
+
+    test('the pages a reader most needs a picture of have one', () {
+      for (final key in ['signin', 'payments', 'schedule', 'everything']) {
+        final step = kGuideSteps.firstWhere((s) => s.key == key);
+        expect(step.shot, isNotEmpty, reason: '$key lost its screenshot');
+      }
+    });
   });
 }

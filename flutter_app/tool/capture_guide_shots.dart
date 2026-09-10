@@ -3,38 +3,18 @@
 //   flutter test tool/capture_guide_shots.dart --dart-define=CAPTURE=true
 //
 // It lives in tool/ and NOT in test/ on purpose: `flutter test` auto-discovers everything
-// under test/, and the hang described below stalled the whole suite. Nothing here runs
-// unless you invoke this file by path.
-//
-// KNOWN LIMITATION — the capture itself works and is fast, but the test harness does not
-// terminate afterwards: the first shot is written correctly within seconds, then the run
-// hangs and every later test reports "did not complete". Ruled out as causes: the
-// notification method channel (mocked), the UserSession poll timer (cancelled in
-// tearDown), an undisposed ui.Image, and a still-mounted widget tree. Cause not yet
-// identified.
-//
-// Practical consequence: ONE shot per invocation, and the process needs killing after.
-// Capture a specific screen with:
-//
-//   flutter test tool/capture_guide_shots.dart --dart-define=CAPTURE=true --plain-name offers
-//
-// The PNG lands before the hang, so the output is still correct — just not batchable.
+// under test/, and this file installs an HttpOverrides and writes to assets/ — neither of
+// which belongs in the normal suite.
 //
 // WHY A TEST AND NOT A DEVICE: a widget test renders the real screens deterministically at
-// a fixed size, with no phone, no login and — critically — no real member's data. The Expo
-// guide shipped screenshots containing a real name, phone number and member QR before that
-// was caught. Everything here is obviously fictional and lives in this file, so a shot can
-// never contain anyone's actual record.
+// a fixed phone size, with no phone, no login and — critically — no real member's data. The
+// Expo guide shipped screenshots containing a real name, phone number and member QR before
+// that was caught. Every value here comes from tool/fake_api.dart, so a capture physically
+// cannot contain anyone's record.
 //
-// SCOPE — only screens that render fully from seeded state, for two reasons:
-//   * API-driven screens (schedule, payments, chat) would capture their loading or empty
-//     state, and a picture of an empty screen teaches a reader nothing.
-//   * Screens that touch a PLUGIN at load — AutoPayScreen calls into
-//     flutter_local_notifications — hang here even with the method channel mocked, and the
-//     capture comes out as a spinner. Mocking the channel was not enough; whatever the
-//     plugin awaits underneath never completes in the test binding. Not worth more time
-//     for one picture, so Auto Pay stays text-only. If you revisit it, the symptom is a
-//     ~10-minute hang per test and a 10KB PNG of a progress indicator.
+// The API is faked at the dart:io layer (see fake_api.dart) because ApiService calls
+// package:http's top-level helpers and has no client to inject. Without that, every
+// API-driven screen captured as an empty state.
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -45,15 +25,55 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:dclix_app/screens/attendance_screen.dart';
+import 'package:dclix_app/screens/autopay_screen.dart';
+import 'package:dclix_app/screens/book_class_screen.dart';
+import 'package:dclix_app/screens/chat_screen.dart';
+import 'package:dclix_app/screens/competition_screen.dart';
+import 'package:dclix_app/screens/helpdesk_screen.dart';
+import 'package:dclix_app/screens/login_screen.dart';
 import 'package:dclix_app/screens/more_screen.dart';
+import 'package:dclix_app/screens/notification_settings_screen.dart';
+import 'package:dclix_app/screens/notifications_screen.dart';
 import 'package:dclix_app/screens/offers_screen.dart';
+import 'package:dclix_app/screens/outstanding_invoices_screen.dart';
+import 'package:dclix_app/screens/progress_screen.dart';
+import 'package:dclix_app/screens/purchase_request_screen.dart';
+import 'package:dclix_app/screens/purchases_screen.dart';
+import 'package:dclix_app/screens/schedule_screen.dart';
+import 'package:dclix_app/screens/student_details_screen.dart';
+import 'package:dclix_app/services/api_service.dart';
 import 'package:dclix_app/services/user_session.dart';
+import 'package:dclix_app/theme/theme_provider.dart';
+
+import 'fake_api.dart';
+
+/// The same providers main.dart installs. LoginScreen watches ThemeProvider and threw
+/// "Could not find the correct Provider<ThemeProvider>" without it.
+///
+/// A plain ThemeData on purpose: AppTheme.light() constructs GoogleFonts, which fires an
+/// async font download the test HttpClient refuses, and the placeholder font comes back.
+/// context.appColors falls back to AppColors.light, so the palette is still the real one.
+Widget _wrap(Widget child) => MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider<UserSession>.value(value: UserSession.instance),
+      ],
+      child: MaterialApp(
+        theme: ThemeData(fontFamily: 'Roboto'),
+        home: child,
+      ),
+    );
 
 const _capture = bool.fromEnvironment('CAPTURE');
 
 /// Fonts ship with the Flutter SDK. Without them every glyph renders as a filled box and
 /// every Material icon as an empty square — fine for layout tests, useless for a picture.
 const _sdkCache = r'C:\flutter\bin\cache';
+
+/// A common modern phone: 390 x 844 logical points at 3x.
+const _phone = Size(1170, 2532);
+const _phoneDpr = 3.0;
 
 Future<void> _loadFont(String family, String path) async {
   final file = File(path);
@@ -63,21 +83,34 @@ Future<void> _loadFont(String family, String path) async {
   await loader.load();
 }
 
-/// Entirely invented. No field here corresponds to a real member.
-void _seedFixture() {
+/// Seeded from the same fixture the fake API serves, so a screen reading the session and a
+/// screen reading the network show the same fictional member.
+void _seedSession() {
   final s = UserSession.instance;
   s.myInfo = {
+    'id': 1,
     'name': 'Alex Tan',
     'registrationNo': 'DCX-0001',
     'currentGrade': 'Green Belt',
     'tCenterName': 'Sample Training Centre',
     'eCenterName': 'Sample Exam Centre',
     'instructorName': 'Sensei Sample',
+    'trainingTme': '8:00 PM - 9:30 PM',
     'handPhone': '000-0000000',
-    'email': 'member@example.com',
+    'icNo': '000000-00-0000',
+    'emailAddress': 'member@example.com',
     'clubName': 'D-CLIX Sample Academy',
+    'attendancePercentage': '92',
+  };
+  s.studentAddtnlInfo = {
+    'schoolname': 'Sample Secondary School',
+    'dob': '2010-04-02T00:00:00',
+    'bloodtype': 'O+',
+    'healthstatus': 'Good',
   };
   s.homeStats = {
+    'invoiceCount': 2,
+    'dueAmount': 170.00,
     'myoffers': [
       {
         'code': 'SAMPLE10',
@@ -92,53 +125,65 @@ void _seedFixture() {
       },
     ],
   };
-  s.studentAddtnlInfo = {'schoolname': 'Sample School', 'bloodtype': 'O+'};
 }
 
-Future<void> _shot(WidgetTester tester, String name, Widget screen) async {
-  tester.view.physicalSize = const Size(1080, 2160);
-  tester.view.devicePixelRatio = 3.0;
+/// [inShell] reproduces what TabsShell does for a tab screen: provide the Scaffold. Those
+/// screens return a bare Container because the shell wraps them, so capturing one on its
+/// own renders Flutter's error widget instead.
+Future<void> _shot(WidgetTester tester, String name, Widget screen,
+    {bool inShell = false}) async {
+  tester.view.physicalSize = _phone;
+  tester.view.devicePixelRatio = _phoneDpr;
   addTearDown(tester.view.reset);
 
   final key = GlobalKey();
-  await tester.pumpWidget(
-    ChangeNotifierProvider<UserSession>.value(
-      value: UserSession.instance,
-      child: MaterialApp(
-        // A plain theme on purpose. AppTheme.light() constructs GoogleFonts, which fires
-        // an async font download that the test HttpClient answers with a 400 — and the
-        // placeholder font comes back. context.appColors falls back to AppColors.light
-        // when the extension is absent, so the palette is still the real one.
-        theme: ThemeData(fontFamily: 'Roboto'),
-        home: RepaintBoundary(key: key, child: screen),
-      ),
-    ),
-  );
-  // NOT pumpAndSettle: a screen showing a CircularProgressIndicator never settles — the
-  // spinner animates forever — and each capture sat there until the 10-minute timeout.
-  // Three fixed pumps is enough for initState futures to complete and lay out.
-  for (var i = 0; i < 3; i++) {
-    await tester.pump(const Duration(milliseconds: 350));
+    final content = inShell ? Scaffold(body: screen) : screen;
+  await tester.pumpWidget(_wrap(RepaintBoundary(key: key, child: content)));
+  // runAsync so the client's future actually completes — flutter_test fakes the clock, and
+  // under plain pump() the fixture arrived after the capture and every API-driven screen
+  // came out as its empty state.
+  //
+  // NOT pumpAndSettle either: a screen showing a CircularProgressIndicator never settles.
+  // Two rounds: some screens chain a second fetch off the first, and one pass of
+  // runAsync + pump captured them mid-way through the chain.
+  for (var round = 0; round < 3; round++) {
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    });
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
   }
 
-  final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-  final image = await boundary.toImage(pixelRatio: 1.5);
-  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-  // An undisposed ui.Image keeps native memory (and the binding) alive past the test.
-  image.dispose();
+  // toImage/toByteData do REAL work on the raster thread, which the faked test clock never
+  // drives — outside runAsync the first capture wrote its PNG and then the run hung until
+  // the harness gave up, taking every later capture with it.
+  late final ByteData? bytes;
+  await tester.runAsync(() async {
+    final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+    final image = await boundary.toImage(pixelRatio: 1.0);
+    bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+  });
+
+  // Refuse to ship a loading state OR an error screen. Both write a perfectly valid PNG
+  // and pass silently — progress.png shipped as Flutter's red-and-yellow error widget and
+  // was only caught by opening the file.
+  expect(find.byType(CircularProgressIndicator), findsNothing,
+      reason: '$name captured while still loading; give it more time or stub what it awaits');
+  expect(find.byType(ErrorWidget), findsNothing,
+      reason: '$name captured as a Flutter error screen; it threw during build');
+
   final out = File('assets/guide/$name.png');
   out.parent.createSync(recursive: true);
   out.writeAsBytesSync(bytes!.buffer.asUint8List());
   // ignore: avoid_print
   print('shot: ${out.path} (${out.lengthSync()} bytes)');
 
-  // Unmount before the test ends: leaving the screen mounted leaves its listeners
-  // attached to the UserSession singleton, which outlives the test.
   await tester.pumpWidget(const SizedBox.shrink());
 }
 
 void main() {
-  // `testWidgets` takes a bool skip; `test` takes a String reason. Both are used below.
   const skipShots = !_capture;
   const skipReason =
       _capture ? null : 'pass --dart-define=CAPTURE=true to regenerate guide shots';
@@ -149,43 +194,89 @@ void main() {
         '$_sdkCache\\dart-sdk\\bin\\resources\\devtools\\assets\\fonts\\MaterialIcons-Regular.otf');
     await _loadFont(
         'Roboto', '$_sdkCache\\artifacts\\material_fonts\\roboto-regular.ttf');
-    // AutoPayScreen and the notification prefs read SharedPreferences; without a mock the
-    // platform channel throws and the screen stays on its spinner.
+
+    // Serve the fixture to every screen that fetches.
+    ApiService.client = fakeApiClient();
+
+    // ignore: invalid_use_of_visible_for_testing_member — this file IS run via
+    // `flutter test`; it only lives outside test/ so the suite does not pick it up.
     SharedPreferences.setMockInitialValues({
-      // Captured with the feature ON, so the shot shows the real settings rather than a
-      // bare toggle. Values match the screen's own defaults.
+      // Auto Pay captured ON, so the shot shows the real settings rather than a bare
+      // toggle.
       'dclix.autopay.v1':
           '{"enabled":true,"dayOfMonth":1,"monthsAhead":1,"payeeIds":[],"lastRemindedMs":null}',
     });
 
-    // flutter_local_notifications has no platform side in a test, so every call hangs
-    // unanswered — which is why the Auto Pay capture came out as a spinner, and why each
-    // test then sat until teardown timed out. Answer the channel instead.
+    // flutter_local_notifications has no platform side in a test; unanswered calls leave
+    // the Auto Pay screen on its spinner.
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('dexterous.com/flutter/local_notifications'),
+      // Types matter: the plugin casts these. `initialize` returning null instead of a
+      // bool left NotificationService.init() awaiting forever and Auto Pay captured as a
+      // spinner.
       (call) async => switch (call.method) {
+        'initialize' => true,
+        'getNotificationAppLaunchDetails' => <String, Object?>{
+            'notificationLaunchedApp': false,
+          },
         'pendingNotificationRequests' => <Map<String, Object?>>[],
+        'getActiveNotifications' => <Map<String, Object?>>[],
         'areNotificationsEnabled' => true,
         'requestNotificationsPermission' => true,
         'requestPermissions' => true,
+        'createNotificationChannel' => null,
+        'cancel' => null,
+        'zonedSchedule' => null,
         _ => null,
       },
     );
-    _seedFixture();
+
+    _seedSession();
   });
 
-  // UserSession is a singleton that starts a periodic notification poll. A live Timer
-  // keeps the test binding from ever finishing, so each capture wrote its PNG and then
-  // hung until the harness gave up — the shot itself was never the slow part.
+  // UserSession is a singleton that starts a periodic notification poll; a live Timer keeps
+  // the binding from finishing.
   tearDown(() => UserSession.instance.stopNotificationPolling());
 
+  // One per guide page that has a screen worth showing.
+  testWidgets('signin', (t) => _shot(t, 'login', const LoginScreen()), skip: skipShots);
+  testWidgets('checkin', (t) => _shot(t, 'attendance', const AttendanceScreen()),
+      skip: skipShots);
+  testWidgets('schedule',
+      (t) => _shot(t, 'schedule', const ScheduleScreen(), inShell: true),
+      skip: skipShots);
+  testWidgets('booking', (t) => _shot(t, 'book-class', const BookClassScreen()),
+      skip: skipShots);
+  testWidgets('payments', (t) => _shot(t, 'payments', const OutstandingInvoicesScreen()),
+      skip: skipShots);
+  testWidgets('autopay', (t) => _shot(t, 'autopay', const AutoPayScreen()),
+      skip: skipShots);
+  testWidgets('notifications', (t) => _shot(t, 'notifications', const NotificationsScreen()),
+      skip: skipShots);
+  testWidgets('alerts',
+      (t) => _shot(t, 'notification-settings', const NotificationSettingsScreen()),
+      skip: skipShots);
+  testWidgets('profile', (t) => _shot(t, 'student-details', const StudentDetailsScreen()),
+      skip: skipShots);
+  testWidgets('chat', (t) => _shot(t, 'chat', const ChatScreen()), skip: skipShots);
   testWidgets('everything', (t) => _shot(t, 'more', const MoreScreen()), skip: skipShots);
+  testWidgets('progress',
+      (t) => _shot(t, 'progress', const ProgressScreen(), inShell: true),
+      skip: skipShots);
   testWidgets('offers', (t) => _shot(t, 'offers', const OffersScreen()), skip: skipShots);
+  testWidgets('competition', (t) => _shot(t, 'competition', const CompetitionScreen()),
+      skip: skipShots);
+  testWidgets('helpdesk', (t) => _shot(t, 'helpdesk', const HelpDeskScreen()),
+      skip: skipShots);
+  testWidgets('purchases', (t) => _shot(t, 'purchases', const PurchasesScreen()),
+      skip: skipShots);
+  testWidgets('purchase-request',
+      (t) => _shot(t, 'purchase-request', const PurchaseRequestScreen()), skip: skipShots);
 
-  test('no captured shot contains a real-looking identifier', () {
-    // A cheap standing guard on the fixture. If someone later seeds this from a live
-    // session, the names below stop matching and this fails.
+  test('the fixture is fictional', () {
+    // A standing guard: if someone later seeds this from a live session these stop
+    // matching, and a capture with real data fails rather than shipping.
     final s = UserSession.instance;
     if (s.myInfo == null) return;
     expect(s.myInfo!['name'], 'Alex Tan');

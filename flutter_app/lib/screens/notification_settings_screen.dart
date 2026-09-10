@@ -76,9 +76,13 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    return Container(
-      color: c.background,
-      child: Column(children: [
+    // Scaffold, not a bare Container: these are STANDALONE routes, so nothing above them
+    // provides Material, and AppHeader's back button is an InkWell — which asserts
+    // "No Material widget found". The tab screens get away with a Container only because
+    // TabsShell wraps them in its own Scaffold.
+    return Scaffold(
+      backgroundColor: c.background,
+      body: Column(children: [
         const AppHeader(title: 'Notification settings', showBack: true),
         Expanded(
           child: _loading

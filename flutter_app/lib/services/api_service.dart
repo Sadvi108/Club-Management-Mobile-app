@@ -27,6 +27,16 @@ class ApiService {
   static String baseUrlFor(String endpoint) =>
       isBoostPath(endpoint) ? boostBaseUrl : baseUrl;
 
+  /// The HTTP client every request goes through.
+  ///
+  /// Overridable so tests and the screenshot tool can serve canned responses. The only
+  /// alternative was intercepting dart:io with HttpOverrides, which means reimplementing
+  /// HttpClient, HttpClientRequest and HttpClientResponse by hand — easy to get subtly
+  /// wrong, and it was: requests arrived and responses silently never came back.
+  ///
+  /// Defaults to a real client, so production behaviour is unchanged.
+  static http.Client client = http.Client();
+
   static String? _token;
 
   /// Network logging — only in debug builds. Release builds must not dump
@@ -52,7 +62,7 @@ class ApiService {
   static Future<dynamic> get(String endpoint) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 GET: $url');
-    final response = await http.get(url, headers: _headers);
+    final response = await client.get(url, headers: _headers);
     _log('📥 Status: ${response.statusCode}');
     _log('📥 Body: ${response.body}');
     return _handle(response);
@@ -63,7 +73,7 @@ class ApiService {
     _log('📤 POST: $url');
     _log('📤 Body: ${jsonEncode(_redactForLog(body))}');
     final response =
-        await http.post(url, headers: _headers, body: jsonEncode(body));
+        await client.post(url, headers: _headers, body: jsonEncode(body));
     _log('📥 Status: ${response.statusCode}');
     _log('📥 Body: ${response.body}');
     return _handle(response);
@@ -74,7 +84,7 @@ class ApiService {
   static Future<Uint8List> getBytes(String endpoint) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 GET(bytes): $url');
-    final response = await http.get(url, headers: {
+    final response = await client.get(url, headers: {
       if (_token != null) 'Authorization': 'Bearer $_token',
     });
     _log('📥 Status: ${response.statusCode} (${response.bodyBytes.length}B)');
@@ -98,7 +108,7 @@ class ApiService {
   static Future<Uint8List> getPdfSmart(String endpoint) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 GET(pdf): $url');
-    final response = await http.get(url, headers: {
+    final response = await client.get(url, headers: {
       'Accept': 'application/pdf, application/json, */*',
       if (_token != null) 'Authorization': 'Bearer $_token',
     });
@@ -124,7 +134,7 @@ class ApiService {
         final cand = _digPdfString(jsonDecode(trimmed));
         if (cand != null) {
           if (cand.startsWith('http')) {
-            final r2 = await http.get(Uri.parse(cand), headers: {
+            final r2 = await client.get(Uri.parse(cand), headers: {
               if (_token != null) 'Authorization': 'Bearer $_token',
             });
             if (_isPdf(r2.bodyBytes)) return r2.bodyBytes;
@@ -218,7 +228,7 @@ class ApiService {
     for (final path in files) {
       req.files.add(await http.MultipartFile.fromPath(fileField, path));
     }
-    final streamed = await req.send();
+    final streamed = await client.send(req);
     final response = await http.Response.fromStream(streamed);
     _log('📥 Status: ${response.statusCode}');
     return _handle(response);
@@ -228,7 +238,7 @@ class ApiService {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 PUT: $url');
     final response =
-        await http.put(url, headers: _headers, body: jsonEncode(body));
+        await client.put(url, headers: _headers, body: jsonEncode(body));
     _log('📥 Status: ${response.statusCode}');
     _log('📥 Body: ${response.body}');
     return _handle(response);
@@ -237,7 +247,7 @@ class ApiService {
   static Future<dynamic> delete(String endpoint) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 DELETE: $url');
-    final response = await http.delete(url, headers: _headers);
+    final response = await client.delete(url, headers: _headers);
     _log('📥 Status: ${response.statusCode}');
     _log('📥 Body: ${response.body}');
     return _handle(response);

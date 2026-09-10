@@ -48,6 +48,7 @@ class GuideDetail {
 const kGuideSteps = <GuideStep>[
   GuideStep(
     key: 'signin',
+    shot: 'assets/guide/login.png',
     icon: Icons.login,
     title: 'Signing in',
     intro: 'Your academy issues one account per member. Everything you see in the app — fees, attendance, grading — belongs to that account.',
@@ -106,6 +107,7 @@ const kGuideSteps = <GuideStep>[
   ),
   GuideStep(
     key: 'schedule',
+    shot: 'assets/guide/schedule.png',
     icon: Icons.calendar_month,
     title: 'Your timetable',
     intro: 'Schedule shows the training week for the centres you belong to, so you can see at a glance which days you train.',
@@ -122,6 +124,7 @@ const kGuideSteps = <GuideStep>[
   ),
   GuideStep(
     key: 'booking',
+    shot: 'assets/guide/book-class.png',
     icon: Icons.event_available,
     title: 'Booking a class',
     intro: 'Booking reserves your place in a session. Work down the screen: centre, then instructor, then month, then the session itself.',
@@ -141,6 +144,7 @@ const kGuideSteps = <GuideStep>[
   ),
   GuideStep(
     key: 'payments',
+    shot: 'assets/guide/payments.png',
     icon: Icons.account_balance_wallet,
     title: 'Fees and payments',
     intro: 'Everything financial lives under Payments: what you owe now, months you want to settle early, and every receipt you have ever been issued.',
@@ -181,6 +185,7 @@ const kGuideSteps = <GuideStep>[
   ),
   GuideStep(
     key: 'notifications',
+    shot: 'assets/guide/notifications.png',
     icon: Icons.notifications,
     title: 'Notifications',
     intro: 'Fee reminders, class changes and club announcements all arrive here, and as alerts on your phone.',
@@ -217,6 +222,7 @@ const kGuideSteps = <GuideStep>[
   ),
   GuideStep(
     key: 'profile',
+    shot: 'assets/guide/student-details.png',
     icon: Icons.account_circle,
     title: 'Profile and Virtual ID',
     intro: 'Your membership card, your details, and the switches for how the app looks and who you are viewing.',
@@ -234,6 +240,7 @@ const kGuideSteps = <GuideStep>[
   ),
   GuideStep(
     key: 'chat',
+    shot: 'assets/guide/chat.png',
     icon: Icons.forum,
     title: 'Chat and Help Desk',
     intro: 'Chat Academy is the two-way channel to your club: their announcements to you, and your questions back to them.',
