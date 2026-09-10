@@ -1,93 +1,135 @@
 # D-CLIX — Club Management Mobile App
 
-Expo / React Native app for martial-arts academies. Members sign in to check in to class by
-QR, see their timetable, book sessions, pay fees, and message the club; instructors get
-collections and reports instead.
+**Flutter** app for martial-arts academies. Members sign in to check in to class by QR, see
+their timetable, book sessions, pay fees, and message the club; instructors get collections
+and reports instead.
 
 The app is a **client only**. All data comes from the third-party **Club.Api** backend
 (`apimac.zyncbook.com`), which this repository does not own or deploy.
 
-> **Private repository.** The docs record live API contracts and account behaviour.
+> **This repository is public.** Do not commit credentials, tokens or member data. The docs
+> record live API contracts and observed backend behaviour — no account details.
 
 ## Stack
 
 | | |
 |---|---|
-| App | Expo SDK 54, Expo Router, React Native 0.81, TypeScript |
+| App | Flutter 3.41, Dart 3, go_router, provider |
 | Backend | Club.Api (ASP.NET, third-party) — REST + bearer JWT |
-| Auth | Token in the OS secure store (Keychain / Keystore) |
+| Auth | Token in the OS secure store (Keychain / Keystore), never in SharedPreferences |
 | Android | `com.dclix.clubapp` |
+| Payments | Boost gateway via the backend's `/Bcpg` routes |
 
 ## Getting started
 
 ```bash
-cd frontend
-npm install
-cp .env.example .env      # public config only: which API host to use
+cd flutter_app
+flutter pub get
 ```
 
-### Run the web preview
-
-From the **repository root** — this starts the Expo web server on `:8081` and the local
-CORS proxy on `:8082` that the browser needs (the production API is plain HTTP and does not
-send CORS headers):
+### Run
 
 ```bash
-node start-web.js
+flutter run                 # attached device or emulator
+flutter run -d chrome       # web preview
 ```
 
-Then open <http://localhost:8081>. In VS Code, *Run and Debug → "Web preview (app + CORS
-proxy)"* does the same thing.
+Note on the web preview: the backend is plain HTTP and sends no CORS headers, so
+**authenticated screens stay empty in a browser**. Sign-in and anything behind it need a
+real device or emulator. The user guide (`#/user-guide`) works without an account.
 
-Native builds call the API directly and do not use the proxy.
-
-### Run on a device
+### Test and analyze
 
 ```bash
-cd frontend
-npm run android      # or: npm run ios
+flutter test                # ~266 tests, offline and deterministic
+flutter analyze
 ```
+
+Two suites are opt-in because they reach outside the process:
+
+```bash
+# Live API smoke test — probes every screen's endpoints and prints a wiring table.
+flutter test test/live_api_smoke_test.dart \
+  --dart-define=LIVE_USER=<id> --dart-define=LIVE_PASS=<password>
+
+# Regenerate the user-guide screenshots (writes to assets/guide/).
+flutter test tool/capture_guide_shots.dart --dart-define=CAPTURE=true
+```
+
+### Build a release APK
+
+```bash
+flutter build apk --release
+```
+
+Requires JDK 17 and an Android SDK. Pushing a `flutter-v*` tag builds and publishes the
+APK through GitHub Actions.
 
 ## Layout
 
 ```
-frontend/            the app
-  app/               screens (Expo Router — file-based routing)
-  src/api/           HTTP layer, endpoints, auth, storage
-  src/notifications/ polling + local device alerts
-  src/theme.ts       colours, spacing, typography
-  assets/            icons, splash, notification sound, guide screenshots
-  scripts/           dev tooling (see below)
-docs/                architecture notes and dated API specs
-start-web.js         web preview launcher (Expo + CORS proxy)
+flutter_app/
+  lib/
+    screens/        one file per screen, plus payment/ and instructor_reports/
+    services/       API client, session, payments, notifications, storage
+    widgets/        shared UI
+    theme/          palette, tokens, ThemeProvider
+    router/         go_router configuration
+    data/           static config and user-guide content
+  test/             unit, wiring and render tests
+  tool/             screenshot capture and its fake API (not part of `flutter test`)
+  assets/guide/     user-guide screenshots, generated from fictional data
+docs/               architecture, design and API contract notes
 ```
+
+## How the app is verified
+
+Beyond ordinary unit tests, a few suites guard classes of bug that type-checking cannot:
+
+| Suite | What it catches |
+|---|---|
+| `api_wiring_test` | An endpoint path or HTTP verb that does not exist on the server. Checked against the real route table in `test/fixtures/club_api_routes.json` (73 paths). |
+| `screen_wiring_test` | A screen with no data source, or one that quietly stopped calling its endpoint. |
+| `navigation_targets_test` | A menu tile pointing at an unregistered route. |
+| `material_ancestor_test` | A standalone route with no `Material` ancestor (an `InkWell` there crashes the screen). |
+| `loading_state_test` | A screen that can never leave its loading state. |
+| `guide_content_test` | Guide text that promises something the app does not do, and missing or orphaned screenshots. |
+
+## Known constraints
+
+These are backend limitations, recorded so they are not mistaken for bugs:
+
+- **No push notifications.** Club.Api exposes no device-token route, so alerts are local:
+  the app polls in the foreground and through a WorkManager job every ~15 minutes with the
+  app closed.
+- **Auto Pay is a reminder, not a mandate.** There is no recurring-payment route. The
+  screen schedules a monthly reminder and pre-selects the months; the member still confirms.
+- **`/Bcpg` is UAT-only.** The Boost routes 404 on production, so those calls — and only
+  those — go to `apimacuat.zyncbook.com`, which serves a self-signed certificate the app
+  trusts for that one host (`android/app/src/main/res/xml/network_security_config.xml`).
+  Remove both once the routes ship to production with a real certificate.
+- **Cleartext HTTP is enabled** because the production API does not serve HTTPS.
+- **New-student approval is not built.** Its endpoints return 404 on both servers.
 
 ## Documentation
 
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — start here. API environments, endpoint
-  contracts, and the backend quirks the screens work around. Several are non-obvious and
-  documented because they cost real debugging time.
-- **[docs/DESIGN.md](docs/DESIGN.md)** — visual language.
-- **[docs/superpowers/specs/](docs/superpowers/specs/)** — dated design specs, including the
-  security audit.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — API contracts and observed backend behaviour
+- [`docs/DESIGN.md`](docs/DESIGN.md) — design system
+- [`docs/flutter-parity-plan.md`](docs/flutter-parity-plan.md) — the Expo → Flutter port, and what was deliberately left out
 
-## Dev tooling
+## History
 
-Scripts in `frontend/scripts/`, run from `frontend/`:
+This app was an Expo / React Native codebase through **v2.11.1**. The Flutter rewrite
+replaced it at **2.12.0**. The Expo app is preserved in full at tag
+[`v2.11.1`](https://github.com/Sadvi108/Club-Management-Mobile-app/tree/v2.11.1) —
+`git checkout v2.11.1` restores it.
 
-| Script | Purpose |
-|---|---|
-| `generate-icons.js` | Rebuilds launcher, splash and notification icons from `assets/branding/dclix-logo.png` |
-| `generate-guide-shots.js` | Recaptures the in-app user-guide screenshots from the running app |
-| `cors-proxy.js` | The web-preview proxy (started for you by `start-web.js`) |
-
-## Releases
-
-`.github/workflows/build-apk.yml` builds a release APK on GitHub Actions (Node 20, JDK 17,
-`expo prebuild` + `gradlew assembleRelease`) and uploads it as a build artifact.
+Both ship as `com.dclix.clubapp`, and the Flutter build's versionCode (18) is above the
+Expo release's (17), so it installs over an existing member's app as an update.
 
 ## Conventions
 
-- TypeScript is strict; `npx tsc --noEmit` and `npm run lint` must both be clean.
-- Comments explain *why*, especially where code works around a backend contract — don't
-  remove those without checking the spec they reference.
+- Commit messages say what changed and why, not how.
+- Comments explain the non-obvious — a workaround, a server quirk, a decision that looks
+  wrong until you know the constraint.
+- Nothing that is not verified is described as verified.

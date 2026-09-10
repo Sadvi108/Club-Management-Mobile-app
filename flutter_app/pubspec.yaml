@@ -78,8 +78,11 @@ flutter:
     - assets/guide/
 
 # Launcher icon generation:  dart run flutter_launcher_icons
-# Sources are the same D-CLIX assets the Expo app ships, produced by
-# frontend/scripts/generate-icons.js — regenerate there, then re-run this.
+# The source is assets/branding/app-icon.png (the D-CLIX logo, already cropped to its
+# alpha bounds — the master carries ~5% transparent padding, and scaling the file rather
+# than the badge leaves a dead ring inside the adaptive icon's safe zone).
+# The generator that produced it lived in the retired Expo app; see tag v2.11.1 if the
+# masters ever need rebuilding from scratch.
 flutter_launcher_icons:
   image_path: "assets/branding/app-icon.png"
   android: true

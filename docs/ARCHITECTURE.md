@@ -1,7 +1,15 @@
 # Architecture & working notes — D-CLIX Club Management App
 
-Expo Router React Native app for a martial-arts club, wired to the live **Club.Api**
-backend. Repo is PRIVATE — keep it private (docs + prefilled login hold test creds).
+**Flutter** app for a martial-arts club, wired to the live **Club.Api** backend.
+
+> **This repository is PUBLIC.** An earlier version of this line claimed it was private and
+> that the docs held test credentials — both wrong, and a dangerous combination to leave
+> written down. Credentials live in the team password manager and must never be committed.
+> Some older notes under `docs/superpowers/` still name test members and their ids; that is
+> already published history, so treat those accounts as exposed and rotate them.
+
+The app was Expo / React Native through v2.11.1 and was rewritten in Flutter at 2.12.0.
+Paths below that point into `frontend/` refer to the retired codebase — see tag `v2.11.1`.
 
 ## API environments (switchable at runtime)
 - **prod** `http://apimac.zyncbook.com` — live academy data, 69 endpoints.

@@ -2,23 +2,35 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Web preview (app + CORS proxy)",
-      "type": "node",
+      "name": "D-CLIX (debug)",
       "request": "launch",
-      "program": "${workspaceFolder}/start-web.js",
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "skipFiles": ["<node_internals>/**"]
+      "type": "dart",
+      "program": "flutter_app/lib/main.dart",
+      "cwd": "${workspaceFolder}/flutter_app"
     },
     {
-      "name": "Web preview (Expo only, no proxy)",
-      "type": "node",
+      "name": "D-CLIX (profile)",
       "request": "launch",
-      "program": "${workspaceFolder}/frontend/node_modules/expo/bin/cli",
-      "args": ["start", "--web", "--port", "8081"],
-      "cwd": "${workspaceFolder}/frontend",
-      "console": "integratedTerminal",
-      "skipFiles": ["<node_internals>/**"]
+      "type": "dart",
+      "flutterMode": "profile",
+      "program": "flutter_app/lib/main.dart",
+      "cwd": "${workspaceFolder}/flutter_app"
+    },
+    {
+      "name": "D-CLIX (release)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "program": "flutter_app/lib/main.dart",
+      "cwd": "${workspaceFolder}/flutter_app"
+    },
+    {
+      "name": "D-CLIX on Chrome",
+      "request": "launch",
+      "type": "dart",
+      "program": "flutter_app/lib/main.dart",
+      "cwd": "${workspaceFolder}/flutter_app",
+      "args": ["-d", "chrome"]
     }
   ]
 }
