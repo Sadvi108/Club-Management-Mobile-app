@@ -69,6 +69,7 @@ const kGuideSteps = <GuideStep>[
   ),
   GuideStep(
     key: 'home',
+    shot: 'assets/guide/home.png',
     icon: Icons.home,
     title: 'Your home dashboard',
     intro: 'Home is the summary of everything that needs your attention today. It refreshes from the club system each time you open it.',
@@ -87,6 +88,7 @@ const kGuideSteps = <GuideStep>[
   ),
   GuideStep(
     key: 'checkin',
+    shot: 'assets/guide/attendance.png',
     icon: Icons.qr_code_scanner,
     title: 'Checking in with QR',
     intro: 'Attendance is marked by scanning the QR poster displayed at your training centre. Tap Scan — the round button in the middle of the tab bar — and point your camera at it.',
@@ -164,6 +166,7 @@ const kGuideSteps = <GuideStep>[
   ),
   GuideStep(
     key: 'autopay',
+    shot: 'assets/guide/autopay.png',
     icon: Icons.autorenew,
     title: 'Auto Pay reminders',
     intro: 'Auto Pay is a monthly nudge, not a direct debit. It reminds you when fees are due and opens the payment with the right months already ticked.',
@@ -202,6 +205,7 @@ const kGuideSteps = <GuideStep>[
   ),
   GuideStep(
     key: 'alerts',
+    shot: 'assets/guide/notification-settings.png',
     icon: Icons.tune,
     title: 'Alert settings',
     intro: 'Control exactly how your phone behaves when the club sends something. Every option here is per-device, so your phone and your tablet can differ.',

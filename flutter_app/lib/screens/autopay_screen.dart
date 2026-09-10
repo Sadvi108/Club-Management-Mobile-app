@@ -41,14 +41,25 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
   }
 
   Future<void> _load() async {
-    final p = await AutoPayStore.load();
-    final armed = await NotificationService.hasAutoPayReminder();
-    if (!mounted) return;
-    setState(() {
-      _prefs = p;
-      _armed = armed;
-      _loading = false;
-    });
+    // Defence in depth. NotificationService.init() no longer throws, but a screen whose
+    // only exit from the loading state is the happy path is one bad await away from
+    // spinning forever — which is exactly what happened here.
+    var p = AutoPayPrefs.defaults;
+    var armed = false;
+    try {
+      p = await AutoPayStore.load();
+      armed = await NotificationService.hasAutoPayReminder();
+    } catch (e) {
+      debugPrint('autopay load failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _prefs = p;
+          _armed = armed;
+          _loading = false;
+        });
+      }
+    }
   }
 
   String _ordinal(int n) {

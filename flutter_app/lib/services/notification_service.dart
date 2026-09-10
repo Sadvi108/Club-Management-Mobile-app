@@ -59,8 +59,22 @@ class NotificationService {
     }
   }
 
+  /// True when [init] tried and failed. Notifications will not work, but the app must
+  /// still run.
+  static bool _initFailed = false;
+
+  /// Whether the notification plugin came up. Screens use it to explain themselves rather
+  /// than silently offering controls that do nothing.
+  static bool get isAvailable => _ready && !_initFailed;
+
+  /// Set up the plugin. NEVER THROWS.
+  ///
+  /// Every caller does `await init()` before its own try block, so a throw here escaped
+  /// all of them — and the screens that await it (Auto Pay, Notification settings) have no
+  /// catch of their own, so they sat on a spinner forever with no error and no way out.
+  /// A notification stack that fails to start is a degraded app, not a stuck one.
   static Future<void> init() async {
-    if (_ready) return;
+    if (_ready || _initFailed) return;
     _initTimeZones();
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings(
@@ -68,16 +82,32 @@ class NotificationService {
       requestSoundPermission: false,
       requestBadgePermission: false,
     );
-    await _plugin.initialize(
-      const InitializationSettings(android: android, iOS: ios),
-      onDidReceiveNotificationResponse: (r) => onTap?.call(r.payload),
-    );
-    _ready = true;
+    try {
+      await _plugin.initialize(
+        const InitializationSettings(android: android, iOS: ios),
+        onDidReceiveNotificationResponse: (r) => onTap?.call(r.payload),
+      );
+      _ready = true;
+    } catch (e) {
+      // Seen for real in a widget test, where the platform interface is never registered
+      // and `instance` throws LateInitializationError. On a device the equivalent is a
+      // failed channel or an OEM quirk — either way, do not strand the UI.
+      _initFailed = true;
+      debugPrint('notification plugin failed to initialise: $e');
+    }
+  }
+
+  /// Test seam: forget a previous failure so a later attempt can succeed.
+  static void resetForTest() {
+    _ready = false;
+    _initFailed = false;
+    _created.clear();
   }
 
   /// Ask for the OS permission. Android 13+ needs POST_NOTIFICATIONS at runtime.
   static Future<bool> requestPermission() async {
     await init();
+    if (_initFailed) return false;
     try {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
@@ -97,6 +127,7 @@ class NotificationService {
 
   static Future<bool> hasPermission() async {
     await init();
+    if (_initFailed) return false;
     try {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
@@ -332,6 +363,7 @@ class NotificationService {
   /// what the app merely intended.
   static Future<bool> hasAutoPayReminder() async {
     await init();
+    if (_initFailed) return false;
     try {
       final pending = await _plugin.pendingNotificationRequests();
       return pending.any((r) => r.id == autoPayReminderId);

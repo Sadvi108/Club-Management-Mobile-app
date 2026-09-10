@@ -22,6 +22,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -31,6 +32,7 @@ import 'package:dclix_app/screens/book_class_screen.dart';
 import 'package:dclix_app/screens/chat_screen.dart';
 import 'package:dclix_app/screens/competition_screen.dart';
 import 'package:dclix_app/screens/helpdesk_screen.dart';
+import 'package:dclix_app/screens/home_screen.dart';
 import 'package:dclix_app/screens/login_screen.dart';
 import 'package:dclix_app/screens/more_screen.dart';
 import 'package:dclix_app/screens/notification_settings_screen.dart';
@@ -59,9 +61,14 @@ Widget _wrap(Widget child) => MultiProvider(
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider<UserSession>.value(value: UserSession.instance),
       ],
-      child: MaterialApp(
+      // MaterialApp.router, not MaterialApp: ProgressScreen reads GoRouter in build and
+      // threw "No GoRouter found in context", which captured as Flutter's error widget.
+      child: MaterialApp.router(
         theme: ThemeData(fontFamily: 'Roboto'),
-        home: child,
+        routerConfig: GoRouter(
+          initialLocation: '/x',
+          routes: [GoRoute(path: '/x', builder: (_, __) => child)],
+        ),
       ),
     );
 
@@ -108,6 +115,32 @@ void _seedSession() {
     'bloodtype': 'O+',
     'healthstatus': 'Good',
   };
+  // Seeded together with homeStats on purpose. Home reads the invoice list from the
+  // session (UserSession.refresh fills it in the real app), and with only homeStats set the
+  // screen said "RM170.00, 2 invoices outstanding" directly above "You're all paid up".
+  // Worth knowing that state is reachable for real if one of the two fetches fails.
+  s.outstandingList = [
+    {
+      'id': 5001,
+      'invoiceNo': 'INV-2026-0091',
+      'invoiceDescription': 'Monthly fee — September 2026',
+      'period': 'Sep 2026',
+      'dueAmount': 85.00,
+      'invoiceDate': '2026-09-01T00:00:00',
+      'studentId': 1,
+      'studentName': 'Alex Tan',
+    },
+    {
+      'id': 5002,
+      'invoiceNo': 'INV-2026-0078',
+      'invoiceDescription': 'Monthly fee — August 2026',
+      'period': 'Aug 2026',
+      'dueAmount': 85.00,
+      'invoiceDate': '2026-08-01T00:00:00',
+      'studentId': 1,
+      'studentName': 'Alex Tan',
+    },
+  ];
   s.homeStats = {
     'invoiceCount': 2,
     'dueAmount': 170.00,
@@ -169,7 +202,13 @@ Future<void> _shot(WidgetTester tester, String name, Widget screen,
   // Refuse to ship a loading state OR an error screen. Both write a perfectly valid PNG
   // and pass silently — progress.png shipped as Flutter's red-and-yellow error widget and
   // was only caught by opening the file.
-  expect(find.byType(CircularProgressIndicator), findsNothing,
+  // Only INDETERMINATE indicators mean "still loading". The attendance screen draws its
+  // percentage as a determinate ring (value != null), which is finished UI — flagging that
+  // rejected a perfectly good screenshot.
+  final spinners = tester
+      .widgetList<CircularProgressIndicator>(find.byType(CircularProgressIndicator))
+      .where((w) => w.value == null);
+  expect(spinners, isEmpty,
       reason: '$name captured while still loading; give it more time or stub what it awaits');
   expect(find.byType(ErrorWidget), findsNothing,
       reason: '$name captured as a Flutter error screen; it threw during build');
@@ -241,6 +280,8 @@ void main() {
 
   // One per guide page that has a screen worth showing.
   testWidgets('signin', (t) => _shot(t, 'login', const LoginScreen()), skip: skipShots);
+  testWidgets('home', (t) => _shot(t, 'home', const HomeScreen(), inShell: true),
+      skip: skipShots);
   testWidgets('checkin', (t) => _shot(t, 'attendance', const AttendanceScreen()),
       skip: skipShots);
   testWidgets('schedule',

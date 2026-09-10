@@ -29,14 +29,24 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
   }
 
   Future<void> _load() async {
-    final p = await NotifPrefsStore.load();
-    final ok = await NotificationService.hasPermission();
-    if (!mounted) return;
-    setState(() {
-      _p = p;
-      _permitted = ok;
-      _loading = false;
-    });
+    // See the note in AutoPayScreen: the loading state must have an exit on every path,
+    // not only the happy one.
+    var p = NotifPrefs.defaults;
+    var ok = false;
+    try {
+      p = await NotifPrefsStore.load();
+      ok = await NotificationService.hasPermission();
+    } catch (e) {
+      debugPrint('notification settings load failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _p = p;
+          _permitted = ok;
+          _loading = false;
+        });
+      }
+    }
   }
 
   Future<void> _update(NotifPrefs next) async {

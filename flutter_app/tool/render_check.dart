@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -45,9 +46,14 @@ Widget _wrap(Widget child) => MultiProvider(
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider<UserSession>.value(value: UserSession.instance),
       ],
-      child: MaterialApp(
+      // MaterialApp.router, not MaterialApp: ProgressScreen reads GoRouter in build and
+      // threw "No GoRouter found in context", which captured as Flutter's error widget.
+      child: MaterialApp.router(
         theme: ThemeData(fontFamily: 'Roboto'),
-        home: child,
+        routerConfig: GoRouter(
+          initialLocation: '/x',
+          routes: [GoRoute(path: '/x', builder: (_, __) => child)],
+        ),
       ),
     );
 
