@@ -445,7 +445,7 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
                   if (invoiceNo.isNotEmpty)
                     _miniMeta(c, Icons.tag, invoiceNo),
                   if (dueDate.isNotEmpty)
-                    _miniMeta(c, Icons.event, dueDate),
+                    _miniMeta(c, Icons.event, _fmtDate(dueDate)),
                 ],
               ),
               const SizedBox(height: 8),
@@ -580,7 +580,7 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
               Divider(color: c.border, height: 1),
               const SizedBox(height: 6),
               if (invoiceNo.isNotEmpty) row('Invoice No.', invoiceNo),
-              if (dueDate.isNotEmpty) row('Due date', dueDate),
+              if (dueDate.isNotEmpty) row('Due date', _fmtDate(dueDate)),
               if (student.isNotEmpty) row('Student', student),
               ...extras.map((e) => row(e.key, e.value)),
               const SizedBox(height: 16),
@@ -645,6 +645,22 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
     final parts = t.trim().split(RegExp(r'\s+'));
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
+  /// Present a server date as a member would write it.
+  ///
+  /// The API returns ISO timestamps, and these were being rendered raw — an invoice card
+  /// read "2026-09-01T00:00:00". Anything unparseable is passed through untouched rather
+  /// than blanked, since an odd-looking date still beats no date.
+  static String _fmtDate(String s) {
+    if (s.trim().isEmpty) return '';
+    final d = DateTime.tryParse(s.trim());
+    if (d == null) return s.trim();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]} ${d.year}';
   }
 
   static bool _isOverdue(String s) {
