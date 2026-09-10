@@ -28,6 +28,7 @@ class MoreScreen extends StatelessWidget {
       _Item('Outstanding Invoices', Icons.description, Color(0xFF8B5CF6), '/invoices'),
       _Item('Purchase Request', Icons.shopping_bag, Color(0xFFF59E0B), '/purchase-request'),
       _Item('My Purchases', Icons.inventory_2, Color(0xFFDB2777), '/purchases'),
+      _Item('Auto Pay', Icons.autorenew, Color(0xFF6366F1), '/autopay'),
     ]),
     _Section('Progress', [
       _Item('Progress Report', Icons.trending_up, Color(0xFF6366F1), '/progress'),

@@ -14,6 +14,7 @@ import '../screens/book_class_screen.dart';
 import '../screens/chat_screen.dart';
 import '../screens/chat_thread_screen.dart';
 import '../screens/more_screen.dart';
+import '../screens/autopay_screen.dart';
 import '../screens/competition_screen.dart';
 import '../screens/edit_profile_screen.dart';
 import '../screens/helpdesk_screen.dart';
@@ -251,6 +252,9 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
         path: '/purchases',
         pageBuilder: (_, s) => _fadeThrough(s.pageKey, const PurchasesScreen())),
+    GoRoute(
+        path: '/autopay',
+        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const AutoPayScreen())),
     GoRoute(
         path: '/purchase-request',
         pageBuilder: (_, s) =>
