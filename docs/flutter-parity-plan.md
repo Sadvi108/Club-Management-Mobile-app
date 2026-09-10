@@ -8,7 +8,7 @@ including every API and the Boost payment gateway, and becomes the shipping app.
 | | `flutter_app/` | `frontend/` (Expo) |
 |---|---|---|
 | Code | 22.5k lines, 77 Dart files | 15.1k lines, 54 screens |
-| Tests | **71 passing** | none |
+| Tests | **212 passing** | none |
 | Last real work | 2026-06-24 | 2026-09-10 |
 | Toolchain | Flutter 3.41.7 — `pub get`, `analyze` (0 errors), `build web`, `test` all pass | Expo SDK 54 |
 
@@ -50,25 +50,44 @@ Replace the direct client with those routes:
 Flutter references 85 endpoints overall — it already covers instructor reporting more
 broadly than Expo does.
 
-## 3. Missing screens (~20)
+## 3. Screens — DONE (updated 2026-09-10, second pass)
 
-Already present: attendance, events, home, login, payments, profile, progress, qr-scan,
-schedule, training, splash, tabs shells, instructor home/collections/reports/settings/
-attendance, outstanding invoices, term payment, student detail.
+Every student- and instructor-facing screen in the Expo app now has a Flutter equivalent.
 
-To build:
+| Area | Screens | Status |
+|---|---|---|
+| Booking | `book-class` | done |
+| Payments | `purchase-request`, `purchases` | done |
+| Messaging | `chat`, `chat-thread`, `helpdesk`, `notifications` | done |
+| Alerts | `notification-settings` + the notification service | done |
+| Club | `competition`, `offers`, `offer-detail` | done |
+| Account | `edit-profile`, `student-details` | done |
+| Navigation | `more` (feature catalogue) | done |
+| Onboarding | `user-guide` (11 pages) | done, without screenshots |
+| Student reports | the `r-*` set | covered by the instructor report routes (20 registered) |
 
-| Area | Screens |
+Route names differ in two places, deliberately: Expo's `chat-thread` is
+`/notification/:groupId` here, and `offer-detail` is `/offer/:code`.
+
+### Deliberately NOT built
+
+| Screen | Why |
 |---|---|
-| Booking | `book-class` |
-| Payments | `autopay`, `autopay-setup`, `purchase-request`, `purchases` |
-| Messaging | `chat`, `chat-thread`, `helpdesk`, `notifications` (list) |
-| Alerts | `notification-settings` + the whole notification service |
-| Club | `competition`, `offer-detail` |
-| Account | `edit-profile`, `student-particulars`, `new-student` |
-| Navigation | `more` (feature catalogue) |
-| Onboarding | `user-guide` (11 pages, real screenshots) |
-| Student reports | the `r-*` set, if not covered by the generic instructor report list |
+| `autopay`, `autopay-setup` | Club.Api has no recurring-payment routes. The Expo screen is a disclosed UI shell that renders sample data behind a "Preview only" banner. Porting it would add a second place to maintain a promise the backend cannot keep. The user guide's Auto Pay claims were corrected for the same reason. |
+| `new-student`, `student-particulars` | The online-submission approval routes 404 on both prod and UAT. Expo ships an "awaiting backend" state; there is nothing to port until the endpoints exist. |
+
+### Screenshots
+
+The Expo guide bundles a capture per page. Those are captures of the Expo UI, so they were
+not carried over — a picture of a different app is worse than no picture. Add Flutter
+captures when there are real ones.
+
+### Dead-link guard
+
+`test/navigation_targets_test.dart` walks the router tree and asserts that every entry in
+the More catalogue, the home quick-access grid and the instructor report list resolves to a
+registered route. Nothing in the type system connects those four lists, and a renamed route
+compiles clean and fails only under a member's thumb.
 
 ## 4. Notifications — build from scratch
 

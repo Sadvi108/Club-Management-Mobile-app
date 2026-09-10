@@ -9,7 +9,7 @@ import '../widgets/app_header.dart';
 /// Every entry here points at a route that EXISTS. A catalogue that lists screens the app
 /// cannot open is worse than a shorter one: the member taps, nothing happens, and they stop
 /// trusting the menu. As screens land during the Flutter port, add them here — see
-/// docs/flutter-parity-plan.md for what is still outstanding.
+/// ../../docs/flutter-parity-plan.md for what is still outstanding.
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
 
