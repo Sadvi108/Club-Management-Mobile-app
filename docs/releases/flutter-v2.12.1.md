@@ -8,7 +8,7 @@ Flutter 2.12.1 (build 19), package `com.dclix.clubapp`. This release includes th
 
 **Verification and limits**
 
-Automated checks: 296 tests passed; three opt-in live/credential tests skipped. Static analysis has no errors or warnings. Authenticated read checks passed for 75 of 78 account/endpoint combinations across two student accounts and one instructor account. `/Outstanding/FetchTranxCharges` returned an error envelope for all three accounts; the UI reports unavailable history rather than showing an empty result.
+Automated checks: 297 tests passed; three opt-in live/credential tests skipped. Static analysis has no errors or warnings. Authenticated read checks passed for 75 of 78 account/endpoint combinations across two student accounts and one instructor account. `/Outstanding/FetchTranxCharges` returned an error envelope for all three accounts; the UI reports unavailable history rather than showing an empty result.
 
 This is **foreground REST polling, not instant background push**. The inspected production and UAT Swagger APIs expose no device-token registration or message-stream contract, and no Firebase/APNs configuration was supplied. Android's background fallback has a minimum requested interval of 15 minutes and OS-controlled execution. Force-stopped apps do not receive this work.
 

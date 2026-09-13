@@ -29,7 +29,7 @@ The matrix covers profile, club stats, inbox, unread count, bookings, home stats
 
 ## Automated verification
 
-- 296 tests passed; three opt-in live/credential tests skipped. The private authenticated read checks above ran separately.
+- 297 tests passed; three opt-in live/credential tests skipped. The private authenticated read checks above ran separately.
 - Static analysis: no errors or warnings; informational style/deprecation lints remain.
 - Tests cover same-count message arrivals, open-conversation updates preserving a draft, failure/recovery, account-switch races, no overlapping refreshes, lifecycle pause/resume, hidden routes, return navigation, QR success-only invalidation, denied OS permission and notification-delivery retries.
 - The parity screenshot harness covers 22 fictional-data screens per theme. See `react-native-parity-audit.md` for the earlier visual work and its limits.

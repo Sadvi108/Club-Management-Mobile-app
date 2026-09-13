@@ -154,18 +154,17 @@ class _ChatThreadScreenState extends State<ChatThreadScreen> {
 
       // Only echo AFTER the server accepted it — echoing an unsent message would tell the
       // member the club received something it never did.
-      final msg = await ChatStore.append(userId, widget.threadKey, text);
+      await ChatStore.append(userId, widget.threadKey, text);
       if (!mounted || userId != (UserSession.instance.authenticatedUserId ?? 0))
         return;
       setState(() {
-        _bubbles = [
-          ..._bubbles,
-          ChatBubble(
-              key: 'out-${msg.id}', mine: true, text: msg.text, at: msg.at),
-        ];
-        _input.clear();
+        // The member may already be typing the next message while this one sends.
+        if (_input.text.trim() == text) _input.clear();
         _sending = false;
       });
+      // Rebuild from the canonical echo instead of appending a second copy when a
+      // simultaneous inbox refresh already picked up this sent message.
+      await _rebuildFeed();
       _jumpToEnd();
     } catch (e) {
       if (!mounted) return;

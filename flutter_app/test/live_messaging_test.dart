@@ -115,4 +115,32 @@ void main() {
     expect(find.text('Unsent draft'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
+  testWidgets(
+      'sending preserves a newer draft and refresh does not duplicate the echo',
+      (tester) async {
+    final accepted = Completer<http.Response>();
+    ApiService.client = MockClient((request) async {
+      if (request.url.path == '/Profile/Reply2Notification')
+        return accepted.future;
+      return http.Response(
+          jsonEncode({
+            'data': [row(1, 'Existing message')]
+          }),
+          200);
+    });
+    await tester.pumpWidget(
+        const MaterialApp(home: ChatThreadScreen(threadKey: 'test-group')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'First outgoing');
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Next draft');
+    accepted.complete(http.Response('{"status":200,"data":true}', 200));
+    await tester.pumpAndSettle();
+    await session.refreshNotifications();
+    await tester.pumpAndSettle();
+    expect(find.text('First outgoing'), findsOneWidget);
+    expect(find.text('Next draft'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
 }
