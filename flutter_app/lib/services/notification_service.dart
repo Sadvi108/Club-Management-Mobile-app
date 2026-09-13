@@ -319,6 +319,9 @@ class NotificationService {
     if (plan.capped > 0 && presented > 0) {
       summaryDelivered = await present(
         title: 'Club notifications',
+        // The summary represents allowed messages; a muted General channel must
+        // not prevent a Fees/Class batch from being acknowledged.
+        category: categoryOf(plan.show.last),
         body:
             '${plan.capped} more new notification${plan.capped > 1 ? 's' : ''}',
       );

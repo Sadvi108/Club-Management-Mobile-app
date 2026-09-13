@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dclix_app/services/notification_service.dart';
+import 'package:dclix_app/services/notification_prefs.dart';
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
@@ -69,5 +70,21 @@ void main() {
     await NotificationService.alertForNew(userId: 90001, rows: [row(1)]);
     expect(shown, [1]);
     expect((await SharedPreferences.getInstance()).getInt(mark), 1);
+  });
+  test('capped fee alerts finish even when general announcements are muted',
+      () async {
+    await NotifPrefsStore.save(NotifPrefs.defaults.copyWith(categories: {
+      NotifCategory.payments: true,
+      NotifCategory.classes: true,
+      NotifCategory.general: false,
+    }));
+    await NotificationService.alertForNew(userId: 90001, rows: []);
+    final rows = List.generate(4,
+        (i) => {'id': i + 1, 'text': 'Fee reminder', 'value': 'Payment due'});
+    await NotificationService.alertForNew(userId: 90001, rows: rows);
+    expect(shown.length, 4); // Three individual alerts and their summary.
+    expect((await SharedPreferences.getInstance()).getInt(mark), 4);
+    await NotificationService.alertForNew(userId: 90001, rows: rows);
+    expect(shown.length, 4);
   });
 }
