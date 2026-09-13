@@ -2,6 +2,16 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'response_utils.dart';
+import 'api_changes.dart';
+
+class ApiException implements Exception {
+  final int statusCode;
+  final String message;
+  const ApiException(this.statusCode, this.message);
+  @override
+  String toString() => '$message (HTTP $statusCode)';
+}
 
 class ApiService {
   static const String baseUrl = 'http://apimac.zyncbook.com';
@@ -38,6 +48,23 @@ class ApiService {
   static http.Client client = http.Client();
 
   static String? _token;
+  static int sessionEpoch = 0;
+  static const requestTimeout = Duration(seconds: 25);
+
+  static Future<http.Response> _request(Future<http.Response> response) async {
+    final epoch = sessionEpoch;
+    final result = await response.timeout(requestTimeout);
+    if (epoch != sessionEpoch)
+      throw const ApiException(
+          409, 'The account changed while loading. Please retry.');
+    return result;
+  }
+
+  static dynamic _complete(String endpoint, http.Response response) {
+    final data = _handle(response);
+    ApiChanges.accepted(endpoint, data);
+    return data;
+  }
 
   /// Network logging — only in debug builds. Release builds must not dump
   /// request/response bodies (PII: IC numbers, payments) to logcat.
@@ -46,10 +73,13 @@ class ApiService {
   }
 
   static void setToken(String token) {
-    _token = token.isEmpty ? null : token;
+    final next = token.isEmpty ? null : token;
+    if (_token != next) sessionEpoch++;
+    _token = next;
   }
 
   static void clearToken() {
+    sessionEpoch++;
     _token = null;
   }
 
@@ -62,21 +92,19 @@ class ApiService {
   static Future<dynamic> get(String endpoint) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 GET: $url');
-    final response = await client.get(url, headers: _headers);
+    final response = await _request(client.get(url, headers: _headers));
     _log('📥 Status: ${response.statusCode}');
-    _log('📥 Body: ${response.body}');
-    return _handle(response);
+    return _complete(endpoint, response);
   }
 
-  static Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
+  static Future<dynamic> post(
+      String endpoint, Map<String, dynamic> body) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 POST: $url');
-    _log('📤 Body: ${jsonEncode(_redactForLog(body))}');
-    final response =
-        await client.post(url, headers: _headers, body: jsonEncode(body));
+    final response = await _request(
+        client.post(url, headers: _headers, body: jsonEncode(body)));
     _log('📥 Status: ${response.statusCode}');
-    _log('📥 Body: ${response.body}');
-    return _handle(response);
+    return _complete(endpoint, response);
   }
 
   /// Raw-bytes GET — for binary endpoints (e.g. ReceiptAsPDF returns a
@@ -84,9 +112,9 @@ class ApiService {
   static Future<Uint8List> getBytes(String endpoint) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 GET(bytes): $url');
-    final response = await client.get(url, headers: {
+    final response = await _request(client.get(url, headers: {
       if (_token != null) 'Authorization': 'Bearer $_token',
-    });
+    }));
     _log('📥 Status: ${response.statusCode} (${response.bodyBytes.length}B)');
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return response.bodyBytes;
@@ -108,10 +136,10 @@ class ApiService {
   static Future<Uint8List> getPdfSmart(String endpoint) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 GET(pdf): $url');
-    final response = await client.get(url, headers: {
+    final response = await _request(client.get(url, headers: {
       'Accept': 'application/pdf, application/json, */*',
       if (_token != null) 'Authorization': 'Bearer $_token',
-    });
+    }));
     _log('📥 Status: ${response.statusCode} (${response.bodyBytes.length}B)');
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('❌ Error ${response.statusCode}');
@@ -134,12 +162,14 @@ class ApiService {
         final cand = _digPdfString(jsonDecode(trimmed));
         if (cand != null) {
           if (cand.startsWith('http')) {
-            final r2 = await client.get(Uri.parse(cand), headers: {
-              if (_token != null) 'Authorization': 'Bearer $_token',
-            });
+            final target = Uri.parse(cand);
+            final r2 = await _request(client.get(target, headers: {
+              if (_token != null && target.origin == url.origin)
+                'Authorization': 'Bearer $_token',
+            }));
             if (_isPdf(r2.bodyBytes)) return r2.bodyBytes;
-            final b2 = _tryBase64(
-                utf8.decode(r2.bodyBytes, allowMalformed: true));
+            final b2 =
+                _tryBase64(utf8.decode(r2.bodyBytes, allowMalformed: true));
             if (b2 != null) return b2;
           } else {
             final b = _tryBase64(cand);
@@ -158,7 +188,10 @@ class ApiService {
 
   static bool _isPdf(List<int> b) =>
       b.length > 4 &&
-      b[0] == 0x25 && b[1] == 0x50 && b[2] == 0x44 && b[3] == 0x46; // %PDF
+      b[0] == 0x25 &&
+      b[1] == 0x50 &&
+      b[2] == 0x44 &&
+      b[3] == 0x46; // %PDF
 
   /// Decode [s] as base64 and return the bytes only if they're a real PDF.
   static Uint8List? _tryBase64(String s) {
@@ -181,8 +214,18 @@ class ApiService {
     if (j is String) return j.isEmpty ? null : j;
     if (j is Map) {
       for (final k in const [
-        'url', 'fileUrl', 'link', 'downloadUrl', 'pdfUrl', 'receiptUrl',
-        'base64', 'data', 'pdf', 'file', 'content', 'document',
+        'url',
+        'fileUrl',
+        'link',
+        'downloadUrl',
+        'pdfUrl',
+        'receiptUrl',
+        'base64',
+        'data',
+        'pdf',
+        'file',
+        'content',
+        'document',
       ]) {
         final v = j[k];
         if (v is String && v.isNotEmpty) return v;
@@ -217,6 +260,8 @@ class ApiService {
     bool sendEmptyFields = false,
     List<String> files = const [],
     String fileField = 'files',
+    Map<String, List<String>> repeatedFields = const {},
+    List<({String name, Uint8List bytes})> uploads = const [],
   }) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 POST(multipart): $url');
@@ -228,48 +273,61 @@ class ApiService {
     for (final path in files) {
       req.files.add(await http.MultipartFile.fromPath(fileField, path));
     }
-    final streamed = await client.send(req);
-    final response = await http.Response.fromStream(streamed);
+    // MultipartRequest.fields is a Map, so use form-data parts to preserve repeated
+    // InvoiceIds exactly as the React Native FormData contract sends them.
+    repeatedFields.forEach((name, values) {
+      for (final value in values) {
+        req.files.add(http.MultipartFile.fromString(name, value));
+      }
+    });
+    for (final upload in uploads) {
+      req.files.add(http.MultipartFile.fromBytes(fileField, upload.bytes,
+          filename: upload.name));
+    }
+    final response =
+        await _request(client.send(req).then(http.Response.fromStream));
     _log('📥 Status: ${response.statusCode}');
-    return _handle(response);
+    return _complete(endpoint, response);
   }
 
   static Future<dynamic> put(String endpoint, Map<String, dynamic> body) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 PUT: $url');
-    final response =
-        await client.put(url, headers: _headers, body: jsonEncode(body));
+    final response = await _request(
+        client.put(url, headers: _headers, body: jsonEncode(body)));
     _log('📥 Status: ${response.statusCode}');
-    _log('📥 Body: ${response.body}');
-    return _handle(response);
+    return _complete(endpoint, response);
   }
 
   static Future<dynamic> delete(String endpoint) async {
     final url = Uri.parse('${baseUrlFor(endpoint)}$endpoint');
     _log('📤 DELETE: $url');
-    final response = await client.delete(url, headers: _headers);
+    final response = await _request(client.delete(url, headers: _headers));
     _log('📥 Status: ${response.statusCode}');
-    _log('📥 Body: ${response.body}');
-    return _handle(response);
+    return _complete(endpoint, response);
   }
 
   static dynamic _handle(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return null;
-      return jsonDecode(response.body);
+      final body = jsonDecode(response.body);
+      final error = apiEnvelopeError(body);
+      if (error != null) {
+        throw ApiException(apiEnvelopeErrorCode(body) ?? 400, error);
+      }
+      return body;
     } else if (response.statusCode == 401) {
-      throw Exception('❌ Unauthorized - Token missing or expired');
+      throw const ApiException(
+          401, 'Your session has expired. Please log in again.');
     } else if (response.statusCode == 404) {
-      throw Exception('❌ Not Found - Wrong endpoint');
+      throw const ApiException(
+          404, 'This feature is not available on the server yet.');
     } else {
-      throw Exception('❌ Error ${response.statusCode}: ${response.body}');
+      throw ApiException(
+          response.statusCode,
+          response.statusCode >= 500
+              ? 'Server error — please try again in a moment.'
+              : 'The request could not be completed. Please check the details and try again.');
     }
-  }
-
-  static Map<String, dynamic> _redactForLog(Map<String, dynamic> body) {
-    final redacted = Map<String, dynamic>.from(body);
-    if (redacted.containsKey('password')) redacted['password'] = '***';
-    if (redacted.containsKey('accessToken')) redacted['accessToken'] = '***';
-    return redacted;
   }
 }

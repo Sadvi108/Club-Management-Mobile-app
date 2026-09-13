@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/notification_prefs.dart';
@@ -12,10 +13,12 @@ class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
 
   @override
-  State<NotificationSettingsScreen> createState() => _NotificationSettingsScreenState();
+  State<NotificationSettingsScreen> createState() =>
+      _NotificationSettingsScreenState();
 }
 
-class _NotificationSettingsScreenState extends State<NotificationSettingsScreen> {
+class _NotificationSettingsScreenState
+    extends State<NotificationSettingsScreen> {
   NotifPrefs _p = NotifPrefs.defaults;
   bool _loading = true;
   bool _permitted = true;
@@ -62,7 +65,8 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       setState(() => _permitted = granted);
       if (!granted) {
         setState(() => _testing = false);
-        _say('Notifications are blocked for D-CLIX. Allow them in your device settings.');
+        _say(
+            'Notifications are blocked for D-CLIX. Allow them in your device settings.');
         return;
       }
     }
@@ -98,14 +102,16 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : ListView(
-                  padding: const EdgeInsets.fromLTRB(Gaps.xl, Gaps.md, Gaps.xl, Gaps.xxxl),
+                  padding: const EdgeInsets.fromLTRB(
+                      Gaps.xl, Gaps.md, Gaps.xl, Gaps.xxxl),
                   children: [
                     if (!_permitted) _blockedBanner(c),
                     _card(c, [
                       _toggle(c,
                           icon: Icons.notifications_active,
                           title: 'Push notifications',
-                          sub: 'Alerts on your lock screen and notification tray',
+                          sub:
+                              'Alerts on your lock screen and notification tray',
                           value: _p.enabled,
                           onChanged: (v) => _update(_p.copyWith(enabled: v))),
                       _divider(c),
@@ -131,7 +137,8 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                       child: ElevatedButton.icon(
                         onPressed: _testing ? null : _test,
                         icon: const Icon(Icons.play_circle_outline, size: 19),
-                        label: Text(_testing ? 'Sending…' : 'Send a test notification'),
+                        label: Text(
+                            _testing ? 'Sending…' : 'Send a test notification'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: c.primary,
                           foregroundColor: Colors.white,
@@ -148,13 +155,15 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                         if (i > 0) _divider(c),
                         _toggle(c,
                             icon: switch (NotifCategory.values[i]) {
-                              NotifCategory.payments => Icons.account_balance_wallet,
-                              NotifCategory.classes => Icons.fitness_center,
+                              NotifCategory.payments =>
+                                AppIcons.account_balance_wallet,
+                              NotifCategory.classes => AppIcons.fitness_center,
                               NotifCategory.general => Icons.campaign,
                             },
                             title: NotifCategory.values[i].label,
                             sub: NotifCategory.values[i].hint,
-                            value: _p.categories[NotifCategory.values[i]] ?? true,
+                            value:
+                                _p.categories[NotifCategory.values[i]] ?? true,
                             enabled: _p.enabled,
                             onChanged: (v) => _update(_p.copyWith(categories: {
                                   ..._p.categories,
@@ -173,7 +182,8 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                               : 'Alerts arrive at any hour',
                           value: _p.quietEnabled,
                           enabled: _p.enabled,
-                          onChanged: (v) => _update(_p.copyWith(quietEnabled: v))),
+                          onChanged: (v) =>
+                              _update(_p.copyWith(quietEnabled: v))),
                       if (_p.quietEnabled) ...[
                         _divider(c),
                         _range(c),
@@ -183,7 +193,8 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                     Text(
                       'Nothing is lost during quiet hours — anything that arrives inside the '
                       'window alerts you once it ends.',
-                      style: TextStyle(color: c.textMuted, fontSize: 11.5, height: 1.4),
+                      style: TextStyle(
+                          color: c.textMuted, fontSize: 11.5, height: 1.4),
                     ),
                     const SizedBox(height: Gaps.xl),
                     _sectionTitle(c, 'How delivery works'),
@@ -198,7 +209,8 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
                     Text(
                       'The club server delivers notifications to the app, which checks for new '
                       'ones about every minute while open.',
-                      style: TextStyle(color: c.textMuted, fontSize: 11, height: 1.4),
+                      style: TextStyle(
+                          color: c.textMuted, fontSize: 11, height: 1.4),
                     ),
                   ],
                 ),
@@ -219,13 +231,17 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           Icon(Icons.warning_amber_rounded, size: 20, color: c.danger),
           const SizedBox(width: Gaps.md),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Alerts are blocked',
                   style: TextStyle(
-                      color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                      color: c.textPrimary,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800)),
               const SizedBox(height: 2),
               Text('Allow notifications for D-CLIX in your device settings.',
-                  style: TextStyle(color: c.textSecondary, fontSize: 12, height: 1.35)),
+                  style: TextStyle(
+                      color: c.textSecondary, fontSize: 12, height: 1.35)),
             ]),
           ),
         ]),
@@ -235,7 +251,9 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
         padding: const EdgeInsets.only(bottom: Gaps.sm),
         child: Text(t,
             style: TextStyle(
-                color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w800)),
+                color: c.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w800)),
       );
 
   Widget _card(AppColors c, List<Widget> children) => Container(
@@ -267,19 +285,27 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             Container(
               width: 36,
               height: 36,
-              decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+              decoration:
+                  BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
               child: Icon(icon, size: 18, color: c.primary),
             ),
             const SizedBox(width: Gaps.md),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title,
-                    style: TextStyle(
-                        color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text(sub,
-                    style: TextStyle(color: c.textSecondary, fontSize: 11.5, height: 1.35)),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(sub,
+                        style: TextStyle(
+                            color: c.textSecondary,
+                            fontSize: 11.5,
+                            height: 1.35)),
+                  ]),
             ),
             Switch(
               value: value,
@@ -297,13 +323,15 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           Container(
             width: 36,
             height: 36,
-            decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+            decoration:
+                BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
             child: Icon(icon, size: 18, color: c.textSecondary),
           ),
           const SizedBox(width: Gaps.md),
           Expanded(
             child: Text(text,
-                style: TextStyle(color: c.textSecondary, fontSize: 12, height: 1.4)),
+                style: TextStyle(
+                    color: c.textSecondary, fontSize: 12, height: 1.4)),
           ),
         ]),
       );
@@ -314,7 +342,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           Row(children: [
             Expanded(child: _hourChip(c, 'From', _p.quietStartHour, 'start')),
             const SizedBox(width: Gaps.md),
-            Icon(Icons.arrow_forward, size: 16, color: c.textMuted),
+            Icon(AppIcons.arrow_forward, size: 16, color: c.textMuted),
             const SizedBox(width: Gaps.md),
             Expanded(child: _hourChip(c, 'To', _p.quietEndHour, 'end')),
           ]),
@@ -358,8 +386,10 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
         ]),
       );
 
-  Widget _hourChip(AppColors c, String label, int hour, String which) => GestureDetector(
-        onTap: () => setState(() => _picking = _picking == which ? null : which),
+  Widget _hourChip(AppColors c, String label, int hour, String which) =>
+      GestureDetector(
+        onTap: () =>
+            setState(() => _picking = _picking == which ? null : which),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           alignment: Alignment.center,
@@ -372,11 +402,15 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           child: Column(children: [
             Text(label,
                 style: TextStyle(
-                    color: c.textSecondary, fontSize: 10.5, fontWeight: FontWeight.w700)),
+                    color: c.textSecondary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
             Text(_hh(hour),
                 style: TextStyle(
-                    color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w800)),
+                    color: c.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800)),
           ]),
         ),
       );

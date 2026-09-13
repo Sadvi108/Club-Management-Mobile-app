@@ -18,7 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// `Api.foo(...)` AND `Api.foo` passed as a tear-off.
 final _apiRe = RegExp(r'\bApi\.([a-zA-Z0-9_]+)');
 final _serviceRe = RegExp(
-    r'\b(BoostPayment|PurchaseService|NotificationService|AutoPayStore|ChatStore)\.([a-zA-Z0-9_]+)');
+    r'\b(BoostPayment|OnlineSubmissions|PurchaseService|NotificationService|AutoPayStore|ChatStore)\.([a-zA-Z0-9_]+)');
 final _sessionRe = RegExp(r'\bUserSession\b');
 
 class ScreenWiring {
@@ -30,9 +30,11 @@ class ScreenWiring {
   final Set<String> api;
   final Set<String> services;
   final bool usesSession;
-  const ScreenWiring(this.name, this.path, this.api, this.services, this.usesSession);
+  const ScreenWiring(
+      this.name, this.path, this.api, this.services, this.usesSession);
 
-  bool get hasDataSource => api.isNotEmpty || services.isNotEmpty || usesSession;
+  bool get hasDataSource =>
+      api.isNotEmpty || services.isNotEmpty || usesSession;
 }
 
 Map<String, ScreenWiring> scanScreens() {
@@ -45,7 +47,10 @@ Map<String, ScreenWiring> scanScreens() {
       name,
       e.path,
       _apiRe.allMatches(src).map((m) => m.group(1)!).toSet(),
-      _serviceRe.allMatches(src).map((m) => '${m.group(1)}.${m.group(2)}').toSet(),
+      _serviceRe
+          .allMatches(src)
+          .map((m) => '${m.group(1)}.${m.group(2)}')
+          .toSet(),
       _sessionRe.hasMatch(src),
     );
   }
@@ -73,23 +78,40 @@ const _expected = <String, List<String>>{
   'student_details_screen': ['profileMyInfo', 'profileStudentAddtnlInfo'],
   'edit_profile_screen': ['profileUpdateProfile'],
   'helpdesk_screen': ['profileSend2ClubHelpDesk'],
-  'notifications_screen': ['profileMyNotifications', 'profileUpdateNotification2Read'],
-  'chat_screen': ['profileMyNotifications'],
-  'chat_thread_screen': ['profileReply2Notification', 'profileSend2ClubHelpDesk'],
+  'notifications_screen': [
+    'profileUpdateNotification2Read'
+  ],
+  'chat_thread_screen': [
+    'profileReply2Notification',
+    'profileSend2ClubHelpDesk'
+  ],
   'outstanding_invoices_screen': ['outstandingFetch'],
   'progress_screen': ['reportsAttendance', 'reportsGradingSchedule'],
   'training_screen': ['listingTrainingTimeByTcId'],
   'qr_scan_screen': ['attendanceAdd'],
-  'term_payment_screen': ['listingMySiblings', 'outstandingPayTermPayments'],
-  'instructor_attendance_screen': ['attendanceAdd', 'listingStudentListByTcId'],
+  'term_payment_screen': ['listingMySiblings'],
+  'instructor_attendance_screen': [
+    'listingDropdownListByType',
+    'listingTrainingTimeByTcId',
+    'listingStudentListByTcId',
+    'utilitiesQRCodeBytes'
+  ],
   'instructor_collections_screen': ['outstandingCollectionCount'],
   // Tear-offs, not calls — the reason this test matches `Api.name` and not `Api.name(`.
-  'schedule_screen': ['classBookingNextBookings', 'classBookingGetBookings'],
-  'book_class_screen': ['classBookingBookNow', 'classBookingTrainingTimeWithDateAndInstructor'],
+  'schedule_screen': [
+    'reportsStudentDetails',
+    'classBookingNextBookings',
+    'classBookingGetBookings'
+  ],
+  'book_class_screen': [
+    'classBookingBookNow',
+    'classBookingTrainingTimeWithDateAndInstructor'
+  ],
 };
 
 /// Screens whose data comes from a service rather than Api.* directly.
 const _expectedServices = <String, List<String>>{
+  'new_student_screen': ['OnlineSubmissions.fetch', 'OnlineSubmissions.detail'],
   'purchases_screen': ['PurchaseService.fetchRequests'],
   'purchase_request_screen': [
     'PurchaseService.fetchProducts',
@@ -97,6 +119,7 @@ const _expectedServices = <String, List<String>>{
     'BoostPayment.confirm',
   ],
   'payments_screen': ['BoostPayment.start', 'BoostPayment.confirm'],
+  'term_payment_screen': ['BoostPayment.start', 'BoostPayment.confirm'],
   'autopay_screen': [
     'NotificationService.scheduleAutoPayReminder',
     'NotificationService.cancelAutoPayReminder',
@@ -120,7 +143,8 @@ void main() {
   test('the scan sees tear-offs, not just calls', () {
     // schedule_screen passes Api.classBookingNextBookings by reference. An `Api.x(` scan
     // reports that screen as completely unwired, which is how this test was wrong first.
-    expect(screens['schedule_screen']!.api, contains('classBookingNextBookings'));
+    expect(
+        screens['schedule_screen']!.api, contains('classBookingNextBookings'));
   });
 
   test('every screen has a data source, or is on the no-data list', () {
@@ -173,7 +197,9 @@ void main() {
     expect(broken, isEmpty, reason: broken.join('\n'));
   });
 
-  test('the payment screens never reach the gateway except through BoostPayment', () {
+  test(
+      'the payment screens never reach the gateway except through BoostPayment',
+      () {
     // The merchant secret lives on the server precisely because it must not be in the
     // app. Any screen building a /Bcpg call itself would be re-opening that hole.
     // Match an actual CALL, not the string anywhere: payments_screen documents
@@ -182,7 +208,8 @@ void main() {
     final callRe = RegExp(r"""ApiService\.\w+\(\s*'/Bcpg""");
     for (final s in screens.values) {
       expect(callRe.hasMatch(File(s.path).readAsStringSync()), isFalse,
-          reason: '${s.name} calls a Boost path directly instead of via BoostPayment');
+          reason:
+              '${s.name} calls a Boost path directly instead of via BoostPayment');
     }
   });
 }

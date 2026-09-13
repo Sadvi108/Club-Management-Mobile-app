@@ -14,9 +14,9 @@ import 'user_session.dart';
 /// Background notification polling.
 ///
 /// Ports the Expo app's expo-background-task job. Android runs it through WorkManager
-/// roughly every 15 minutes (the OS decides; 15 is the floor it will honour) EVEN WITH THE
-/// APP CLOSED. Without it, alerts only arrive while the app is open — a member who closes
-/// the app simply stops receiving fee reminders, which is the whole point of the feature.
+/// at a minimum requested interval of 15 minutes. Execution is OS-controlled and can be
+/// delayed; force-stopped apps do not receive this work. This is a fallback for eventual
+/// local alerts, not a guarantee of immediate delivery while the app is closed.
 ///
 /// The callback runs in a HEADLESS ISOLATE: no widgets, no providers, and UserSession's
 /// in-memory state does not exist. Everything it needs — the token and the member id — is
@@ -32,7 +32,8 @@ class BackgroundPoll {
   static Future<void> register() async {
     if (kIsWeb) return; // no WorkManager in a browser
     try {
-      await Workmanager().initialize(backgroundCallbackDispatcher, isInDebugMode: false);
+      await Workmanager()
+          .initialize(backgroundCallbackDispatcher, isInDebugMode: false);
       await Workmanager().registerPeriodicTask(
         _uniqueName,
         taskName,
@@ -63,7 +64,8 @@ class BackgroundPoll {
   static Future<bool> runOnce() async {
     try {
       final token = await SecureStore.read(UserSession.tokenKey);
-      if (token == null || token.isEmpty) return true; // signed out: nothing to do
+      if (token == null || token.isEmpty)
+        return true; // signed out: nothing to do
 
       final userId = await _restoreUserId();
       if (userId == null) return true;
@@ -71,7 +73,7 @@ class BackgroundPoll {
       ApiService.setToken(token);
       final res = await Api.profileMyNotifications();
       final rows = findRecordList(res);
-      if (rows.isEmpty) return true;
+      if (await SecureStore.read(UserSession.tokenKey) != token) return true;
 
       // Same selection logic the foreground poll uses — categories, quiet hours, the
       // volume cap and both silent-loss fixes all come along for free.
@@ -87,6 +89,7 @@ class BackgroundPoll {
   static Future<int?> _restoreUserId() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
       final raw = prefs.getString(UserSession.sessionKey);
       if (raw == null || raw.isEmpty) return null;
       final decoded = jsonDecode(raw);
@@ -94,7 +97,8 @@ class BackgroundPoll {
       // The id lives under authData for a normal session; tolerate a flat shape too.
       for (final candidate in [decoded['authData'], decoded]) {
         if (candidate is Map) {
-          final v = candidate['id'] ?? candidate['userId'] ?? candidate['studentId'];
+          final v =
+              candidate['id'] ?? candidate['userId'] ?? candidate['studentId'];
           final id = v is int ? v : int.tryParse('${v ?? ''}');
           if (id != null && id > 0) return id;
         }

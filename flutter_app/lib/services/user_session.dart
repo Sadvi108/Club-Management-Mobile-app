@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
+import 'api_changes.dart';
+import '../config/app_version.dart';
 import 'background_poll.dart';
 import 'autopay.dart';
 import 'api_service.dart';
@@ -11,10 +13,17 @@ import 'secure_store.dart';
 import 'notification_prefs.dart';
 import 'notification_service.dart';
 import 'response_utils.dart';
+import 'live_refresh.dart';
 
 class UserSession extends ChangeNotifier {
   static final UserSession instance = UserSession._();
-  UserSession._();
+  UserSession._() {
+    ApiChanges.stream.listen((topic) {
+      if (topic == 'notifications' && isLoggedIn && _notifTimer != null) {
+        unawaited(refreshNotifications());
+      }
+    });
+  }
 
   /// App-wide messenger key used by [UserSession] to surface toast / SnackBar
   /// alerts (e.g. new notifications) without needing a BuildContext.
@@ -26,7 +35,38 @@ class UserSession extends ChangeNotifier {
   Map<String, dynamic>? homeStats;
   List<dynamic>? clubStats;
   List<dynamic>? notifications;
+  int notificationsRevision = 0;
+  String? notificationsError;
+  final Set<String> _acknowledgedRead = {};
+  Future<void>? _notificationsInFlight;
+  int _notificationGeneration = 0;
+
+  int? get authenticatedUserId => int.tryParse('${authData?['id']}');
+
+  void acceptNotifications(List<dynamic> rows) {
+    final next = rows.whereType<Map>().map((row) {
+      final value = Map<String, dynamic>.from(row);
+      if (_acknowledgedRead.contains('${value['id']}')) value['isRead'] = true;
+      return value;
+    }).toList();
+    final changed = jsonEncode(next) != jsonEncode(notifications);
+    notifications = next;
+    unreadNotifications = next
+        .where((r) =>
+            r['isRead'] != true && r['isRead'] != 1 && r['isRead'] != 'true')
+        .length;
+    notificationsError = null;
+    if (changed) notificationsRevision++;
+    notifyListeners();
+  }
+
+  void acknowledgeNotificationRead(Object id) {
+    _acknowledgedRead.add('$id');
+    acceptNotifications(notifications ?? const []);
+  }
+
   Map<String, dynamic>? studentAddtnlInfo;
+
   /// Outstanding invoices for the instructor's branch — loaded from
   /// `/Outstanding/Fetch`. Used to compute live `dueAmount` and
   /// `invoiceCount` since `/Reports/HomePageStats` doesn't include them
@@ -40,6 +80,7 @@ class UserSession extends ChangeNotifier {
 
   /// `/ClassBooking/NextBookings` — upcoming sessions for the student.
   List<dynamic>? nextBookings;
+
   /// `/ClassBooking/GetBookings` — full booking history.
   List<dynamic>? allBookings;
 
@@ -85,37 +126,38 @@ class UserSession extends ChangeNotifier {
   /// Set (or clear, with null) the active student filter. Pure client-side,
   /// no network — instantly re-scopes every list via [notifyListeners].
   void setActiveStudent({String? name, Object? id}) {
-    activeStudentName = (name != null && name.trim().isNotEmpty)
-        ? name.trim()
-        : null;
+    activeStudentName =
+        (name != null && name.trim().isNotEmpty) ? name.trim() : null;
     activeStudentId = id;
     notifyListeners();
   }
 
   /// Last raw response from /Outstanding/Fetch (kept for in-app debugging).
   dynamic outstandingRaw;
+
   /// Error message if the last /Outstanding/Fetch call threw.
   String? outstandingError;
+
   /// Last raw response from /Reports/HomePageStats (kept for in-app debugging).
   dynamic homeStatsRaw;
   String? homeStatsError;
   int unreadNotifications = 0;
   bool loading = false;
+  Future<void>? _refreshInFlight;
   String? error;
 
   // -------- Notification polling --------
-  /// Live polling interval (seconds). Default 30s — light on the API but
-  /// makes new notifications feel "real-time".
-  static const Duration notificationPollInterval = Duration(seconds: 30);
+  /// Foreground REST sync; closed-app delivery is a separate platform concern.
+  static const Duration notificationPollInterval =
+      LiveRefresh.messagingInterval;
   Timer? _notifTimer;
-  int _previousUnread = 0;
   bool _pollingPaused = false;
 
   /// Latest store version returned by /Listing/StoreVersion. Compared against
   /// [currentAppVersion] to decide whether to show the "new version" banner.
   String? latestStoreVersion;
   bool storeVersionDismissed = false;
-  static const String currentAppVersion = '1.1.5';
+  static const String currentAppVersion = kAppVersion;
 
   bool get hasNewerVersion {
     final latest = latestStoreVersion;
@@ -145,7 +187,9 @@ class UserSession extends ChangeNotifier {
   List<dynamic> get myNews =>
       (homeStats?['mynews'] as List?) ?? const <dynamic>[];
 
-  bool get isLoggedIn => authData != null && (authData!['accessToken'] ?? '').toString().isNotEmpty;
+  bool get isLoggedIn =>
+      authData != null &&
+      (authData!['accessToken'] ?? '').toString().isNotEmpty;
 
   /// Active student/instructor name. Resolution order:
   ///   1. `/Profile/MyInfo` (refreshes after ChangeStudent)
@@ -158,17 +202,43 @@ class UserSession extends ChangeNotifier {
     if (activeStudentName != null && activeStudentName!.isNotEmpty) {
       return activeStudentName!;
     }
-    final pick = _pick([myInfo, authData],
-        ['name', 'fullName', 'studentName', 'displayName',
-         'Name', 'FullName', 'StudentName', 'userName', 'firstName',
-         'fname', 'first_name', 'givenName']);
+    final pick = _pick([
+      myInfo,
+      authData
+    ], [
+      'name',
+      'fullName',
+      'studentName',
+      'displayName',
+      'Name',
+      'FullName',
+      'StudentName',
+      'userName',
+      'firstName',
+      'fname',
+      'first_name',
+      'givenName'
+    ]);
     if (pick.isNotEmpty) return pick;
     // Fuzzy: any key with "name" in it that isn't a different entity.
-    const skip = ['clubname', 'centername', 'centrename',
-                  'instructorname', 'parentname', 'siblingname',
-                  'username', 'companyname', 'organizationname',
-                  'logoname', 'modulename', 'classname', 'tcname',
-                  'tcentername', 'scentername', 'examcentername'];
+    const skip = [
+      'clubname',
+      'centername',
+      'centrename',
+      'instructorname',
+      'parentname',
+      'siblingname',
+      'username',
+      'companyname',
+      'organizationname',
+      'logoname',
+      'modulename',
+      'classname',
+      'tcname',
+      'tcentername',
+      'scentername',
+      'examcentername'
+    ];
     for (final src in [myInfo, authData]) {
       if (src == null) continue;
       for (final entry in src.entries) {
@@ -186,17 +256,33 @@ class UserSession extends ChangeNotifier {
     return '';
   }
 
-  String get registrationNo => _pick([myInfo, authData],
-      ['registrationNo', 'registrationNumber', 'regNo', 'code',
-       'RegistrationNo', 'studentCode']);
+  String get registrationNo => _pick([
+        myInfo,
+        authData
+      ], [
+        'registrationNo',
+        'registrationNumber',
+        'regNo',
+        'code',
+        'RegistrationNo',
+        'studentCode'
+      ]);
 
-  String get currentGrade => _pick([myInfo, authData],
-      ['currentGrade', 'belt', 'grade', 'CurrentGrade']);
+  String get currentGrade => _pick(
+      [myInfo, authData], ['currentGrade', 'belt', 'grade', 'CurrentGrade']);
 
   /// Student code / membership number — distinct from registrationNo.
-  String get studentCode => _pick([myInfo, authData], [
-        'studentCode', 'studentcode', 'studentNo', 'studentNumber',
-        'memberCode', 'memberNo', 'StudentCode',
+  String get studentCode => _pick([
+        myInfo,
+        authData
+      ], [
+        'studentCode',
+        'studentcode',
+        'studentNo',
+        'studentNumber',
+        'memberCode',
+        'memberNo',
+        'StudentCode',
       ]);
 
   /// Most relevant grading row: the soonest upcoming exam, else the latest.
@@ -209,8 +295,12 @@ class UserSession extends ChangeNotifier {
     if (rows.isEmpty) return null;
     DateTime? dateOf(Map<String, dynamic> r) {
       for (final k in const [
-        'nextGradingDate', 'nextGradeDate', 'examDate', 'gradingDate',
-        'nextExamDate', 'date',
+        'nextGradingDate',
+        'nextGradeDate',
+        'examDate',
+        'gradingDate',
+        'nextExamDate',
+        'date',
       ]) {
         final v = r[k];
         if (v == null) continue;
@@ -221,16 +311,14 @@ class UserSession extends ChangeNotifier {
     }
 
     final now = DateTime.now();
-    final upcoming = rows
-        .where((r) {
-          final d = dateOf(r);
-          return d != null && !d.isBefore(DateTime(now.year, now.month, now.day));
-        })
-        .toList()
+    final upcoming = rows.where((r) {
+      final d = dateOf(r);
+      return d != null && !d.isBefore(DateTime(now.year, now.month, now.day));
+    }).toList()
       ..sort((a, b) => (dateOf(a) ?? now).compareTo(dateOf(b) ?? now));
     if (upcoming.isNotEmpty) return upcoming.first;
-    rows.sort((a, b) => (dateOf(b) ?? DateTime(1970))
-        .compareTo(dateOf(a) ?? DateTime(1970)));
+    rows.sort((a, b) =>
+        (dateOf(b) ?? DateTime(1970)).compareTo(dateOf(a) ?? DateTime(1970)));
     return rows.first;
   }
 
@@ -242,7 +330,10 @@ class UserSession extends ChangeNotifier {
   /// through to [lastGradingDate] instead of labelling a past exam "Next".
   String get nextGradingDate {
     const keys = [
-      'nextGradingDate', 'nextGradeDate', 'nextExamDate', 'examDate',
+      'nextGradingDate',
+      'nextGradeDate',
+      'nextExamDate',
+      'examDate',
       'gradingDate',
     ];
     final inline = _pick([myInfo, studentAddtnlInfo], keys);
@@ -292,8 +383,11 @@ class UserSession extends ChangeNotifier {
   /// Grading payment status (e.g. "Paid").
   String get gradingPaymentStatus {
     const keys = [
-      'gradingPaymentStatus', 'gradePaymentStatus', 'examPaymentStatus',
-      'paymentStatus', 'payStatus',
+      'gradingPaymentStatus',
+      'gradePaymentStatus',
+      'examPaymentStatus',
+      'paymentStatus',
+      'payStatus',
     ];
     final inline = _pick([myInfo, studentAddtnlInfo], keys);
     return inline.isNotEmpty ? inline : _pickFrom(_gradingRow, keys);
@@ -317,12 +411,19 @@ class UserSession extends ChangeNotifier {
   String get trainingTime => _pick([myInfo],
       ['trainingTme', 'trainingTime', 'tTime', 'TrainingTime', 'classTime']);
 
-  String get tCenterName => _pick([myInfo],
-      ['tCenterName', 'trainingCenter', 'trainingCentre',
-       'TCenterName', 'tcName', 'centerName']);
+  String get tCenterName => _pick([
+        myInfo
+      ], [
+        'tCenterName',
+        'trainingCenter',
+        'trainingCentre',
+        'TCenterName',
+        'tcName',
+        'centerName'
+      ]);
 
-  String get clubName => _pick([authData, myInfo],
-      ['clubName', 'club', 'ClubName', 'organizationName']);
+  String get clubName => _pick(
+      [authData, myInfo], ['clubName', 'club', 'ClubName', 'organizationName']);
 
   String get clubPic => _pick([authData, myInfo],
       ['clubPic', 'clubLogo', 'logo', 'logoUrl', 'ClubPic']);
@@ -330,8 +431,8 @@ class UserSession extends ChangeNotifier {
   String get phone => _pick([myInfo, authData],
       ['handPhone', 'mobile', 'phone', 'HandPhone', 'mobileNo', 'contactNo']);
 
-  String get email => _pick([myInfo, authData],
-      ['email', 'emailAddress', 'Email', 'mail']);
+  String get email =>
+      _pick([myInfo, authData], ['email', 'emailAddress', 'Email', 'mail']);
 
   /// First integer value found in `authData` (or `myInfo` as fallback) for
   /// any of the candidate keys. Returns 0 when nothing matches.
@@ -356,7 +457,8 @@ class UserSession extends ChangeNotifier {
       if (src == null) continue;
       for (final k in keys) {
         final v = src[k];
-        if (v != null && v.toString().trim().isNotEmpty) return v.toString().trim();
+        if (v != null && v.toString().trim().isNotEmpty)
+          return v.toString().trim();
       }
     }
     return '';
@@ -384,7 +486,8 @@ class UserSession extends ChangeNotifier {
   /// `/Uploads/DP/123.jpg` or even `Uploads\DP\123.jpg`. Requiring `http` dropped every
   /// relative one on the floor and fell through to the club logo, so a member with a real
   /// photo saw the club crest and assumed the upload had failed.
-  static String resolvePhotoUrl(String raw, {String base = ApiService.baseUrl}) {
+  static String resolvePhotoUrl(String raw,
+      {String base = ApiService.baseUrl}) {
     final v = raw.trim();
     if (v.isEmpty) return '';
     if (v.startsWith('http://') || v.startsWith('https://')) return v;
@@ -394,16 +497,25 @@ class UserSession extends ChangeNotifier {
     return '$base${path.startsWith('/') ? '' : '/'}$path';
   }
 
-  /// Student's actual profile picture. Checks multiple myInfo / studentAddtnlInfo
-  /// fields before falling back to the club logo (clubPic).
+  /// Student photo and club logo are distinct in Expo v2.11.1. Missing student
+  /// photos return an empty URL so MemberAvatar renders initials, not a club logo.
   String get studentPhoto {
-    const photoKeys = ['photo', 'profilePic', 'pic', 'image', 'avatar', 'photoUrl', 'studentPhoto'];
-    for (final k in photoKeys) {
-      final v = (myInfo?[k] ?? studentAddtnlInfo?[k] ?? '').toString();
-      final url = resolvePhotoUrl(v);
-      if (url.isNotEmpty) return url;
+    const keys = [
+      'photo',
+      'profilePic',
+      'pic',
+      'image',
+      'avatar',
+      'photoUrl',
+      'studentPhoto'
+    ];
+    for (final source in [myInfo, studentAddtnlInfo, authData]) {
+      for (final key in keys) {
+        final url = resolvePhotoUrl('${source?[key] ?? ''}');
+        if (url.isNotEmpty) return url;
+      }
     }
-    return resolvePhotoUrl(clubPic);
+    return '';
   }
 
   /// Locally-cached profile photo (base64), keyed by student id. The API
@@ -462,8 +574,10 @@ class UserSession extends ChangeNotifier {
   List<dynamic> scopeToSelf(List<dynamic>? rows) {
     final list = rows ?? const [];
     if (list.isEmpty || isInstructor) return list;
-    final myIc =
-        (authData?['icNo'] ?? myInfo?['icNo'] ?? '').toString().trim().toUpperCase();
+    final myIc = (authData?['icNo'] ?? myInfo?['icNo'] ?? '')
+        .toString()
+        .trim()
+        .toUpperCase();
     final myName = displayName.trim().toUpperCase();
     if (myIc.isEmpty && myName.isEmpty) return list;
     bool mine(dynamic r) {
@@ -622,9 +736,17 @@ class UserSession extends ChangeNotifier {
   static int _readCount(Map? m) {
     if (m == null) return 0;
     const exactKeys = [
-      'invoiceCount', 'pendingInvoice', 'dueInvoice', 'invoices',
-      'pendingCount', 'unpaidInvoices', 'invoiceQty', 'invQty',
-      'numInvoices', 'totalInvoices', 'outstandingCount'
+      'invoiceCount',
+      'pendingInvoice',
+      'dueInvoice',
+      'invoices',
+      'pendingCount',
+      'unpaidInvoices',
+      'invoiceQty',
+      'invQty',
+      'numInvoices',
+      'totalInvoices',
+      'outstandingCount'
     ];
     for (final k in exactKeys) {
       final v = m[k];
@@ -655,8 +777,14 @@ class UserSession extends ChangeNotifier {
     String? earliest;
     for (final row in list) {
       if (row is! Map) continue;
-      for (final k in ['dueDate', 'due_date', 'invoiceDate', 'date',
-                        'paymentDue', 'expiryDate']) {
+      for (final k in [
+        'dueDate',
+        'due_date',
+        'invoiceDate',
+        'date',
+        'paymentDue',
+        'expiryDate'
+      ]) {
         final v = row[k];
         if (v == null) continue;
         final s = v.toString();
@@ -691,8 +819,15 @@ class UserSession extends ChangeNotifier {
   }
 
   static DateTime? _bookingDate(Map row) {
-    for (final k in ['date', 'bookingDate', 'startTime', 'classDate',
-                      'sessionDate', 'time', 'sessionTime']) {
+    for (final k in [
+      'date',
+      'bookingDate',
+      'startTime',
+      'classDate',
+      'sessionDate',
+      'time',
+      'sessionTime'
+    ]) {
       final v = row[k];
       if (v == null) continue;
       if (v is DateTime) return v;
@@ -713,9 +848,18 @@ class UserSession extends ChangeNotifier {
   ///   3. number parsing that strips currency symbols + commas
   static num _readAmount(Map row) {
     const exactKeys = [
-      'dueAmount', 'dueAmt', 'amount', 'amountDue', 'outstandingAmount',
-      'outstandingAmt', 'balance', 'totalAmount', 'totalDue', 'value',
-      'invoiceAmount', 'amtDue'
+      'dueAmount',
+      'dueAmt',
+      'amount',
+      'amountDue',
+      'outstandingAmount',
+      'outstandingAmt',
+      'balance',
+      'totalAmount',
+      'totalDue',
+      'value',
+      'invoiceAmount',
+      'amtDue'
     ];
     for (final k in exactKeys) {
       final n = _toNum(row[k]);
@@ -757,8 +901,17 @@ class UserSession extends ChangeNotifier {
     if (resp is Map) {
       // Common wrapper keys first.
       for (final k in const [
-        'data', 'invoices', 'records', 'outstanding', 'list',
-        'items', 'rows', 'results', 'value', 'siblings', 'children'
+        'data',
+        'invoices',
+        'records',
+        'outstanding',
+        'list',
+        'items',
+        'rows',
+        'results',
+        'value',
+        'siblings',
+        'children'
       ]) {
         if (resp.containsKey(k)) {
           final inner = findList(resp[k]);
@@ -801,7 +954,7 @@ class UserSession extends ChangeNotifier {
     final raw = authData?['userType'];
     final ut = raw is num ? raw.toInt() : int.tryParse(raw?.toString() ?? '');
     if (ut == null) return false; // logged out / unknown
-    return ut != 3;               // 3 = student/parent; 0 (and 2) = instructor
+    return ut != 3; // 3 = student/parent; 0 (and 2) = instructor
   }
 
   /// Numeric student id to act on for per-student actions (e.g. prepay).
@@ -822,8 +975,11 @@ class UserSession extends ChangeNotifier {
   /// Rows surfaced by `Profile/MyClubStats` — each entry is
   /// `{id: <count>, value: <orderIndex>, text: <label>}`.
   List<Map<String, dynamic>> get clubStatsRows =>
-      clubStats?.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList() ??
-          const [];
+      clubStats
+          ?.whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList() ??
+      const [];
 
   String get clubDisplayName {
     final list = authData?['clubList'];
@@ -849,7 +1005,8 @@ class UserSession extends ChangeNotifier {
   /// Split a session map into the bearer token (keystore) and the profile (prefs).
   /// Pure so the "no token in plaintext prefs" rule can be asserted in a test.
   @visibleForTesting
-  static (String, Map<String, dynamic>) splitAuthForStorage(Map<String, dynamic> auth) {
+  static (String, Map<String, dynamic>) splitAuthForStorage(
+      Map<String, dynamic> auth) {
     final token = (auth['accessToken'] ?? '').toString();
     final safe = Map<String, dynamic>.from(auth)..remove('accessToken');
     return (token, safe);
@@ -913,21 +1070,20 @@ class UserSession extends ChangeNotifier {
       await _loadAll();
       // If the token was rejected, _loadAll surfaces errors but authData
       // stays set — guard with a lightweight validity check.
-      if (myInfo == null && homeStatsError != null &&
+      if (myInfo == null &&
+          homeStatsError != null &&
           homeStatsError!.contains('401')) {
         await _clearPersistedAuth();
         authData = null;
         ApiService.clearToken();
         return false;
       }
-      _previousUnread = unreadNotifications;
       startNotificationPolling();
       // Closed-app alerts. Registered here rather than at app start so it only runs for a
       // signed-in member, and so a fresh sign-in re-arms it.
       unawaited(BackgroundPoll.register());
       unawaited(NotificationService.requestPermission());
       _checkStoreVersion();
-      _registerPushToken();
       return true;
     } catch (e) {
       debugPrint('restoreSession failed: $e');
@@ -1001,7 +1157,6 @@ class UserSession extends ChangeNotifier {
       debugPrint('🔐 AuthData keys: ${data.keys.toList()}');
       await _persistAuth();
       await _loadAll();
-      _previousUnread = unreadNotifications;
       startNotificationPolling();
       // Closed-app alerts. Registered here rather than at app start so it only runs for a
       // signed-in member, and so a fresh sign-in re-arms it.
@@ -1009,7 +1164,6 @@ class UserSession extends ChangeNotifier {
       unawaited(NotificationService.requestPermission());
       // Boot-time post-login extras (best-effort, never throw).
       _checkStoreVersion();
-      _registerPushToken();
       return true;
     } catch (e) {
       error = e.toString();
@@ -1027,20 +1181,15 @@ class UserSession extends ChangeNotifier {
           myInfo = Map<String, dynamic>.from(d);
           debugPrint('👤 MyInfo keys: ${myInfo!.keys.toList()}');
         } else {
-          debugPrint('👤 MyInfo response was not a Map (was ${d?.runtimeType})');
+          debugPrint(
+              '👤 MyInfo response was not a Map (was ${d?.runtimeType})');
         }
       }),
       _loadHomeStats(),
       _safeGet('/Profile/MyClubStats').then((d) {
         if (d is List) clubStats = d;
       }),
-      _safeGet('/Profile/MyUnreadNotificationCount').then((d) {
-        if (d is int) unreadNotifications = d;
-        if (d is num) unreadNotifications = d.toInt();
-      }),
-      _safeGet('/Profile/MyNotifications').then((d) {
-        if (d is List) notifications = d;
-      }),
+      refreshNotifications(),
     ];
     // StudentAddtnlInfo is student-only — skip for instructor accounts.
     if (!isInstructor) {
@@ -1106,9 +1255,18 @@ class UserSession extends ChangeNotifier {
         // common keys we care about.
         final keys = v.keys.map((k) => k.toString().toLowerCase()).toSet();
         const interesting = {
-          'dueamount', 'duamount', 'dueamt', 'totaldue', 'totalamount',
-          'outstandingamount', 'invoicecount', 'invoices',
-          'pendinginvoice', 'mynews', 'myoffers', 'newsfeed'
+          'dueamount',
+          'duamount',
+          'dueamt',
+          'totaldue',
+          'totalamount',
+          'outstandingamount',
+          'invoicecount',
+          'invoices',
+          'pendinginvoice',
+          'mynews',
+          'myoffers',
+          'newsfeed'
         };
         if (keys.any(interesting.contains)) {
           best = Map<String, dynamic>.from(v);
@@ -1117,8 +1275,10 @@ class UserSession extends ChangeNotifier {
           walk(inner);
         }
       }
+
       walk(resp);
-      homeStats = best ?? (resp is Map ? Map<String, dynamic>.from(resp) : null);
+      homeStats =
+          best ?? (resp is Map ? Map<String, dynamic>.from(resp) : null);
       debugPrint('🏠 HomeStats: keys=${homeStats?.keys.toList()}');
     } catch (e) {
       homeStatsError = e.toString();
@@ -1137,14 +1297,13 @@ class UserSession extends ChangeNotifier {
     //   eCenterId, tCenterId, sCenterId, transactionType.
     // Server appears to require the shape even when fields are zero/empty,
     // so we send a fully-populated body keyed off the auth payload.
-    final sid = _intFromAuth([
-      'studentId', 'StudentId', 'id', 'Id', 'userId', 'UserId'
-    ]);
+    final sid = _intFromAuth(
+        ['studentId', 'StudentId', 'id', 'Id', 'userId', 'UserId']);
     final icNo = _strFromAuth(['icNo', 'IcNo', 'nric', 'identityNo']);
     final now = DateTime.now();
     // Wide date window: 2 years back → 2 years forward.
     final start = DateTime(now.year - 2, 1, 1).toIso8601String();
-    final end   = DateTime(now.year + 2, 12, 31).toIso8601String();
+    final end = DateTime(now.year + 2, 12, 31).toIso8601String();
     final fullBody = <String, dynamic>{
       'studentId': sid,
       'studentName': '',
@@ -1175,7 +1334,8 @@ class UserSession extends ChangeNotifier {
               'body=$body');
           if (list.isNotEmpty) return; // good, stop trying
         } else {
-          debugPrint('💰 Outstanding: no list in response (type=${resp.runtimeType}, body=$body)');
+          debugPrint(
+              '💰 Outstanding: no list in response (type=${resp.runtimeType}, body=$body)');
         }
       } catch (e) {
         outstandingError = e.toString();
@@ -1191,7 +1351,8 @@ class UserSession extends ChangeNotifier {
       if (resp is String) {
         v = resp;
       } else if (resp is Map) {
-        v = (resp['version'] ?? resp['data'] ?? resp['storeVersion'])?.toString();
+        v = (resp['version'] ?? resp['data'] ?? resp['storeVersion'])
+            ?.toString();
       }
       if (v != null && v.isNotEmpty) {
         latestStoreVersion = v;
@@ -1202,16 +1363,6 @@ class UserSession extends ChangeNotifier {
     }
   }
 
-  /// Register the device push token with the backend.
-  ///
-  /// FCM is not wired yet, so there is no real device token to send. We
-  /// deliberately do NOT post a placeholder/stub token (that would write
-  /// junk into the server's notification routing table). Re-enable this
-  /// once a genuine FCM/APNs token is available.
-  Future<void> _registerPushToken() async {
-    return;
-  }
-
   // ---------------------------------------------------------------------------
   // Real-time notification polling
   // ---------------------------------------------------------------------------
@@ -1219,19 +1370,30 @@ class UserSession extends ChangeNotifier {
   /// Start the periodic poll. Safe to call multiple times.
   void startNotificationPolling() {
     _notifTimer?.cancel();
-    _previousUnread = unreadNotifications;
-    _notifTimer = Timer.periodic(notificationPollInterval, (_) => _pollNotifications());
-    debugPrint('🔔 Notification polling started (every ${notificationPollInterval.inSeconds}s)');
+    if (!isLoggedIn) return;
+    _pollingPaused = false;
+    unawaited(refreshNotifications(raiseAlerts: true));
+    _notifTimer = Timer.periodic(notificationPollInterval,
+        (_) => refreshNotifications(raiseAlerts: true));
   }
 
   void stopNotificationPolling() {
+    _notificationGeneration++;
+    _notificationsInFlight = null;
     _notifTimer?.cancel();
     _notifTimer = null;
   }
 
-  /// Temporarily skip a poll cycle (used while a switch/refresh is in flight).
-  void pauseNotificationPolling() => _pollingPaused = true;
-  void resumeNotificationPolling() => _pollingPaused = false;
+  void pauseNotificationPolling() {
+    _pollingPaused = true;
+    _notificationGeneration++;
+    _notificationsInFlight = null;
+  }
+
+  void resumeNotificationPolling() {
+    _pollingPaused = false;
+    if (isLoggedIn) unawaited(refreshNotifications(raiseAlerts: true));
+  }
 
   /// Auto Pay reminder catch-up.
   ///
@@ -1247,8 +1409,18 @@ class UserSession extends ChangeNotifier {
 
       final months = monthsToSettle(prefs, now);
       const names = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December',
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
       ];
       final label = months.length == 1
           ? '${names[months.first.month - 1]} ${months.first.year}'
@@ -1268,118 +1440,49 @@ class UserSession extends ChangeNotifier {
             prefs.copyWith(lastRemindedMs: now.millisecondsSinceEpoch));
         // Arm the following month while we are here.
         await NotificationService.scheduleAutoPayReminder(
-            nextReminder(prefs, now), 'Time to settle your next fees. Tap to pay.');
+            nextReminder(prefs, now),
+            'Time to settle your next fees. Tap to pay.');
       }
     } catch (e) {
       debugPrint('autopay reminder check failed: $e');
     }
   }
 
-  Future<void> _pollNotifications() async {
-    if (!isLoggedIn || _pollingPaused) return;
-    unawaited(_checkAutoPayReminder());
-    try {
-      final countResp = await ApiService.get('/Profile/MyUnreadNotificationCount');
-      final c = (countResp is Map && countResp.containsKey('data'))
-          ? countResp['data']
-          : countResp;
-      int newCount = unreadNotifications;
-      if (c is int) newCount = c;
-      if (c is num) newCount = c.toInt();
-
-      // No change → nothing to do.
-      if (newCount == _previousUnread) return;
-
-      // Pull the latest list so the bell sheet & toast have content.
-      Map<String, dynamic>? newest;
-      try {
-        final listResp = await ApiService.get('/Profile/MyNotifications');
-        final list = (listResp is Map && listResp.containsKey('data'))
-            ? listResp['data']
-            : listResp;
-        if (list is List) {
-          notifications = list;
-          if (newCount > _previousUnread && list.isNotEmpty && list.first is Map) {
-            newest = Map<String, dynamic>.from(list.first as Map);
-          }
-        }
-      } catch (e) {
-        debugPrint('Poll list failed: $e');
-      }
-
-      unreadNotifications = newCount;
-      _previousUnread = newCount;
-      notifyListeners();
-
-      // Raise real OS notifications (tray + sound), not just an in-app toast. The
-      // high-water mark is by notification id rather than the unread count, so a message
-      // the member reads on the web still alerts once here and never twice.
-      final list = notifications;
-      if (list != null && list.isNotEmpty) {
-        await NotificationService.alertForNew(
-          userId: currentStudentId ?? 0,
-          rows: list,
-        );
-      }
-
-      // Keep the in-app toast for when the app is already frontmost.
-      if (newest != null) _showNotificationToast(newest);
-    } catch (e) {
-      debugPrint('Notification poll failed: $e');
-    }
+  Future<void> refreshNotifications({bool raiseAlerts = false}) {
+    if (_pollingPaused) return Future.value();
+    final pending = _notificationsInFlight;
+    if (pending != null) return pending;
+    final job = _fetchNotifications(raiseAlerts: raiseAlerts);
+    _notificationsInFlight = job;
+    return job.whenComplete(() {
+      if (identical(_notificationsInFlight, job)) _notificationsInFlight = null;
+    });
   }
 
-  void _showNotificationToast(Map<String, dynamic> n) {
-    final title = (n['text'] ?? n['title'] ?? n['name'] ?? 'New notification').toString();
-    final body = (n['value'] ?? n['description'] ?? '')
-        .toString()
-        .replaceAll(RegExp(r'<[^>]+>'), '')
-        .replaceAll('&nbsp;', ' ')
-        .trim();
-    final messenger = scaffoldMessengerKey.currentState;
-    if (messenger == null) return;
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(SnackBar(
-      duration: const Duration(seconds: 5),
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: const Color(0xFF0F172A),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      content: Row(children: [
-        Container(
-          width: 34, height: 34,
-          decoration: const BoxDecoration(
-            color: Color(0xFFFB923C),
-            shape: BoxShape.circle,
-          ),
-          alignment: Alignment.center,
-          child: const Icon(Icons.notifications_active, color: Colors.white, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 13)),
-              if (body.isNotEmpty)
-                Text(body,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Color(0xCCFFFFFF), fontSize: 11)),
-            ],
-          ),
-        ),
-      ]),
-    ));
+  Future<void> _fetchNotifications({required bool raiseAlerts}) async {
+    final epoch = ApiService.sessionEpoch;
+    final generation = _notificationGeneration;
+    final userId = authenticatedUserId;
+    try {
+      // Fetch content every cycle. An unchanged unread count does not mean unchanged
+      // messages (one read and one new arrival can cancel each other out).
+      final response = await Api.profileMyNotifications();
+      if (epoch != ApiService.sessionEpoch ||
+          generation != _notificationGeneration ||
+          userId != authenticatedUserId) return;
+      acceptNotifications(findRecordList(response));
+      if (raiseAlerts && isLoggedIn && userId != null) {
+        await NotificationService.alertForNew(
+            userId: userId, rows: notifications ?? const []);
+        await _checkAutoPayReminder();
+      }
+    } catch (e) {
+      if (epoch != ApiService.sessionEpoch ||
+          generation != _notificationGeneration ||
+          userId != authenticatedUserId) return;
+      notificationsError = friendlyError(e);
+      notifyListeners();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1457,12 +1560,14 @@ class UserSession extends ChangeNotifier {
       homeStats = null;
       clubStats = null;
       notifications = null;
+      notificationsRevision++;
+      notificationsError = null;
+      _acknowledgedRead.clear();
       studentAddtnlInfo = null;
       outstandingList = null;
       gradingSchedule = null;
 
       await _loadAll();
-      _previousUnread = unreadNotifications;
       return true;
     } catch (e) {
       error = e.toString();
@@ -1486,24 +1591,46 @@ class UserSession extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh() async {
-    loading = true;
+  Future<void> refresh({bool background = false}) {
+    final pending = _refreshInFlight;
+    if (pending != null) return pending;
+    final job = _refresh(background: background);
+    _refreshInFlight = job;
+    return job.whenComplete(() {
+      if (identical(_refreshInFlight, job)) _refreshInFlight = null;
+    });
+  }
+
+  Future<void> _refresh({required bool background}) async {
+    final epoch = ApiService.sessionEpoch;
+    if (!background) loading = true;
     notifyListeners();
-    await _loadAll();
-    loading = false;
-    notifyListeners();
+    try {
+      await _loadAll();
+    } finally {
+      if (epoch == ApiService.sessionEpoch) {
+        loading = false;
+        notifyListeners();
+      }
+    }
   }
 
   void logout() {
     stopNotificationPolling();
+    _refreshInFlight = null;
+    loading = false;
     // Otherwise a signed-out device keeps waking up to poll with a token that is gone.
     unawaited(BackgroundPoll.cancel());
+    unawaited(NotificationService.cancelAll());
     _clearPersistedAuth();
     authData = null;
     myInfo = null;
     homeStats = null;
     clubStats = null;
     notifications = null;
+    notificationsRevision++;
+    notificationsError = null;
+    _acknowledgedRead.clear();
     studentAddtnlInfo = null;
     outstandingList = null;
     outstandingRaw = null;
@@ -1514,7 +1641,6 @@ class UserSession extends ChangeNotifier {
     allBookings = null;
     gradingSchedule = null;
     unreadNotifications = 0;
-    _previousUnread = 0;
     ApiService.clearToken();
     notifyListeners();
   }

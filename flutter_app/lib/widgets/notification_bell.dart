@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -63,7 +64,9 @@ class NotificationBell extends StatelessWidget {
             ),
             alignment: Alignment.center,
             child: Icon(
-              has ? Icons.notifications_active : Icons.notifications_outlined,
+              has
+                  ? Icons.notifications_active
+                  : AppIcons.notifications_outlined,
               size: iconSize,
               color: iconColor ?? c.primary,
             ),
@@ -184,7 +187,8 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
               ),
               Row(children: [
                 Container(
-                  width: 36, height: 36,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(colors: c.gradient),
                     shape: BoxShape.circle,
@@ -218,7 +222,7 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.refresh, color: c.primary, size: 20),
+                  icon: Icon(AppIcons.refresh, color: c.primary, size: 20),
                   tooltip: 'Refresh',
                   onPressed: () async {
                     await UserSession.instance.refresh();
@@ -243,8 +247,7 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
                         label: 'Type',
                         options: typeOptions,
                         selected: _typeFilter,
-                        onSelected: (v) =>
-                            setState(() => _typeFilter = v),
+                        onSelected: (v) => setState(() => _typeFilter = v),
                       ),
                   ],
                   resultCount: items.length,
@@ -337,7 +340,8 @@ class _NotificationRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
-            width: 8, height: 8,
+            width: 8,
+            height: 8,
             margin: const EdgeInsets.only(top: 6, right: 10),
             decoration: BoxDecoration(
               color: isUnread ? c.primary : Colors.transparent,
@@ -377,7 +381,7 @@ class _NotificationRow extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.chevron_right, color: c.textMuted, size: 20),
+          Icon(AppIcons.chevron_right, color: c.textMuted, size: 20),
         ]),
       ),
     );

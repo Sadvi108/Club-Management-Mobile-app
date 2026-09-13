@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 /// User guide content.
@@ -51,7 +52,8 @@ const kGuideSteps = <GuideStep>[
     shot: 'assets/guide/login.png',
     icon: Icons.login,
     title: 'Signing in',
-    intro: 'Your academy issues one account per member. Everything you see in the app — fees, attendance, grading — belongs to that account.',
+    intro:
+        'Your academy issues one account per member. Everything you see in the app — fees, attendance, grading — belongs to that account.',
     details: [
       GuideDetail(1, 'Student or Instructor',
           'Students stay on the Student tab. Instructors switch to Instructor, which also asks for a club code and branch — those come from your academy.'),
@@ -70,9 +72,10 @@ const kGuideSteps = <GuideStep>[
   GuideStep(
     key: 'home',
     shot: 'assets/guide/home.png',
-    icon: Icons.home,
+    icon: AppIcons.home,
     title: 'Your home dashboard',
-    intro: 'Home is the summary of everything that needs your attention today. It refreshes from the club system each time you open it.',
+    intro:
+        'Home is the summary of everything that needs your attention today. It refreshes from the club system each time you open it.',
     details: [
       GuideDetail(1, 'Your three headline numbers',
           'Open invoices, your current grade and total amount due. Tapping the card takes you to the detail behind it.'),
@@ -89,9 +92,10 @@ const kGuideSteps = <GuideStep>[
   GuideStep(
     key: 'checkin',
     shot: 'assets/guide/attendance.png',
-    icon: Icons.qr_code_scanner,
+    icon: AppIcons.qr_code_scanner,
     title: 'Checking in with QR',
-    intro: 'Attendance is marked by scanning the QR poster displayed at your training centre. Tap Scan — the round button in the middle of the tab bar — and point your camera at it.',
+    intro:
+        'Attendance is marked by scanning the QR poster displayed at your training centre. Tap Scan — the round button in the middle of the tab bar — and point your camera at it.',
     details: [
       GuideDetail(1, 'Your attendance rate',
           'Present, absent and total sessions. Clubs commonly ask for 80% or better before you can enter gradings and events.'),
@@ -105,14 +109,16 @@ const kGuideSteps = <GuideStep>[
     tips: [
       'Nothing recorded? Check with the front desk that you scanned the current poster — centres reprint them when details change.',
     ],
-    note: 'Scan the centre\'s poster, not your own Virtual ID. The centre code says WHERE you are training; your personal QR is only for identifying yourself at the counter and will be rejected by the check-in scanner.',
+    note:
+        'Scan the centre\'s poster, not your own Virtual ID. The centre code says WHERE you are training; your personal QR is only for identifying yourself at the counter and will be rejected by the check-in scanner.',
   ),
   GuideStep(
     key: 'schedule',
     shot: 'assets/guide/schedule.png',
-    icon: Icons.calendar_month,
+    icon: AppIcons.calendar_month,
     title: 'Your timetable',
-    intro: 'Schedule shows the training week for the centres you belong to, so you can see at a glance which days you train.',
+    intro:
+        'Schedule shows the training week for the centres you belong to, so you can see at a glance which days you train.',
     details: [
       GuideDetail(1, 'The week strip',
           'Tap any day to load its sessions. The highlighted day is the one you are viewing.'),
@@ -127,9 +133,10 @@ const kGuideSteps = <GuideStep>[
   GuideStep(
     key: 'booking',
     shot: 'assets/guide/book-class.png',
-    icon: Icons.event_available,
+    icon: AppIcons.event_available,
     title: 'Booking a class',
-    intro: 'Booking reserves your place in a session. Work down the screen: centre, then instructor, then month, then the session itself.',
+    intro:
+        'Booking reserves your place in a session. Work down the screen: centre, then instructor, then month, then the session itself.',
     details: [
       GuideDetail(1, 'Training centre and instructor',
           'Only the centres and instructors you are registered with appear. Changing either reloads the sessions below.'),
@@ -147,9 +154,10 @@ const kGuideSteps = <GuideStep>[
   GuideStep(
     key: 'payments',
     shot: 'assets/guide/payments.png',
-    icon: Icons.account_balance_wallet,
+    icon: AppIcons.account_balance_wallet,
     title: 'Fees and payments',
-    intro: 'Everything financial lives under Payments: what you owe now, months you want to settle early, and every receipt you have ever been issued.',
+    intro:
+        'Everything financial lives under Payments: what you owe now, months you want to settle early, and every receipt you have ever been issued.',
     details: [
       GuideDetail(1, 'Three tabs',
           'Pay is what is outstanding today. Advance Payment settles future months before they are invoiced. History is every past payment and receipt.'),
@@ -162,14 +170,16 @@ const kGuideSteps = <GuideStep>[
       GuideDetail(5, 'Receipts',
           'Any receipt in History can be downloaded as an official PDF. There is no automatic monthly payment: every payment is one you make yourself.'),
     ],
-    note: 'A Direct Bank-In payment is not settled the moment you upload the slip — your academy reviews it first, and the invoice stays pending until they approve it.',
+    note:
+        'A Direct Bank-In payment is not settled the moment you upload the slip — your academy reviews it first, and the invoice stays pending until they approve it.',
   ),
   GuideStep(
     key: 'autopay',
     shot: 'assets/guide/autopay.png',
-    icon: Icons.autorenew,
+    icon: AppIcons.autorenew,
     title: 'Auto Pay reminders',
-    intro: 'Auto Pay is a monthly nudge, not a direct debit. It reminds you when fees are due and opens the payment with the right months already ticked.',
+    intro:
+        'Auto Pay is a monthly nudge, not a direct debit. It reminds you when fees are due and opens the payment with the right months already ticked.',
     details: [
       GuideDetail(1, 'Turn it on',
           'One switch. Your phone will ask permission to show notifications the first time — without that the reminder cannot appear, and the screen will tell you so.'),
@@ -184,14 +194,16 @@ const kGuideSteps = <GuideStep>[
       'Reminders stop the moment you switch Auto Pay off. Nothing is left running in the background.',
       'If your phone misses the reminder — after a restart, say — D-CLIX prompts you the next time you open the app.',
     ],
-    note: 'Your money is never taken automatically. The club system cannot hold a direct debit or keep your card on file, so every payment still needs you to tap Pay. Do not treat Auto Pay as proof your fees are settled — check Fees Due.',
+    note:
+        'Your money is never taken automatically. The club system cannot hold a direct debit or keep your card on file, so every payment still needs you to tap Pay. Do not treat Auto Pay as proof your fees are settled — check Fees Due.',
   ),
   GuideStep(
     key: 'notifications',
     shot: 'assets/guide/notifications.png',
-    icon: Icons.notifications,
+    icon: AppIcons.notifications,
     title: 'Notifications',
-    intro: 'Fee reminders, class changes and club announcements all arrive here, and as alerts on your phone.',
+    intro:
+        'Fee reminders, class changes and club announcements all arrive here, and as alerts on your phone.',
     details: [
       GuideDetail(1, 'Unread first',
           'Unread messages are highlighted and counted on the home bell. Tap one to expand the full text — that also marks it read.'),
@@ -208,7 +220,8 @@ const kGuideSteps = <GuideStep>[
     shot: 'assets/guide/notification-settings.png',
     icon: Icons.tune,
     title: 'Alert settings',
-    intro: 'Control exactly how your phone behaves when the club sends something. Every option here is per-device, so your phone and your tablet can differ.',
+    intro:
+        'Control exactly how your phone behaves when the club sends something. Every option here is per-device, so your phone and your tablet can differ.',
     details: [
       GuideDetail(1, 'Sound and vibration',
           'Turn the D-CLIX chime on or off, and whether alerts buzz. Turning both off still delivers the message silently to your tray.'),
@@ -227,9 +240,10 @@ const kGuideSteps = <GuideStep>[
   GuideStep(
     key: 'profile',
     shot: 'assets/guide/student-details.png',
-    icon: Icons.account_circle,
+    icon: AppIcons.account_circle,
     title: 'Profile and Virtual ID',
-    intro: 'Your membership card, your details, and the switches for how the app looks and who you are viewing.',
+    intro:
+        'Your membership card, your details, and the switches for how the app looks and who you are viewing.',
     details: [
       GuideDetail(1, 'Virtual ID',
           'Your personal member QR with your name, grade and registration number. Show it at the counter to identify yourself or claim member offers.'),
@@ -240,14 +254,16 @@ const kGuideSteps = <GuideStep>[
       GuideDetail(4, 'Appearance and sign-out',
           'Further down are the light and dark mode switch, this guide, and Logout.'),
     ],
-    note: 'The Virtual ID QR identifies you. It is not the check-in code — attendance is only recorded by scanning your centre\'s poster.',
+    note:
+        'The Virtual ID QR identifies you. It is not the check-in code — attendance is only recorded by scanning your centre\'s poster.',
   ),
   GuideStep(
     key: 'chat',
     shot: 'assets/guide/chat.png',
-    icon: Icons.forum,
+    icon: AppIcons.forum,
     title: 'Chat and Help Desk',
-    intro: 'Chat Academy is the two-way channel to your club: their announcements to you, and your questions back to them.',
+    intro:
+        'Chat Academy is the two-way channel to your club: their announcements to you, and your questions back to them.',
     details: [
       GuideDetail(1, 'Help Desk',
           'The pinned conversation at the top. Use it to start a new question with the club admin about anything — fees, schedules, membership.'),
@@ -263,9 +279,10 @@ const kGuideSteps = <GuideStep>[
   GuideStep(
     key: 'everything',
     shot: 'assets/guide/more.png',
-    icon: Icons.grid_view,
+    icon: AppIcons.grid_view,
     title: 'Finding everything else',
-    intro: 'More — the last tile in Quick Access — is the full catalogue of every screen in the app, grouped by what it is for.',
+    intro:
+        'More — the last tile in Quick Access — is the full catalogue of every screen in the app, grouped by what it is for.',
     details: [
       GuideDetail(1, 'Training',
           'Your trainer, today\'s classes, the timetable, attendance, booking and the QR scanner.'),

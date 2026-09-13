@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api.dart';
@@ -24,10 +26,53 @@ class BookClassScreen extends StatefulWidget {
   State<BookClassScreen> createState() => _BookClassScreenState();
 }
 
-class _BookClassScreenState extends State<BookClassScreen> {
+class _BookClassScreenState extends State<BookClassScreen>
+    with LiveRefreshMixin<BookClassScreen> {
+  @override
+  bool get canLiveRefresh => !_loading && !_slotsLoading && !_booking;
+  @override
+  Future<void> refreshLiveData() async {
+    final center = _centerId, instructor = _instructorId, month = _monthOffset;
+    await _refreshBookings();
+    await _loadPackage();
+    if (center == 0 || instructor == 0) return;
+    try {
+      final res = await Api.classBookingTrainingTimeWithDateAndInstructor(
+        month: _month.month,
+        year: _month.year,
+        tCenterId: center,
+        instructorId: instructor,
+      );
+      if (!mounted ||
+          center != _centerId ||
+          instructor != _instructorId ||
+          month != _monthOffset) return;
+      setState(() {
+        _slots = _rows(res);
+        if (_chosenSlot == null) {
+          _slotId = null;
+          _date = null;
+        }
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = friendlyError(e));
+    }
+  }
+
   static const _monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   List<Map<String, dynamic>> _centers = [];
@@ -47,7 +92,8 @@ class _BookClassScreenState extends State<BookClassScreen> {
   bool _booking = false;
   String? _error;
 
-  DateTime get _month => DateTime(DateTime.now().year, DateTime.now().month + _monthOffset);
+  DateTime get _month =>
+      DateTime(DateTime.now().year, DateTime.now().month + _monthOffset);
 
   @override
   void initState() {
@@ -195,7 +241,8 @@ class _BookClassScreenState extends State<BookClassScreen> {
     }
     // BookNow will happily create a second identical booking — this is the only guard.
     if (isAlreadyBooked(_bookings, _idOf(slot), _date!)) {
-      _toast('You have already booked this class on that date. Pick another date.');
+      _toast(
+          'You have already booked this class on that date. Pick another date.');
       return;
     }
 
@@ -229,8 +276,8 @@ class _BookClassScreenState extends State<BookClassScreen> {
     }
   }
 
-  void _toast(String msg) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 4)));
+  void _toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 4)));
 
   String _prettyDate(String iso) {
     final d = DateTime.tryParse(iso);
@@ -256,7 +303,8 @@ class _BookClassScreenState extends State<BookClassScreen> {
               : RefreshIndicator(
                   onRefresh: _loadPickers,
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(Gaps.xl, Gaps.md, Gaps.xl, Gaps.xxxl),
+                    padding: const EdgeInsets.fromLTRB(
+                        Gaps.xl, Gaps.md, Gaps.xl, Gaps.xxxl),
                     children: [
                       if (_error != null) _errorBanner(c, _error!),
                       _label(c, 'TRAINING CENTER'),
@@ -305,7 +353,9 @@ class _BookClassScreenState extends State<BookClassScreen> {
         child: Row(children: [
           Icon(Icons.error_outline, size: 18, color: c.danger),
           const SizedBox(width: Gaps.sm),
-          Expanded(child: Text(msg, style: TextStyle(color: c.textPrimary, fontSize: 12.5))),
+          Expanded(
+              child: Text(msg,
+                  style: TextStyle(color: c.textPrimary, fontSize: 12.5))),
         ]),
       );
 
@@ -322,7 +372,8 @@ class _BookClassScreenState extends State<BookClassScreen> {
   Widget _chips(AppColors c, List<Map<String, dynamic>> rows, int selected,
       ValueChanged<int> onTap) {
     if (rows.isEmpty) {
-      return Text('None available', style: TextStyle(color: c.textSecondary, fontSize: 13));
+      return Text('None available',
+          style: TextStyle(color: c.textSecondary, fontSize: 13));
     }
     return Wrap(
       spacing: Gaps.sm,
@@ -405,26 +456,36 @@ class _BookClassScreenState extends State<BookClassScreen> {
             decoration: BoxDecoration(
               color: c.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: on ? c.primary : c.border, width: on ? 1.6 : 1),
+              border: Border.all(
+                  color: on ? c.primary : c.border, width: on ? 1.6 : 1),
             ),
             child: Row(children: [
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text((s['name'] ?? '').toString(),
-                      style: TextStyle(
-                          color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 3),
-                  Text(
-                    [
-                      (s['centerName'] ?? '').toString(),
-                      (s['instructorName'] ?? '').toString(),
-                    ].where((x) => x.isNotEmpty).join(' · '),
-                    style: TextStyle(color: c.textSecondary, fontSize: 11.5),
-                  ),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text((s['name'] ?? '').toString(),
+                          style: TextStyle(
+                              color: c.textPrimary,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 3),
+                      Text(
+                        [
+                          (s['centerName'] ?? '').toString(),
+                          (s['instructorName'] ?? '').toString(),
+                        ].where((x) => x.isNotEmpty).join(' · '),
+                        style:
+                            TextStyle(color: c.textSecondary, fontSize: 11.5),
+                      ),
+                    ]),
               ),
-              Icon(on ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                  size: 20, color: on ? c.primary : c.textMuted),
+              Icon(
+                  on
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                  size: 20,
+                  color: on ? c.primary : c.textMuted),
             ]),
           ),
         );
@@ -463,7 +524,8 @@ class _BookClassScreenState extends State<BookClassScreen> {
                       fontWeight: FontWeight.w700)),
               if (already) ...[
                 const SizedBox(width: 5),
-                Icon(Icons.check_circle, size: 13, color: on ? Colors.white : c.warning),
+                Icon(AppIcons.check_circle,
+                    size: 13, color: on ? Colors.white : c.warning),
               ],
             ]),
           ),
@@ -482,7 +544,8 @@ class _BookClassScreenState extends State<BookClassScreen> {
     return Column(
       children: rows.take(12).map((b) {
         final d = DateTime.tryParse((b['trainingDate'] ?? '').toString());
-        final past = d != null && d.isBefore(DateTime(today.year, today.month, today.day));
+        final past = d != null &&
+            d.isBefore(DateTime(today.year, today.month, today.day));
         return Container(
           margin: const EdgeInsets.only(bottom: Gaps.sm),
           padding: const EdgeInsets.all(Gaps.md),
@@ -492,20 +555,25 @@ class _BookClassScreenState extends State<BookClassScreen> {
             border: Border.all(color: c.border),
           ),
           child: Row(children: [
-            Icon(past ? Icons.history : Icons.event_available,
+            Icon(past ? Icons.history : AppIcons.event_available,
                 size: 18, color: past ? c.textMuted : c.success),
             const SizedBox(width: Gaps.md),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text((b['name'] ?? 'Class').toString(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        color: c.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text(d == null ? '' : _prettyDate(isoDate(d)),
-                    style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text((b['name'] ?? 'Class').toString(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(d == null ? '' : _prettyDate(isoDate(d)),
+                        style:
+                            TextStyle(color: c.textSecondary, fontSize: 11.5)),
+                  ]),
             ),
             Text((b['status'] ?? (past ? 'Done' : 'Booked')).toString(),
                 style: TextStyle(
@@ -518,7 +586,8 @@ class _BookClassScreenState extends State<BookClassScreen> {
     );
   }
 
-  Widget _empty(AppColors c, IconData icon, String title, String sub) => Container(
+  Widget _empty(AppColors c, IconData icon, String title, String sub) =>
+      Container(
         padding: const EdgeInsets.symmetric(vertical: Gaps.xxl),
         alignment: Alignment.center,
         child: Column(children: [
@@ -526,7 +595,9 @@ class _BookClassScreenState extends State<BookClassScreen> {
           const SizedBox(height: Gaps.sm),
           Text(title,
               style: TextStyle(
-                  color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w800)),
+                  color: c.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
           Text(sub, style: TextStyle(color: c.textSecondary, fontSize: 12)),
         ]),
@@ -537,8 +608,8 @@ class _BookClassScreenState extends State<BookClassScreen> {
     final ready = slot != null && _date != null;
     final dup = ready && isAlreadyBooked(_bookings, _idOf(slot), _date!);
     return Container(
-      padding: EdgeInsets.fromLTRB(
-          Gaps.xl, Gaps.md, Gaps.xl, Gaps.md + MediaQuery.of(context).padding.bottom),
+      padding: EdgeInsets.fromLTRB(Gaps.xl, Gaps.md, Gaps.xl,
+          Gaps.md + MediaQuery.of(context).padding.bottom),
       decoration: BoxDecoration(
         color: c.surface,
         border: Border(top: BorderSide(color: c.border)),

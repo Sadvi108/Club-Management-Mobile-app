@@ -12,7 +12,7 @@ class Motion {
   static const Curve enter = Curves.easeOutQuart;
 
   /// Standard entrance duration for a single element.
-  static const Duration base = Duration(milliseconds: 480);
+  static const Duration base = Duration(milliseconds: 220);
 
   /// Per-index delay used to stagger a list of siblings.
   static const Duration stagger = Duration(milliseconds: 70);
@@ -163,8 +163,7 @@ class Shimmer extends StatefulWidget {
   State<Shimmer> createState() => _ShimmerState();
 }
 
-class _ShimmerState extends State<Shimmer>
-    with SingleTickerProviderStateMixin {
+class _ShimmerState extends State<Shimmer> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
   @override

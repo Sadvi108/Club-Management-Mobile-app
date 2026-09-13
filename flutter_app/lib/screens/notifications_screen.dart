@@ -1,9 +1,10 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api.dart';
+import '../services/user_session.dart';
 import '../services/notification_diff.dart';
 import '../services/notification_prefs.dart';
-import '../services/response_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_icon_button.dart';
@@ -31,35 +32,32 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
+    UserSession.instance.addListener(_feedChanged);
     _load();
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    UserSession.instance.removeListener(_feedChanged);
+    super.dispose();
+  }
+
+  void _feedChanged() {
+    if (!mounted) return;
+    final session = UserSession.instance;
     setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final res = await Api.profileMyNotifications();
-      // Instructor accounts can come back without a list at all — guard rather than throw.
-      final rows = findRecordList(res)
+      _rows = (session.notifications ?? const [])
           .whereType<Map>()
           .map((m) => Map<String, dynamic>.from(m))
           .toList();
-      if (!mounted) return;
-      setState(() {
-        _rows = rows;
-        _readLocally.clear();
-        _expanded = null;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = friendlyError(e);
-        _loading = false;
-      });
-    }
+      _error = session.notificationsError;
+      _loading = false;
+    });
+  }
+
+  Future<void> _load() async {
+    await UserSession.instance.refreshNotifications();
+    if (mounted) _feedChanged();
   }
 
   int _idOf(Map<String, dynamic> m) {
@@ -76,6 +74,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       await Api.profileUpdateNotification2Read({'id': id});
       if (!mounted) return;
+      UserSession.instance.acknowledgeNotificationRead(id);
       setState(() => _readLocally.add(id));
     } catch (_) {
       // Leave it showing as unread: claiming it was read when the server never recorded
@@ -84,7 +83,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _markAll() async {
-    final unread = _rows.where((m) => !_isRead(m)).map(_idOf).where((i) => i > 0).toList();
+    final unread =
+        _rows.where((m) => !_isRead(m)).map(_idOf).where((i) => i > 0).toList();
     if (unread.isEmpty) return;
     setState(() => _busy = true);
     // Sequentially, not in parallel: this backend is a shared shoestring host and a burst
@@ -92,6 +92,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     for (final id in unread) {
       try {
         await Api.profileUpdateNotification2Read({'id': id});
+        UserSession.instance.acknowledgeNotificationRead(id);
         _readLocally.add(id);
       } catch (_) {/* keep the rest going */}
     }
@@ -107,8 +108,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (mins < 60) return '${mins}m ago';
     if (mins < 1440) return '${mins ~/ 60}h ago';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]} ${d.year}';
   }
@@ -126,7 +137,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           subtitle: unread == 0 ? 'All caught up' : '$unread unread',
           showBack: true,
           trailing: AppIconButton(
-            icon: Icons.refresh,
+            icon: AppIcons.refresh,
             onPressed: _loading || _busy ? null : _load,
             backgroundColor: c.surfaceAlt,
             foregroundColor: c.primary,
@@ -158,13 +169,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 30),
                           child: Column(children: [
-                            Icon(Icons.error_outline, size: 36, color: c.danger),
+                            Icon(Icons.error_outline,
+                                size: 36, color: c.danger),
                             const SizedBox(height: Gaps.sm),
                             Text(_error!,
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: c.danger, fontSize: 13)),
+                                style:
+                                    TextStyle(color: c.danger, fontSize: 13)),
                             TextButton(
-                                onPressed: _load, child: const Text('Try again')),
+                                onPressed: _load,
+                                child: const Text('Try again')),
                           ]),
                         ),
                       if (_error == null && _rows.isEmpty)
@@ -193,7 +207,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final read = _isRead(m);
     final title = titleOf(m);
     final body = bodyOf(m);
-    final when = _fmtWhen('${m['createdDate'] ?? m['date'] ?? m['notificationDate'] ?? ''}');
+    final when = _fmtWhen(
+        '${m['createdDate'] ?? m['date'] ?? m['notificationDate'] ?? ''}');
     final open = _expanded == id;
     final category = categoryOf(m);
 
@@ -209,54 +224,61 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(Radii.lg),
-            border: Border.all(color: read ? c.border : c.primary.withValues(alpha: 0.5)),
+            border: Border.all(
+                color: read ? c.border : c.primary.withValues(alpha: 0.5)),
             boxShadow: Shadows.card(c),
           ),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(
               width: 38,
               height: 38,
-              decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+              decoration:
+                  BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
               child: Icon(_iconFor(category), size: 18, color: c.primary),
             ),
             const SizedBox(width: Gaps.md),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  Expanded(
-                    child: Text(title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: c.textPrimary,
-                            fontSize: 14,
-                            fontWeight: read ? FontWeight.w600 : FontWeight.w800)),
-                  ),
-                  if (!read)
-                    Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(left: 6),
-                      decoration:
-                          BoxDecoration(color: c.primary, shape: BoxShape.circle),
-                    ),
-                ]),
-                if (body.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text(body,
-                        maxLines: open ? null : 2,
-                        overflow: open ? null : TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: c.textSecondary, fontSize: 12.5, height: 1.4)),
-                  ),
-                if (when.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 5),
-                    child: Text(when,
-                        style: TextStyle(color: c.textMuted, fontSize: 11)),
-                  ),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                        child: Text(title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: c.textPrimary,
+                                fontSize: 14,
+                                fontWeight:
+                                    read ? FontWeight.w600 : FontWeight.w800)),
+                      ),
+                      if (!read)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(left: 6),
+                          decoration: BoxDecoration(
+                              color: c.primary, shape: BoxShape.circle),
+                        ),
+                    ]),
+                    if (body.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Text(body,
+                            maxLines: open ? null : 2,
+                            overflow: open ? null : TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: c.textSecondary,
+                                fontSize: 12.5,
+                                height: 1.4)),
+                      ),
+                    if (when.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Text(when,
+                            style: TextStyle(color: c.textMuted, fontSize: 11)),
+                      ),
+                  ]),
             ),
           ]),
         ),
@@ -265,8 +287,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   IconData _iconFor(NotifCategory c) => switch (c) {
-        NotifCategory.payments => Icons.account_balance_wallet_outlined,
-        NotifCategory.classes => Icons.fitness_center,
-        NotifCategory.general => Icons.campaign_outlined,
+        NotifCategory.payments => AppIcons.account_balance_wallet_outlined,
+        NotifCategory.classes => AppIcons.fitness_center,
+        NotifCategory.general => AppIcons.campaign_outlined,
       };
 }

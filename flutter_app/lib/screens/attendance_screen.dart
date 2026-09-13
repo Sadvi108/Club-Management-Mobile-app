@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -15,7 +17,13 @@ class AttendanceScreen extends StatefulWidget {
   State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
 
-class _AttendanceScreenState extends State<AttendanceScreen> {
+class _AttendanceScreenState extends State<AttendanceScreen>
+    with LiveRefreshMixin<AttendanceScreen> {
+  @override
+  bool get canLiveRefresh => !_loading;
+  @override
+  Future<void> refreshLiveData() => _loadAttendance();
+
   List<dynamic>? _liveAttendance;
   bool _loading = false;
 
@@ -38,7 +46,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       // window, then fall back to empty if that's also empty.
       final now = DateTime.now();
       final fromDate = DateTime(now.year - 1, 1, 1).toIso8601String();
-      final toDate   = DateTime(now.year, now.month + 1, 0).toIso8601String();
+      final toDate = DateTime(now.year, now.month + 1, 0).toIso8601String();
       final candidates = <Map<String, dynamic>>[
         {
           'sCenterId': 0,
@@ -47,7 +55,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           'tTimeId': 0,
           'fromDate': fromDate,
           'toDate': toDate,
-          'reportType': 0,
+          'reportType': '',
           'sourceKeyId': 0,
         },
         const <String, dynamic>{},
@@ -90,10 +98,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     for (final row in list) {
       if (row is! Map) continue;
       total++;
-      final s = (row['attendanceType'] ?? row['status'] ?? row['value'] ?? row['attendanceStatus'] ?? '')
+      final s = (row['attendanceType'] ??
+              row['status'] ??
+              row['value'] ??
+              row['attendanceStatus'] ??
+              '')
           .toString()
           .toLowerCase();
-      if (s.contains('present') || s == '1' || s == 'true' || s == 'yes' || s == 'p') {
+      if (s.contains('present') ||
+          s == '1' ||
+          s == 'true' ||
+          s == 'yes' ||
+          s == 'p') {
         present++;
       }
     }
@@ -133,19 +149,35 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     //   recordedTime, sCenterName, trainingCenter}.
     for (final row in list) {
       if (row is! Map) continue;
-      final raw = (row['recordedTime'] ?? row['date'] ?? row['attendanceDate'] ?? row['day'] ?? '').toString();
+      final raw = (row['recordedTime'] ??
+              row['date'] ??
+              row['attendanceDate'] ??
+              row['day'] ??
+              '')
+          .toString();
       if (raw.isEmpty) continue;
       final d = DateTime.tryParse(raw);
       if (d == null) continue;
       final now = DateTime.now();
       if (d.year != now.year || d.month != now.month) continue;
-      final s = (row['attendanceType'] ?? row['status'] ?? row['value'] ?? row['attendanceStatus'] ?? '')
+      final s = (row['attendanceType'] ??
+              row['status'] ??
+              row['value'] ??
+              row['attendanceStatus'] ??
+              '')
           .toString()
           .toLowerCase();
       AttendanceStatus status;
-      if (s.contains('present') || s == '1' || s == 'true' || s == 'yes' || s == 'p') {
+      if (s.contains('present') ||
+          s == '1' ||
+          s == 'true' ||
+          s == 'yes' ||
+          s == 'p') {
         status = AttendanceStatus.present;
-      } else if (s.contains('absent') || s.contains('missed') || s == '0' || s == 'a') {
+      } else if (s.contains('absent') ||
+          s.contains('missed') ||
+          s == '0' ||
+          s == 'a') {
         status = AttendanceStatus.missed;
       } else {
         status = AttendanceStatus.off;
@@ -157,9 +189,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return List.generate(28, (i) {
       final dayNum = i + 1;
       final status = byDay[dayNum] ??
-          (dayNum > today.day
-              ? AttendanceStatus.future
-              : AttendanceStatus.off);
+          (dayNum > today.day ? AttendanceStatus.future : AttendanceStatus.off);
       return AttendanceDay(day: dayNum, status: status);
     });
   }
@@ -172,14 +202,29 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final out = <MissedClass>[];
     for (final row in list) {
       if (row is! Map) continue;
-      final s = (row['attendanceType'] ?? row['status'] ?? row['value'] ?? row['attendanceStatus'] ?? '')
+      final s = (row['attendanceType'] ??
+              row['status'] ??
+              row['value'] ??
+              row['attendanceStatus'] ??
+              '')
           .toString()
           .toLowerCase();
-      if (!(s.contains('absent') || s.contains('missed') || s == '0' || s == 'a')) continue;
-      final rawDate = (row['recordedTime'] ?? row['date'] ?? row['attendanceDate'] ?? '').toString();
+      if (!(s.contains('absent') ||
+          s.contains('missed') ||
+          s == '0' ||
+          s == 'a')) continue;
+      final rawDate =
+          (row['recordedTime'] ?? row['date'] ?? row['attendanceDate'] ?? '')
+              .toString();
       out.add(MissedClass(
         date: rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate,
-        className: (row['trainingCenter'] ?? row['sCenterName'] ?? row['className'] ?? row['classTitle'] ?? row['title'] ?? 'Class').toString(),
+        className: (row['trainingCenter'] ??
+                row['sCenterName'] ??
+                row['className'] ??
+                row['classTitle'] ??
+                row['title'] ??
+                'Class')
+            .toString(),
         reason: (row['reason'] ?? row['note'] ?? 'Absent').toString(),
       ));
       if (out.length >= 8) break;
@@ -188,7 +233,20 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   String _currentMonthLabel() {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     final now = DateTime.now();
     return '${months[now.month - 1]} ${now.year}';
   }
@@ -344,44 +402,45 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Row(
                           children: calendar
-                              .sublist(w * 7, (w * 7 + 7).clamp(0, calendar.length))
+                              .sublist(
+                                  w * 7, (w * 7 + 7).clamp(0, calendar.length))
                               .map((d) {
-                          Color bg = Colors.transparent;
-                          Color txt = c.textPrimary;
-                          Border? border;
-                          if (d.status == AttendanceStatus.present) {
-                            bg = c.success;
-                            txt = Colors.white;
-                          } else if (d.status == AttendanceStatus.missed) {
-                            bg = c.danger;
-                            txt = Colors.white;
-                          } else if (d.status == AttendanceStatus.off) {
-                            bg = c.surfaceAlt;
-                          } else {
-                            border = Border.all(color: c.border);
-                            txt = c.textMuted;
-                          }
-                          return Expanded(
-                            child: Center(
-                              child: Container(
-                                width: 34,
-                                height: 34,
-                                decoration: BoxDecoration(
-                                    color: bg,
-                                    shape: BoxShape.circle,
-                                    border: border),
-                                alignment: Alignment.center,
-                                child: Text('${d.day}',
-                                    style: TextStyle(
-                                        fontSize: 12,
-                                        color: txt,
-                                        fontWeight: FontWeight.w700)),
+                            Color bg = Colors.transparent;
+                            Color txt = c.textPrimary;
+                            Border? border;
+                            if (d.status == AttendanceStatus.present) {
+                              bg = c.success;
+                              txt = Colors.white;
+                            } else if (d.status == AttendanceStatus.missed) {
+                              bg = c.danger;
+                              txt = Colors.white;
+                            } else if (d.status == AttendanceStatus.off) {
+                              bg = c.surfaceAlt;
+                            } else {
+                              border = Border.all(color: c.border);
+                              txt = c.textMuted;
+                            }
+                            return Expanded(
+                              child: Center(
+                                child: Container(
+                                  width: 34,
+                                  height: 34,
+                                  decoration: BoxDecoration(
+                                      color: bg,
+                                      shape: BoxShape.circle,
+                                      border: border),
+                                  alignment: Alignment.center,
+                                  child: Text('${d.day}',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: txt,
+                                          fontWeight: FontWeight.w700)),
+                                ),
                               ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ));
+                            );
+                          }).toList(),
+                        ),
+                      ));
                 }(),
               ]),
             ),
@@ -414,16 +473,21 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                                   color: Color(0xE6FFFFFF), fontSize: 11)),
                         ]),
                   ),
-                  Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+                  Icon(AppIcons.arrow_forward, color: Colors.white, size: 18),
                 ]),
               ),
             ),
             const SizedBox(height: 20),
-            if (_loading)
+            if ((_loading && !liveRefreshing))
               Row(children: [
-                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
+                SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: c.primary)),
                 const SizedBox(width: 8),
-                Text('Loading attendance…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+                Text('Loading attendance…',
+                    style: TextStyle(fontSize: 12, color: c.textSecondary)),
               ]),
             if (_liveAttendance != null && _liveAttendance!.isNotEmpty) ...[
               _liveAttendanceCard(c, _liveAttendance!),
@@ -453,7 +517,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   boxShadow: Shadows.card(c),
                 ),
                 child: Row(children: [
-                  Icon(Icons.check_circle_outline,
+                  Icon(AppIcons.check_circle_outline,
                       color: c.success, size: 18),
                   const SizedBox(width: 10),
                   Expanded(
@@ -468,44 +532,44 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 ]),
               )
             else
-            ..._liveMissed().map((m) => Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    borderRadius: BorderRadius.circular(Radii.md),
-                    border: c.isDark ? Border.all(color: c.border) : null,
-                    boxShadow: Shadows.card(c),
-                  ),
-                  child: Row(children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                          color: c.isDark
-                              ? const Color(0xFF3F1212)
-                              : const Color(0xFFFEE2E2),
-                          shape: BoxShape.circle),
-                      child: Icon(Icons.cancel, color: c.danger, size: 20),
+              ..._liveMissed().map((m) => Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(Radii.md),
+                      border: c.isDark ? Border.all(color: c.border) : null,
+                      boxShadow: Shadows.card(c),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(m.className,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: c.textPrimary)),
-                            const SizedBox(height: 2),
-                            Text('${m.date} · ${m.reason}',
-                                style: TextStyle(
-                                    fontSize: 11, color: c.textSecondary)),
-                          ]),
-                    ),
-                  ]),
-                )),
+                    child: Row(children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                            color: c.isDark
+                                ? const Color(0xFF3F1212)
+                                : const Color(0xFFFEE2E2),
+                            shape: BoxShape.circle),
+                        child: Icon(Icons.cancel, color: c.danger, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(m.className,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: c.textPrimary)),
+                              const SizedBox(height: 2),
+                              Text('${m.date} · ${m.reason}',
+                                  style: TextStyle(
+                                      fontSize: 11, color: c.textSecondary)),
+                            ]),
+                      ),
+                    ]),
+                  )),
           ]),
         ),
       ]),
@@ -527,22 +591,35 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             Icon(Icons.fact_check_outlined, size: 16, color: c.primary),
             const SizedBox(width: 6),
             Text('Recent Attendance (${rows.length})',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: c.primary,
+                    letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
           ...rows.take(15).map((r) {
             final m = r is Map ? r : <dynamic, dynamic>{};
-            final date = (m['date'] ?? m['attendanceDate'] ?? m['text'] ?? '').toString();
+            final date = (m['date'] ?? m['attendanceDate'] ?? m['text'] ?? '')
+                .toString();
             final status = (m['status'] ?? m['value'] ?? '').toString();
-            final present = status.toLowerCase().contains('present') || status == '1' || status.toLowerCase() == 'true';
+            final present = status.toLowerCase().contains('present') ||
+                status == '1' ||
+                status.toLowerCase() == 'true';
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(children: [
-                Icon(present ? Icons.check_circle : Icons.cancel,
+                Icon(present ? AppIcons.check_circle : Icons.cancel,
                     size: 14, color: present ? c.success : c.danger),
                 const SizedBox(width: 8),
-                Expanded(child: Text(date, style: TextStyle(fontSize: 12, color: c.textPrimary))),
-                Text(status, style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w700)),
+                Expanded(
+                    child: Text(date,
+                        style: TextStyle(fontSize: 12, color: c.textPrimary))),
+                Text(status,
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: c.textSecondary,
+                        fontWeight: FontWeight.w700)),
               ]),
             );
           }),
@@ -567,7 +644,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             Icon(Icons.insights, size: 16, color: c.primary),
             const SizedBox(width: 6),
             Text('Club Stats',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: c.primary,
+                    letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
           ...stats.take(6).map((s) {
@@ -575,8 +656,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(children: [
-                Expanded(child: Text('${s['text'] ?? ''}', style: TextStyle(fontSize: 12, color: c.textSecondary))),
-                Text('${s['value'] ?? ''}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c.textPrimary)),
+                Expanded(
+                    child: Text('${s['text'] ?? ''}',
+                        style:
+                            TextStyle(fontSize: 12, color: c.textSecondary))),
+                Text('${s['value'] ?? ''}',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: c.textPrimary)),
               ]),
             );
           }),
@@ -600,7 +688,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             Icon(Icons.notifications_active, size: 16, color: c.primary),
             const SizedBox(width: 6),
             Text('Recent Notifications',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: c.primary,
+                    letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
           ...notifs.take(4).map((n) => Padding(
@@ -609,9 +701,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('${n['text'] ?? ''}',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: c.textPrimary)),
                     Text(_stripHtml('${n['value'] ?? ''}'),
-                        maxLines: 2, overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 11, color: c.textSecondary)),
                   ],
                 ),

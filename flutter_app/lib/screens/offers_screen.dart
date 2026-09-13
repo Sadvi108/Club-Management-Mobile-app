@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -25,8 +27,7 @@ class MemberOffer {
     this.expiry,
   });
 
-  bool get isExpired =>
-      expiry != null && expiry!.isBefore(DateTime.now());
+  bool get isExpired => expiry != null && expiry!.isBefore(DateTime.now());
 
   static String _str(dynamic v) => v == null ? '' : '$v'.trim();
 
@@ -37,7 +38,8 @@ class MemberOffer {
       if (list is List) {
         for (final item in list) {
           if (item is Map) {
-            final url = _str(item['documentUrl'] ?? item['url'] ?? item['path']);
+            final url =
+                _str(item['documentUrl'] ?? item['url'] ?? item['path']);
             if (url.isNotEmpty) return UserSession.resolvePhotoUrl(url);
           }
         }
@@ -66,8 +68,19 @@ List<MemberOffer> parseOffers(List<dynamic> raw) => raw
     .toList(growable: false);
 
 /// Offers — the member's available offers, from the home stats payload.
-class OffersScreen extends StatelessWidget {
+class OffersScreen extends StatefulWidget {
   const OffersScreen({super.key});
+  @override
+  State<OffersScreen> createState() => _OffersScreenState();
+}
+
+class _OffersScreenState extends State<OffersScreen>
+    with LiveRefreshMixin<OffersScreen> {
+  @override
+  bool get canLiveRefresh => !UserSession.instance.loading;
+  @override
+  Future<void> refreshLiveData() =>
+      UserSession.instance.refresh(background: true);
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +100,8 @@ class OffersScreen extends StatelessWidget {
           child: offers.isEmpty
               ? Center(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.local_offer_outlined, size: 48, color: c.textMuted),
+                    Icon(Icons.local_offer_outlined,
+                        size: 48, color: c.textMuted),
                     const SizedBox(height: Gaps.sm),
                     Text('No offers right now.',
                         style: TextStyle(color: c.textSecondary, fontSize: 14)),
@@ -118,7 +132,8 @@ class OffersScreen extends StatelessWidget {
               boxShadow: Shadows.card(c),
             ),
             clipBehavior: Clip.antiAlias,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (o.imageUrl.isNotEmpty)
                 AspectRatio(
                   aspectRatio: 16 / 9,
@@ -126,47 +141,49 @@ class OffersScreen extends StatelessWidget {
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                             color: c.surfaceAlt,
-                            child: Icon(Icons.local_offer,
+                            child: Icon(AppIcons.local_offer,
                                 size: 32, color: c.textMuted),
                           )),
                 ),
               Padding(
                 padding: const EdgeInsets.all(Gaps.md),
-                child:
-                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Expanded(
-                      child: Text(o.title.isEmpty ? o.code : o.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800)),
-                    ),
-                    if (o.isExpired)
-                      Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: c.danger.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(Radii.xxl),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                          child: Text(o.title.isEmpty ? o.code : o.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800)),
                         ),
-                        child: Text('Expired',
+                        if (o.isExpired)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: c.danger.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(Radii.xxl),
+                            ),
+                            child: Text('Expired',
+                                style: TextStyle(
+                                    color: c.danger,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800)),
+                          ),
+                      ]),
+                      if (o.description.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(o.description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                                color: c.danger,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800)),
-                      ),
-                  ]),
-                  if (o.description.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(o.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
-                  ],
-                ]),
+                                color: c.textSecondary, fontSize: 12.5)),
+                      ],
+                    ]),
               ),
             ]),
           ),

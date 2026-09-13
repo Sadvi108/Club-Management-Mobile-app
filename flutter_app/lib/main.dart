@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'router/app_router.dart';
 import 'services/user_session.dart';
+import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 
@@ -22,8 +23,58 @@ void main() {
   );
 }
 
-class DClixApp extends StatelessWidget {
+class DClixApp extends StatefulWidget {
   const DClixApp({super.key});
+  @override
+  State<DClixApp> createState() => _DClixAppState();
+}
+
+class _DClixAppState extends State<DClixApp> {
+  AppLifecycleListener? _lifecycle;
+  String? _pendingNotification;
+  bool _navigationQueued = false;
+
+  @override
+  void initState() {
+    super.initState();
+    NotificationService.onTap = (payload) {
+      _pendingNotification = payload ?? 'chat';
+      _sessionChanged();
+    };
+    UserSession.instance.addListener(_sessionChanged);
+    _lifecycle = AppLifecycleListener(onResume: () {
+      if (UserSession.instance.isLoggedIn)
+        UserSession.instance.startNotificationPolling();
+    }, onStateChange: (state) {
+      if (state != AppLifecycleState.resumed)
+        UserSession.instance.stopNotificationPolling();
+    });
+  }
+
+  void _sessionChanged() {
+    final session = UserSession.instance;
+    if (_pendingNotification == null ||
+        !session.isLoggedIn ||
+        session.loading ||
+        _navigationQueued) return;
+    _navigationQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _navigationQueued = false;
+      if (!mounted || !session.isLoggedIn || session.loading) return;
+      final payload = _pendingNotification;
+      _pendingNotification = null;
+      appRouter.push(payload == 'autopay' ? '/autopay' : '/chat');
+    });
+  }
+
+  @override
+  void dispose() {
+    _lifecycle?.dispose();
+    UserSession.instance.removeListener(_sessionChanged);
+    NotificationService.onTap = null;
+    UserSession.instance.stopNotificationPolling();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

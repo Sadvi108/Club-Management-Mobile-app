@@ -60,10 +60,10 @@ void main() {
       expect(o.success, isFalse);
     });
 
-    test('missing/unknown data shape → assumed success', () {
-      expect(AttendanceOutcome.parse(null).success, isTrue);
-      expect(AttendanceOutcome.parse({'status': 200}).success, isTrue);
-      expect(AttendanceOutcome.parse('ok').success, isTrue);
+    test('missing/unknown data shape never claims success', () {
+      expect(AttendanceOutcome.parse(null).success, isFalse);
+      expect(AttendanceOutcome.parse({'status': 200}).success, isFalse);
+      expect(AttendanceOutcome.parse('ok').success, isFalse);
     });
 
     test('malformed session rows are skipped', () {

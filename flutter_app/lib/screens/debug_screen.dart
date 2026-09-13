@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -39,11 +40,12 @@ class DebugScreen extends StatelessWidget {
         title: const Text('Debug — API dump'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/home'),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(AppIcons.refresh),
             tooltip: 'Refresh',
             onPressed: () async => UserSession.instance.refresh(),
           ),
@@ -84,30 +86,33 @@ class DebugScreen extends StatelessWidget {
           _summary(c, 'notifications length',
               '${session.notifications?.length ?? "null"}'),
           const SizedBox(height: 16),
-
-          _block(c, 'authData keys', (session.authData?.keys.toList() ?? []).join(', ')),
+          _block(c, 'authData keys',
+              (session.authData?.keys.toList() ?? []).join(', ')),
           _block(c, 'authData (full)', _pretty(session.authData)),
-
-          _block(c, 'myInfo keys', (session.myInfo?.keys.toList() ?? []).join(', ')),
+          _block(c, 'myInfo keys',
+              (session.myInfo?.keys.toList() ?? []).join(', ')),
           _block(c, 'myInfo (full)', _pretty(session.myInfo)),
-
-          _block(c, 'homeStatsRaw (full /Reports/HomePageStats)', _pretty(session.homeStatsRaw)),
+          _block(c, 'homeStatsRaw (full /Reports/HomePageStats)',
+              _pretty(session.homeStatsRaw)),
           _block(c, 'homeStats (parsed)', _pretty(session.homeStats)),
           if (session.homeStatsError != null)
             _block(c, 'homeStatsError', session.homeStatsError!),
-
-          _block(c, 'outstandingRaw (full /Outstanding/Fetch)', _pretty(session.outstandingRaw)),
-          _block(c, 'outstandingList (parsed)', _pretty(session.outstandingList)),
+          _block(c, 'outstandingRaw (full /Outstanding/Fetch)',
+              _pretty(session.outstandingRaw)),
+          _block(
+              c, 'outstandingList (parsed)', _pretty(session.outstandingList)),
           if (session.outstandingError != null)
             _block(c, 'outstandingError', session.outstandingError!),
-
-          _block(c, 'nextBookings (full /ClassBooking/NextBookings)', _pretty(session.nextBookings)),
-          _block(c, 'allBookings (full /ClassBooking/GetBookings)', _pretty(session.allBookings)),
-
-          _block(c, 'notifications (full /Profile/MyNotifications)', _pretty(session.notifications)),
-          _block(c, 'studentAddtnlInfo (full /Profile/StudentAddtnlInfo)', _pretty(session.studentAddtnlInfo)),
-          _block(c, 'clubStats (full /Profile/MyClubStats)', _pretty(session.clubStats)),
-
+          _block(c, 'nextBookings (full /ClassBooking/NextBookings)',
+              _pretty(session.nextBookings)),
+          _block(c, 'allBookings (full /ClassBooking/GetBookings)',
+              _pretty(session.allBookings)),
+          _block(c, 'notifications (full /Profile/MyNotifications)',
+              _pretty(session.notifications)),
+          _block(c, 'studentAddtnlInfo (full /Profile/StudentAddtnlInfo)',
+              _pretty(session.studentAddtnlInfo)),
+          _block(c, 'clubStats (full /Profile/MyClubStats)',
+              _pretty(session.clubStats)),
           const SizedBox(height: 60),
         ],
       ),

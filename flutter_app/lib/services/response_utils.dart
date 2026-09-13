@@ -23,8 +23,16 @@ List<dynamic> findRecordList(dynamic resp) {
   if (resp is List) return resp;
   if (resp is Map) {
     const keys = [
-      'data', 'items', 'rows', 'results', 'value', 'records',
-      'collections', 'slips', 'list', 'payments',
+      'data',
+      'items',
+      'rows',
+      'results',
+      'value',
+      'records',
+      'collections',
+      'slips',
+      'list',
+      'payments',
     ];
     for (final k in keys) {
       final v = resp[k];
@@ -52,21 +60,29 @@ List<dynamic> findRecordList(dynamic resp) {
 String? apiEnvelopeError(dynamic resp) {
   if (resp is! Map) return null;
   final meta = resp['meta'];
-  int? code;
-  final s = resp['status'];
-  if (s is num) code = s.toInt();
-  if (code == null && meta is Map && meta['code'] is num) {
-    code = (meta['code'] as num).toInt();
-  }
-  // No status info → assume success (let the caller validate `data`).
+  final code = apiEnvelopeErrorCode(resp);
   if (code == null) return null;
-  if (code >= 200 && code < 300) return null;
-  final metaError =
-      (meta is Map) ? (meta['error']?.toString().trim() ?? '') : '';
-  if (metaError.isNotEmpty) return metaError;
+  final metaError = (meta is Map)
+      ? ((meta['error'] ?? meta['message'])?.toString().trim() ?? '')
+      : '';
+  if (metaError.isNotEmpty) return friendlyError(metaError);
   final topError = (resp['error'] ?? resp['message'] ?? '').toString().trim();
-  if (topError.isNotEmpty && topError != 'null') return topError;
+  if (topError.isNotEmpty && topError != 'null') return friendlyError(topError);
   return 'Request failed (status $code).';
+}
+
+/// Both slots must be checked: a report may return status 200 with meta.code 400.
+/// String gateway statuses such as "NotFound" are payment data, not HTTP codes.
+int? apiEnvelopeErrorCode(dynamic resp) {
+  if (resp is! Map) return null;
+  final meta = resp['meta'];
+  final codes = [resp['status'], if (meta is Map) meta['code']]
+      .whereType<num>()
+      .where((code) => code >= 400)
+      .map((code) => code.toInt())
+      .toList();
+  if (codes.isNotEmpty) return codes.reduce((a, b) => a > b ? a : b);
+  return resp['status'] == false ? 400 : null;
 }
 
 /// Turn any error/exception into a short, user-facing message — never show a
@@ -76,6 +92,12 @@ String? apiEnvelopeError(dynamic resp) {
 String friendlyError(Object? e) {
   final raw = (e ?? '').toString();
   final lower = raw.toLowerCase();
+  if (raw.length > 200 ||
+      RegExp(r'nvarchar|varchar|sql|ado\.net|stack trace|System\.|Microsoft\.|Npgsql|ORA-\d|constraint|column name|object reference not set|inner exception|\.cs:line',
+              caseSensitive: false)
+          .hasMatch(raw)) {
+    return 'The club server could not complete that request. Please try again.';
+  }
   if (lower.contains('xmlhttprequest') ||
       lower.contains('clientexception') ||
       lower.contains('socketexception') ||
@@ -88,8 +110,7 @@ String friendlyError(Object? e) {
   if (lower.contains('401') || lower.contains('unauthorized')) {
     return 'Your session has expired. Please log in again.';
   }
-  if (RegExp(r'\b5\d\d\b').hasMatch(raw) ||
-      lower.contains('internal server')) {
+  if (RegExp(r'\b5\d\d\b').hasMatch(raw) || lower.contains('internal server')) {
     return 'Server error — please try again in a moment.';
   }
   // Strip "Exception: " prefixes and our error glyph from the remaining text.

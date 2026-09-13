@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/autopay.dart';
@@ -30,8 +31,18 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
   bool _armed = false;
 
   static const _months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 
   @override
@@ -155,7 +166,8 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
         ),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(Gaps.lg, Gaps.md, Gaps.lg, Gaps.xxxl),
+            padding:
+                const EdgeInsets.fromLTRB(Gaps.lg, Gaps.md, Gaps.lg, Gaps.xxxl),
             children: [
               _explainer(c),
               const SizedBox(height: Gaps.md),
@@ -173,7 +185,7 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
                 const SizedBox(height: Gaps.xl),
                 GradientButton(
                   label: 'Pay these months now',
-                  trailingIcon: Icons.arrow_forward,
+                  trailingIcon: AppIcons.arrow_forward,
                   // TermPaymentScreen has no route of its own — the payments screen
                   // pushes it directly, so do the same rather than invent a path.
                   onPressed: _saving
@@ -198,10 +210,11 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
           border: Border.all(color: c.primary.withValues(alpha: 0.25)),
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(Icons.info_outline, size: 20, color: c.primary),
+          Icon(AppIcons.info_outline, size: 20, color: c.primary),
           const SizedBox(width: Gaps.sm),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Your money is never taken automatically',
                   style: TextStyle(
                       color: c.textPrimary,
@@ -220,13 +233,15 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
       );
 
   Widget _toggleCard(AppColors c) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: Gaps.md, vertical: 4),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(Radii.lg),
-          border: c.isDark ? Border.all(color: c.border) : null,
-          boxShadow: Shadows.card(c),
-        ),
+      padding: const EdgeInsets.symmetric(horizontal: Gaps.md, vertical: 4),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(Radii.lg),
+        border: c.isDark ? Border.all(color: c.border) : null,
+        boxShadow: Shadows.card(c),
+      ),
+      child: Material(
+        color: Colors.transparent,
         child: SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: _prefs.enabled,
@@ -235,14 +250,16 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
           activeTrackColor: c.primary,
           title: Text('Monthly payment reminder',
               style: TextStyle(
-                  color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w800)),
+                  color: c.textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800)),
           subtitle: Text(
               _prefs.enabled
                   ? 'On — you will get one notification a month'
                   : 'Off — no reminders',
               style: TextStyle(color: c.textSecondary, fontSize: 12.5)),
         ),
-      );
+      ));
 
   /// The app asked the OS to schedule and the OS said no. Saying nothing here would leave
   /// the member believing a reminder is coming that never arrives.
@@ -268,7 +285,8 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
         ]),
       );
 
-  Widget _nextCard(AppColors c, DateTime next, List<TermMonth> months) => Container(
+  Widget _nextCard(AppColors c, DateTime next, List<TermMonth> months) =>
+      Container(
         padding: const EdgeInsets.all(Gaps.md),
         decoration: BoxDecoration(
           color: c.surface,
@@ -278,7 +296,7 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(Icons.event_available, size: 18, color: c.primary),
+            Icon(AppIcons.event_available, size: 18, color: c.primary),
             const SizedBox(width: 8),
             Text('Next reminder',
                 style: TextStyle(
@@ -290,7 +308,9 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
           const SizedBox(height: 6),
           Text(_fmt(next),
               style: TextStyle(
-                  color: c.textPrimary, fontSize: 17, fontWeight: FontWeight.w900)),
+                  color: c.textPrimary,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900)),
           const SizedBox(height: Gaps.sm),
           Divider(height: 1, color: c.border),
           const SizedBox(height: Gaps.sm),
@@ -300,14 +320,17 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
           Wrap(spacing: 6, runSpacing: 6, children: [
             for (final m in months)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: c.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(Radii.xxl),
                 ),
                 child: Text('${_months[m.month - 1]} ${m.year}',
                     style: TextStyle(
-                        color: c.primary, fontSize: 11.5, fontWeight: FontWeight.w800)),
+                        color: c.primary,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800)),
               ),
           ]),
           const SizedBox(height: Gaps.sm),
@@ -338,7 +361,9 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
         child: Column(children: [
           Text('Day ${_prefs.dayOfMonth} of each month',
               style: TextStyle(
-                  color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+                  color: c.textPrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700)),
           Slider(
             value: _prefs.dayOfMonth.toDouble(),
             min: 1,
@@ -352,7 +377,8 @@ class _AutoPayScreenState extends State<AutoPayScreen> {
                     () => _prefs = _prefs.copyWith(dayOfMonth: v.round())),
             onChangeEnd: (v) => _apply(_prefs.copyWith(dayOfMonth: v.round())),
           ),
-          Text('Capped at 28 so the reminder never lands on a day February does not have.',
+          Text(
+              'Capped at 28 so the reminder never lands on a day February does not have.',
               textAlign: TextAlign.center,
               style: TextStyle(color: c.textMuted, fontSize: 11)),
         ]),

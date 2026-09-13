@@ -56,7 +56,8 @@ class PrepayInvoice {
 /// The collected bill across the selected students + months.
 class PrepayBill {
   final List<PrepayInvoice> invoices;
-  const PrepayBill(this.invoices);
+  final int failedRequests;
+  const PrepayBill(this.invoices, {this.failedRequests = 0});
   int get count => invoices.length;
   num get total => invoices.fold<num>(0, (s, i) => s + i.amount);
 }
@@ -74,6 +75,7 @@ class PrepayService {
   }) async {
     final fn = fetch ?? (b) => Api.outstandingFetchTermPayments(b);
     final out = <PrepayInvoice>[];
+    var failedRequests = 0;
     for (final sid in studentIds) {
       for (final m in months) {
         try {
@@ -82,7 +84,10 @@ class PrepayService {
             'year': year,
             'months': [m],
           });
-          if (apiEnvelopeError(resp) != null) continue;
+          if (apiEnvelopeError(resp) != null) {
+            failedRequests++;
+            continue;
+          }
           for (final row in findRecordList(resp).whereType<Map>()) {
             final r = Map<String, dynamic>.from(row);
             final no = pickField(r, ['invoiceId', 'invoiceNo']);
@@ -101,11 +106,11 @@ class PrepayService {
             ));
           }
         } catch (_) {
-          // skip this (student, month); keep gathering the rest
+          failedRequests++; // Keep the successful rows, but never label a partial quote complete.
         }
       }
     }
-    return PrepayBill(out);
+    return PrepayBill(out, failedRequests: failedRequests);
   }
 
   /// Price [months] for [studentId]/[year]. Calls the term-payment endpoint

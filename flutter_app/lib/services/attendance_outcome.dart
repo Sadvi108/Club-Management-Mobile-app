@@ -29,10 +29,13 @@ class AttendanceOutcome {
   static AttendanceOutcome parse(dynamic resp) {
     final data = resp is Map ? resp['data'] : null;
     if (data is! Map) {
-      // Legacy/unknown shape on a 2xx — assume recorded.
-      return const AttendanceOutcome(status: 0);
+      // A successful HTTP response alone is not proof that attendance was recorded.
+      return const AttendanceOutcome(
+          status: -2,
+          message:
+              'Could not confirm attendance. Please check your history before scanning again.');
     }
-    final status = _toInt(data['status']) ?? 0;
+    final status = _toInt(data['status']) ?? -2;
     final message = (data['message'] ?? '').toString();
     final sessions = <AttendanceSession>[];
     final raw = data['tTimeSession'];

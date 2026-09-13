@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -23,28 +24,28 @@ class AppHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    // On web/preview the OS reports no notch inset (padding.top == 0),
-    // so SafeArea adds nothing and the header collides with a hardware
-    // notch. Add a fixed clearance only when no real inset is reported.
-    final extraTop =
-        MediaQuery.of(context).padding.top > 0 ? 0.0 : 44.0;
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: EdgeInsets.fromLTRB(Gaps.lg, extraTop + 10, Gaps.lg, 10),
+        padding: EdgeInsets.fromLTRB(Gaps.xl, 10, Gaps.xl, 10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             if (showBack)
               AppIconButton(
-                icon: Icons.chevron_left,
-                onPressed: onBack ?? () => context.pop(),
+                icon: AppIcons.chevron_left,
+                onPressed: onBack ??
+                    () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/home');
+                      }
+                    },
                 backgroundColor: c.surfaceAlt,
                 foregroundColor: c.textPrimary,
-              )
-            else
-              const SizedBox(width: 42, height: 42),
-            const SizedBox(width: 12),
+              ),
+            if (showBack) const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -55,7 +56,7 @@ class AppHeader extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: c.textPrimary,
-                      fontSize: 18,
+                      fontSize: showBack ? 18 : 26,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -75,11 +76,13 @@ class AppHeader extends StatelessWidget {
                 ],
               ),
             ),
-            if (trailing != null) trailing! else const SizedBox(width: 42, height: 42),
+            if (trailing != null)
+              trailing!
+            else
+              const SizedBox(width: 42, height: 42),
           ],
         ),
       ),
     );
   }
 }
-

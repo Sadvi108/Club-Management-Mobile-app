@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dclix_app/screens/instructor_reports/report_spec.dart';
-import 'package:dclix_app/screens/instructor_reports/student_list_fetch.dart';
 
 void main() {
   group('Receipt report body — server-side payment-mode filter', () {
@@ -32,12 +31,7 @@ void main() {
     });
   });
 
-  group('New Student report wiring', () {
-    test('is registered and titled (not the raw schedule endpoint)', () {
-      final spec = kReportSpecs['new-student'];
-      expect(spec, isNotNull);
-      expect(spec!.title, 'New Student');
-      expect(identical(spec.fetch, fetchInstructorStudentList), isTrue);
-    });
+  test('New Student does not masquerade as the enrolled student report', () {
+    expect(kReportSpecs.containsKey('new-student'), isFalse);
   });
 }

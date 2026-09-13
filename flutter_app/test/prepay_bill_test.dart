@@ -41,7 +41,8 @@ void main() {
     return {'status': 200, 'data': []};
   }
 
-  test('gatherInvoices collects one invoice per (student, month), with detail', () async {
+  test('gatherInvoices collects one invoice per (student, month), with detail',
+      () async {
     final bill = await PrepayService.gatherInvoices(
       studentIds: [100, 200],
       year: 2026,
@@ -59,6 +60,16 @@ void main() {
     final t = bill.invoices.firstWhere((i) => i.studentId == 200);
     expect(t.invoiceNo, '0');
     expect(t.discount, 5.0);
+  });
+
+  test('failed pricing is distinct from an uninvoiced month', () async {
+    final bill = await PrepayService.gatherInvoices(
+        studentIds: [1],
+        year: 2026,
+        months: [10],
+        fetch: (_) async => throw Exception('offline'));
+    expect(bill.failedRequests, 1);
+    expect(bill.count, 0);
   });
 
   test('empty months/students yield an empty bill', () async {

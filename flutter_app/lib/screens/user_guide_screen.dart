@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../data/guide_content.dart';
@@ -28,7 +29,8 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
   void _go(int index) {
     if (index < 0 || index >= kGuideSteps.length) return;
     _controller.animateToPage(index,
-        duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic);
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic);
   }
 
   @override
@@ -59,7 +61,8 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
   }
 
   Widget _progress(AppColors c) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Gaps.lg, vertical: Gaps.sm),
+        padding:
+            const EdgeInsets.symmetric(horizontal: Gaps.lg, vertical: Gaps.sm),
         child: Row(children: [
           for (var i = 0; i < kGuideSteps.length; i++)
             Expanded(
@@ -95,12 +98,15 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
             Expanded(
               child: Text(s.title,
                   style: TextStyle(
-                      color: c.textPrimary, fontSize: 21, fontWeight: FontWeight.w900)),
+                      color: c.textPrimary,
+                      fontSize: 21,
+                      fontWeight: FontWeight.w900)),
             ),
           ]),
           const SizedBox(height: Gaps.md),
           Text(s.intro,
-              style: TextStyle(color: c.textSecondary, fontSize: 14, height: 1.55)),
+              style: TextStyle(
+                  color: c.textSecondary, fontSize: 14, height: 1.55)),
           if (s.shot.isNotEmpty) _shot(c, s.shot),
           const SizedBox(height: Gaps.lg),
           for (final d in s.details) _detail(c, d),
@@ -142,18 +148,23 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
             decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle),
             child: Text('${d.n}',
                 style: const TextStyle(
-                    color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w900)),
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w900)),
           ),
           const SizedBox(width: Gaps.md),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(d.title,
                   style: TextStyle(
-                      color: c.textPrimary, fontSize: 14.5, fontWeight: FontWeight.w800)),
+                      color: c.textPrimary,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800)),
               const SizedBox(height: 3),
               Text(d.text,
-                  style:
-                      TextStyle(color: c.textSecondary, fontSize: 13.5, height: 1.5)),
+                  style: TextStyle(
+                      color: c.textSecondary, fontSize: 13.5, height: 1.5)),
             ]),
           ),
         ]),
@@ -200,13 +211,16 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
           for (final t in tips)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Icon(Icons.lightbulb_outline, size: 15, color: c.primary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(t,
                       style: TextStyle(
-                          color: c.textSecondary, fontSize: 12.5, height: 1.45)),
+                          color: c.textSecondary,
+                          fontSize: 12.5,
+                          height: 1.45)),
                 ),
               ]),
             ),
@@ -223,7 +237,7 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
         child: Row(children: [
           TextButton.icon(
             onPressed: _page == 0 ? null : () => _go(_page - 1),
-            icon: const Icon(Icons.chevron_left),
+            icon: const Icon(AppIcons.chevron_left),
             label: const Text('Back'),
           ),
           const Spacer(),
@@ -231,7 +245,7 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
             onPressed: last
                 ? () => Navigator.of(context).maybePop()
                 : () => _go(_page + 1),
-            icon: Icon(last ? Icons.check : Icons.chevron_right),
+            icon: Icon(last ? AppIcons.check : AppIcons.chevron_right),
             label: Text(last ? 'Done' : 'Next'),
             style: FilledButton.styleFrom(backgroundColor: c.primary),
           ),

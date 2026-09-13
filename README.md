@@ -14,7 +14,7 @@ The app is a **client only**. All data comes from the third-party **Club.Api** b
 
 | | |
 |---|---|
-| App | Flutter 3.41, Dart 3, go_router, provider |
+| App | Flutter 3.44.8, Dart 3.12, go_router, provider |
 | Backend | Club.Api (ASP.NET, third-party) — REST + bearer JWT |
 | Auth | Token in the OS secure store (Keychain / Keystore), never in SharedPreferences |
 | Android | `com.dclix.clubapp` |
@@ -41,7 +41,7 @@ real device or emulator. The user guide (`#/user-guide`) works without an accoun
 ### Test and analyze
 
 ```bash
-flutter test                # ~266 tests, offline and deterministic
+flutter test                # offline service, navigation and widget tests
 flutter analyze
 ```
 
@@ -62,8 +62,10 @@ flutter test tool/capture_guide_shots.dart --dart-define=CAPTURE=true
 flutter build apk --release
 ```
 
-Requires JDK 17 and an Android SDK. Pushing a `flutter-v*` tag builds and publishes the
-APK through GitHub Actions.
+Requires JDK 17 and an Android SDK. The current release configuration signs with the
+local debug key, so this command produces an optimized test APK. Configure the original
+release signing key before distributing an update. Pushing a `flutter-v*` tag builds and
+publishes the APK through GitHub Actions.
 
 ## Layout
 
@@ -105,17 +107,18 @@ These are backend limitations, recorded so they are not mistaken for bugs:
 - **Auto Pay is a reminder, not a mandate.** There is no recurring-payment route. The
   screen schedules a monthly reminder and pre-selects the months; the member still confirms.
 - **`/Bcpg` is UAT-only.** The Boost routes 404 on production, so those calls — and only
-  those — go to `apimacuat.zyncbook.com`, which serves a self-signed certificate the app
-  trusts for that one host (`android/app/src/main/res/xml/network_security_config.xml`).
-  Remove both once the routes ship to production with a real certificate.
+  those — go to `apimacuat.zyncbook.com`, which is documented as serving a self-signed certificate without a host SAN.
+  The Android trust file does not resolve Dart HTTP or hostname validation. Online payment
+  needs a valid server certificate or production Boost routes; see the parity audit.
 - **Cleartext HTTP is enabled** because the production API does not serve HTTPS.
-- **New-student approval is not built.** Its endpoints return 404 on both servers.
+- **New-student approval awaits the backend.** The Flutter list/detail/action flow follows
+  the proposed RN contract and shows “Awaiting backend” when those routes are unavailable.
 
 ## Documentation
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — API contracts and observed backend behaviour
 - [`docs/DESIGN.md`](docs/DESIGN.md) — design system
-- [`docs/flutter-parity-plan.md`](docs/flutter-parity-plan.md) — the Expo → Flutter port, and what was deliberately left out
+- [`docs/react-native-parity-audit.md`](docs/react-native-parity-audit.md) — exact RN reference, corrected gaps, route mapping and verification limits
 
 ## History
 
@@ -125,7 +128,8 @@ replaced it at **2.12.0**. The Expo app is preserved in full at tag
 `git checkout v2.11.1` restores it.
 
 Both ship as `com.dclix.clubapp`, and the Flutter build's versionCode (18) is above the
-Expo release's (17), so it installs over an existing member's app as an update.
+Expo release's (17). Installing over an existing release also requires its original signing
+key. The checked-in Android release configuration currently uses the debug key.
 
 ## Conventions
 
@@ -133,3 +137,7 @@ Expo release's (17), so it installs over an existing member's app as an update.
 - Comments explain the non-obvious — a workaround, a server quirk, a decision that looks
   wrong until you know the constraint.
 - Nothing that is not verified is described as verified.
+
+## Live updates and test APK
+
+Flutter 2.12.1+19 adds foreground message and data refresh. See [live API verification](docs/realtime-verification.md) for tested behavior and remaining backend/device requirements, and [APK release notes](docs/releases/flutter-v2.12.1.md) for signing and installation limits. Instant closed-app push still requires backend/Firebase integration.

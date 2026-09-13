@@ -1,3 +1,5 @@
+import '../../services/live_refresh.dart';
+import '../../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/api.dart';
@@ -22,7 +24,12 @@ class InstructorStudentDetailScreen extends StatefulWidget {
 }
 
 class _InstructorStudentDetailScreenState
-    extends State<InstructorStudentDetailScreen> {
+    extends State<InstructorStudentDetailScreen>
+    with LiveRefreshMixin<InstructorStudentDetailScreen> {
+  @override
+  bool get canLiveRefresh => !_loading;
+  @override
+  Future<void> refreshLiveData() => _load();
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _outstanding = const [];
@@ -106,8 +113,7 @@ class _InstructorStudentDetailScreenState
         } catch (_) {}
       }
 
-      final receiptsResp =
-          await Api.reportsReceipts(const <String, dynamic>{});
+      final receiptsResp = await Api.reportsReceipts(const <String, dynamic>{});
 
       final os = findRecordList(osResp)
           .whereType<Map>()
@@ -134,16 +140,12 @@ class _InstructorStudentDetailScreenState
 
   bool _matches(Map<String, dynamic> r) {
     final sid = _studentIdStr;
-    if (sid.isNotEmpty &&
-        (r['studentId'] ?? '').toString().trim() == sid) {
+    if (sid.isNotEmpty && (r['studentId'] ?? '').toString().trim() == sid) {
       return true;
     }
     final nm = _name.toLowerCase();
     if (nm.isNotEmpty &&
-        (r['studentName'] ?? r['name'] ?? '')
-            .toString()
-            .toLowerCase() ==
-            nm) {
+        (r['studentName'] ?? r['name'] ?? '').toString().toLowerCase() == nm) {
       return true;
     }
     return false;
@@ -151,13 +153,13 @@ class _InstructorStudentDetailScreenState
 
   bool _matchesReceipt(Map<String, dynamic> r) {
     final sid = _studentIdStr;
-    if (sid.isNotEmpty &&
-        (r['studentId'] ?? '').toString().trim() == sid) return true;
+    if (sid.isNotEmpty && (r['studentId'] ?? '').toString().trim() == sid)
+      return true;
     final nm = _name.toLowerCase();
     if (nm.isEmpty) return false;
     return (r['studentName'] ?? r['name'] ?? r['receiverName'] ?? '')
-        .toString()
-        .toLowerCase() ==
+            .toString()
+            .toLowerCase() ==
         nm;
   }
 
@@ -197,7 +199,7 @@ class _InstructorStudentDetailScreenState
                   _sectionHeader(c, 'Outstanding invoices',
                       _outstanding.length.toString()),
                   const SizedBox(height: 8),
-                  if (_loading)
+                  if ((_loading && !liveRefreshing))
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
                       child: ShimmerList(count: 3, rowHeight: 72),
@@ -212,12 +214,13 @@ class _InstructorStudentDetailScreenState
                   _sectionHeader(
                       c, 'Recent receipts', _receipts.length.toString()),
                   const SizedBox(height: 8),
-                  if (_loading)
+                  if ((_loading && !liveRefreshing))
                     const SizedBox.shrink()
                   else if (_receipts.isEmpty)
                     _emptyTile(c, 'No receipts on file for this student.')
                   else
-                    for (final entry in _receipts.take(15).toList().asMap().entries)
+                    for (final entry
+                        in _receipts.take(15).toList().asMap().entries)
                       FadeSlideIn.at(entry.key.clamp(0, 8),
                           child: _receiptCard(c, entry.value)),
                   if (_error != null) ...[
@@ -240,8 +243,7 @@ class _InstructorStudentDetailScreenState
   Widget _heroCard(AppColors c) {
     final grade = (widget.student['grade'] ?? '').toString();
     final tcenter = (widget.student['trainingCenter'] ?? '').toString();
-    final attendance =
-        (widget.student['attendanceCount'] ?? '').toString();
+    final attendance = (widget.student['attendanceCount'] ?? '').toString();
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -254,16 +256,15 @@ class _InstructorStudentDetailScreenState
       ),
       child: Row(children: [
         Container(
-          width: 56, height: 56,
+          width: 56,
+          height: 56,
           decoration: const BoxDecoration(
               color: Color(0x33FFFFFF), shape: BoxShape.circle),
           alignment: Alignment.center,
           child: Text(
             _name.isNotEmpty ? _name[0].toUpperCase() : '?',
             style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w900),
+                color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900),
           ),
         ),
         const SizedBox(width: 14),
@@ -288,7 +289,7 @@ class _InstructorStudentDetailScreenState
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Row(children: [
-                    const Icon(Icons.fitness_center,
+                    const Icon(AppIcons.fitness_center,
                         size: 12, color: Color(0xCCFFFFFF)),
                     const SizedBox(width: 4),
                     Expanded(
@@ -316,7 +317,7 @@ class _InstructorStudentDetailScreenState
                     if (attendance.isNotEmpty &&
                         attendance != '0' &&
                         attendance != 'null') ...[
-                      const Icon(Icons.check_circle,
+                      const Icon(AppIcons.check_circle,
                           size: 12, color: Color(0xCCFFFFFF)),
                       const SizedBox(width: 4),
                       Text('$attendance classes',
@@ -364,11 +365,11 @@ class _InstructorStudentDetailScreenState
           ),
         );
     return Row(children: [
-      tile(Icons.credit_card, 'RM ${due.toStringAsFixed(2)}', 'Total due'),
+      tile(AppIcons.credit_card, 'RM ${due.toStringAsFixed(2)}', 'Total due'),
       const SizedBox(width: 10),
-      tile(Icons.receipt_long_outlined, '$inv', 'Invoices'),
+      tile(AppIcons.receipt_long_outlined, '$inv', 'Invoices'),
       const SizedBox(width: 10),
-      tile(Icons.payments_outlined, '$rec', 'Receipts'),
+      tile(AppIcons.payments_outlined, '$rec', 'Receipts'),
     ]);
   }
 
@@ -376,9 +377,7 @@ class _InstructorStudentDetailScreenState
     return Row(children: [
       Text(title,
           style: TextStyle(
-              color: c.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w800)),
+              color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
       const Spacer(),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
@@ -388,9 +387,7 @@ class _InstructorStudentDetailScreenState
         ),
         child: Text(badge,
             style: TextStyle(
-                color: c.primary,
-                fontSize: 11,
-                fontWeight: FontWeight.w900)),
+                color: c.primary, fontSize: 11, fontWeight: FontWeight.w900)),
       ),
     ]);
   }
@@ -420,7 +417,10 @@ class _InstructorStudentDetailScreenState
 
   Widget _invoiceCard(AppColors c, Map<String, dynamic> r) {
     final desc = pickField(r, [
-      'invoiceDescription', 'description', 'particulars', 'invoiceName',
+      'invoiceDescription',
+      'description',
+      'particulars',
+      'invoiceName',
     ]);
     final amt = pickAmount(r, ['dueAmount', 'amount', 'invoiceAmount']);
     final status = pickField(r, ['paymentStatus', 'status']);
@@ -451,14 +451,12 @@ class _InstructorStudentDetailScreenState
           ),
           Text('RM ${amt.toStringAsFixed(2)}',
               style: TextStyle(
-                  color: c.primary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900)),
+                  color: c.primary, fontSize: 14, fontWeight: FontWeight.w900)),
         ]),
         const SizedBox(height: 6),
         Row(children: [
           if (dueShort.isNotEmpty) ...[
-            Icon(Icons.event, size: 12, color: c.textMuted),
+            Icon(AppIcons.event, size: 12, color: c.textMuted),
             const SizedBox(width: 4),
             Text(dueShort,
                 style: TextStyle(
@@ -469,8 +467,7 @@ class _InstructorStudentDetailScreenState
           const Spacer(),
           if (status.isNotEmpty)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: statusColor.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(999),
@@ -512,15 +509,13 @@ class _InstructorStudentDetailScreenState
           ),
           Text('RM ${amt.toStringAsFixed(2)}',
               style: TextStyle(
-                  color: c.success,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900)),
+                  color: c.success, fontSize: 14, fontWeight: FontWeight.w900)),
         ]),
         if (dateShort.isNotEmpty || method.isNotEmpty) ...[
           const SizedBox(height: 6),
           Row(children: [
             if (dateShort.isNotEmpty) ...[
-              Icon(Icons.event, size: 12, color: c.textMuted),
+              Icon(AppIcons.event, size: 12, color: c.textMuted),
               const SizedBox(width: 4),
               Text(dateShort,
                   style: TextStyle(

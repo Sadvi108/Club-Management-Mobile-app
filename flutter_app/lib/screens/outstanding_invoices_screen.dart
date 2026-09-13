@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -19,10 +21,17 @@ class OutstandingInvoicesScreen extends StatefulWidget {
   const OutstandingInvoicesScreen({super.key});
 
   @override
-  State<OutstandingInvoicesScreen> createState() => _OutstandingInvoicesScreenState();
+  State<OutstandingInvoicesScreen> createState() =>
+      _OutstandingInvoicesScreenState();
 }
 
-class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
+class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen>
+    with LiveRefreshMixin<OutstandingInvoicesScreen> {
+  @override
+  bool get canLiveRefresh => !_refreshing;
+  @override
+  Future<void> refreshLiveData() => _refresh();
+
   bool _refreshing = false;
   final _searchCtrl = TextEditingController();
   String _query = '';
@@ -42,8 +51,13 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
     return rows.where((r) {
       if (q.isNotEmpty) {
         const searchKeys = [
-          'studentName', 'icNo', 'invoiceId', 'invoiceDescription',
-          'period', 'grade', 'centerName',
+          'studentName',
+          'icNo',
+          'invoiceId',
+          'invoiceDescription',
+          'period',
+          'grade',
+          'centerName',
         ];
         final hit = searchKeys.any(
             (k) => r[k] != null && r[k].toString().toLowerCase().contains(q));
@@ -114,7 +128,8 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
     final c = context.appColors;
     final session = context.watch<UserSession>();
     final raw = session.outstandingForCurrentStudent;
-    final invoices = raw.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+    final invoices =
+        raw.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
     final visible = _applyFilters(invoices);
     final total = _sum(visible);
     final count = visible.length;
@@ -136,7 +151,8 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
               onRefresh: _refresh,
               color: c.primary,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(Gaps.lg, Gaps.sm, Gaps.lg, 120),
+                padding:
+                    const EdgeInsets.fromLTRB(Gaps.lg, Gaps.sm, Gaps.lg, 120),
                 children: [
                   _heroCard(c, total, count),
                   if (invoices.length > 3) ...[
@@ -185,7 +201,8 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
                   if (_refreshing)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Center(child: CircularProgressIndicator(color: c.primary)),
+                      child: Center(
+                          child: CircularProgressIndicator(color: c.primary)),
                     )
                   else if (invoices.isEmpty)
                     _emptyState(c, session)
@@ -229,7 +246,7 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: const [
-          Icon(Icons.receipt_long, color: Color(0xFFFFF7ED), size: 18),
+          Icon(AppIcons.receipt_long, color: Color(0xFFFFF7ED), size: 18),
           SizedBox(width: 6),
           Text('OUTSTANDING TOTAL',
               style: TextStyle(
@@ -251,9 +268,13 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          count == 0 ? 'No unpaid invoices' : '$count unpaid invoice${count == 1 ? "" : "s"}',
+          count == 0
+              ? 'No unpaid invoices'
+              : '$count unpaid invoice${count == 1 ? "" : "s"}',
           style: const TextStyle(
-              color: Color(0xCCFFFFFF), fontSize: 13, fontWeight: FontWeight.w600),
+              color: Color(0xCCFFFFFF),
+              fontSize: 13,
+              fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 18),
         Row(children: [
@@ -269,15 +290,17 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(Radii.md),
                   ),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(Icons.lock, size: 14, color: c.primary),
-                    const SizedBox(width: 6),
-                    Text('Pay Now',
-                        style: TextStyle(
-                            color: c.primary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14)),
-                  ]),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.lock, size: 14, color: c.primary),
+                        const SizedBox(width: 6),
+                        Text('Pay Now',
+                            style: TextStyle(
+                                color: c.primary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14)),
+                      ]),
                 ),
               ),
             ),
@@ -291,7 +314,8 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
                 color: Colors.white.withOpacity(0.22),
                 borderRadius: BorderRadius.circular(Radii.md),
               ),
-              child: const Icon(Icons.refresh, color: Colors.white, size: 18),
+              child:
+                  const Icon(AppIcons.refresh, color: Colors.white, size: 18),
             ),
           ),
         ]),
@@ -310,7 +334,9 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
       ),
       child: Column(children: [
         Icon(
-          hasError ? Icons.cloud_off_outlined : Icons.check_circle_outline,
+          hasError
+              ? AppIcons.cloud_off_outlined
+              : AppIcons.check_circle_outline,
           size: 56,
           color: hasError ? c.danger : c.success,
         ),
@@ -330,7 +356,7 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
         ),
         const SizedBox(height: 16),
         OutlinedButton.icon(
-          icon: const Icon(Icons.refresh, size: 16),
+          icon: const Icon(AppIcons.refresh, size: 16),
           label: const Text('Refresh now'),
           onPressed: _refresh,
         ),
@@ -351,13 +377,35 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
   }
 
   Widget _invoiceCard(AppColors c, int index, Map<String, dynamic> inv) {
-    final title = _pick(inv,
-        ['invoiceDescription', 'invoiceName', 'description', 'particulars', 'name', 'invoiceTitle', 'item', 'feeType']);
+    final title = _pick(inv, [
+      'invoiceDescription',
+      'invoiceName',
+      'description',
+      'particulars',
+      'name',
+      'invoiceTitle',
+      'item',
+      'feeType'
+    ]);
     final studentName = _pick(inv, ['studentName', 'name', 'memberName']);
     final period = _pick(inv, ['period', 'invoicePeriod', 'month']);
-    final invoiceNo = _pick(inv, ['invoiceNo', 'invoiceNumber', 'invNo', 'docNo', 'refNo', 'invoiceId', 'id']);
-    final dueDate = _pick(inv,
-        ['dueDate', 'invoiceDate', 'date', 'paymentDue', 'expiryDate', 'due_date']);
+    final invoiceNo = _pick(inv, [
+      'invoiceNo',
+      'invoiceNumber',
+      'invNo',
+      'docNo',
+      'refNo',
+      'invoiceId',
+      'id'
+    ]);
+    final dueDate = _pick(inv, [
+      'dueDate',
+      'invoiceDate',
+      'date',
+      'paymentDue',
+      'expiryDate',
+      'due_date'
+    ]);
     final amount = _readAmount(inv);
     final overdue = _isOverdue(dueDate);
     final initials = _initialFromTitle(title);
@@ -365,111 +413,122 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
       onTap: () => _showInvoiceDetail(c, inv, index),
       borderRadius: BorderRadius.circular(Radii.lg),
       child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.border),
-        boxShadow: Shadows.card(c),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: overdue
-                    ? [c.danger.withOpacity(0.18), c.danger.withOpacity(0.28)]
-                    : [c.primary.withOpacity(0.14), c.primary.withOpacity(0.24)],
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              initials,
-              style: TextStyle(
-                color: overdue ? c.danger : c.primary,
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(
-                  child: Text(
-                    title.isEmpty ? 'Invoice #${index + 1}' : title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: c.surface,
+          borderRadius: BorderRadius.circular(Radii.lg),
+          border: Border.all(color: c.border),
+          boxShadow: Shadows.card(c),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: overdue
+                      ? [c.danger.withOpacity(0.18), c.danger.withOpacity(0.28)]
+                      : [
+                          c.primary.withOpacity(0.14),
+                          c.primary.withOpacity(0.24)
+                        ],
                 ),
-                if (overdue)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: c.danger.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text('OVERDUE',
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                initials,
+                style: TextStyle(
+                  color: overdue ? c.danger : c.primary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                        child: Text(
+                          title.isEmpty ? 'Invoice #${index + 1}' : title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: c.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (overdue)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: c.danger.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text('OVERDUE',
+                              style: TextStyle(
+                                  color: c.danger,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.6)),
+                        ),
+                    ]),
+                    if (studentName.isNotEmpty || period.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        [studentName, period]
+                            .where((s) => s.isNotEmpty)
+                            .join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            color: c.danger,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.6)),
-                  ),
-              ]),
-              if (studentName.isNotEmpty || period.isNotEmpty) ...[
-                const SizedBox(height: 3),
-                Text(
-                  [studentName, period].where((s) => s.isNotEmpty).join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600),
-                ),
-              ],
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 12, runSpacing: 4,
-                children: [
-                  if (invoiceNo.isNotEmpty)
-                    _miniMeta(c, Icons.tag, invoiceNo),
-                  if (dueDate.isNotEmpty)
-                    _miniMeta(c, Icons.event, _fmtDate(dueDate)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(children: [
-                Text(
-                  'RM ${amount.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    color: overdue ? c.danger : c.primary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const Spacer(),
-                Text('View details',
-                    style: TextStyle(
-                        color: c.textMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700)),
-                Icon(Icons.chevron_right, size: 16, color: c.textMuted),
-              ]),
-            ]),
-          ),
-        ]),
-      ),
+                            color: c.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      children: [
+                        if (invoiceNo.isNotEmpty)
+                          _miniMeta(c, Icons.tag, invoiceNo),
+                        if (dueDate.isNotEmpty)
+                          _miniMeta(c, AppIcons.event, _fmtDate(dueDate)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Text(
+                        'RM ${amount.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: overdue ? c.danger : c.primary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text('View details',
+                          style: TextStyle(
+                              color: c.textMuted,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700)),
+                      Icon(AppIcons.chevron_right,
+                          size: 16, color: c.textMuted),
+                    ]),
+                  ]),
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -477,22 +536,52 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
   /// Bottom-sheet detail view for one invoice — shows every meaningful
   /// field from the live /Outstanding/Fetch row.
   void _showInvoiceDetail(AppColors c, Map<String, dynamic> inv, int index) {
-    final title = _pick(inv,
-        ['invoiceName', 'description', 'particulars', 'name', 'invoiceTitle', 'item', 'feeType']);
-    final invoiceNo = _pick(inv,
-        ['invoiceNo', 'invoiceNumber', 'invNo', 'docNo', 'refNo', 'id']);
-    final dueDate = _pick(inv,
-        ['dueDate', 'invoiceDate', 'date', 'paymentDue', 'expiryDate', 'due_date']);
+    final title = _pick(inv, [
+      'invoiceName',
+      'description',
+      'particulars',
+      'name',
+      'invoiceTitle',
+      'item',
+      'feeType'
+    ]);
+    final invoiceNo = _pick(
+        inv, ['invoiceNo', 'invoiceNumber', 'invNo', 'docNo', 'refNo', 'id']);
+    final dueDate = _pick(inv, [
+      'dueDate',
+      'invoiceDate',
+      'date',
+      'paymentDue',
+      'expiryDate',
+      'due_date'
+    ]);
     final student = _pick(inv, ['studentName', 'name', 'memberName']);
     final amount = _readAmount(inv);
     final overdue = _isOverdue(dueDate);
 
     // Any remaining non-empty fields not already shown above.
     const shown = {
-      'invoiceName', 'description', 'particulars', 'name', 'invoiceTitle',
-      'item', 'feeType', 'invoiceNo', 'invoiceNumber', 'invNo', 'docNo',
-      'refNo', 'id', 'dueDate', 'invoiceDate', 'date', 'paymentDue',
-      'expiryDate', 'due_date', 'studentName', 'memberName',
+      'invoiceName',
+      'description',
+      'particulars',
+      'name',
+      'invoiceTitle',
+      'item',
+      'feeType',
+      'invoiceNo',
+      'invoiceNumber',
+      'invNo',
+      'docNo',
+      'refNo',
+      'id',
+      'dueDate',
+      'invoiceDate',
+      'date',
+      'paymentDue',
+      'expiryDate',
+      'due_date',
+      'studentName',
+      'memberName',
     };
     final extras = <MapEntry<String, String>>[];
     inv.forEach((k, v) {
@@ -543,7 +632,8 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
             children: [
               Center(
                   child: Container(
-                      width: 40, height: 4,
+                      width: 40,
+                      height: 4,
                       decoration: BoxDecoration(
                           color: c.border,
                           borderRadius: BorderRadius.circular(2)))),
@@ -563,8 +653,8 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
                 const SizedBox(width: 10),
                 if (overdue)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: c.danger.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(20),
@@ -614,8 +704,8 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
 
   /// "studentName" → "Student name", "amountDue" → "Amount due".
   String _humanizeKey(String k) {
-    final spaced = k.replaceAllMapped(
-        RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
+    final spaced =
+        k.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
     if (spaced.isEmpty) return spaced;
     return spaced[0].toUpperCase() + spaced.substring(1).toLowerCase();
   }
@@ -626,7 +716,9 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
       const SizedBox(width: 4),
       Text(text,
           style: TextStyle(
-              color: c.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+              color: c.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600)),
     ]);
   }
 
@@ -635,7 +727,8 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
   static String _pick(Map<String, dynamic> m, List<String> keys) {
     for (final k in keys) {
       final v = m[k];
-      if (v != null && v.toString().trim().isNotEmpty) return v.toString().trim();
+      if (v != null && v.toString().trim().isNotEmpty)
+        return v.toString().trim();
     }
     return '';
   }
@@ -657,8 +750,18 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
     final d = DateTime.tryParse(s.trim());
     if (d == null) return s.trim();
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]} ${d.year}';
   }
@@ -675,9 +778,18 @@ class _OutstandingInvoicesScreenState extends State<OutstandingInvoicesScreen> {
 
   static num _readAmount(Map row) {
     const exactKeys = [
-      'dueAmount', 'dueAmt', 'amount', 'amountDue', 'outstandingAmount',
-      'outstandingAmt', 'balance', 'totalAmount', 'totalDue', 'value',
-      'invoiceAmount', 'amtDue'
+      'dueAmount',
+      'dueAmt',
+      'amount',
+      'amountDue',
+      'outstandingAmount',
+      'outstandingAmt',
+      'balance',
+      'totalAmount',
+      'totalDue',
+      'value',
+      'invoiceAmount',
+      'amtDue'
     ];
     for (final k in exactKeys) {
       final n = _toNum(row[k]);

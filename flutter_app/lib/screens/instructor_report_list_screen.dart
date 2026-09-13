@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api.dart';
@@ -26,8 +28,17 @@ class InstructorReportListScreen extends StatefulWidget {
       _InstructorReportListScreenState();
 }
 
-class _InstructorReportListScreenState
-    extends State<InstructorReportListScreen> {
+class _InstructorReportListScreenState extends State<InstructorReportListScreen>
+    with LiveRefreshMixin<InstructorReportListScreen> {
+  @override
+  bool get canLiveRefresh =>
+      !_loading &&
+      (!_spec.trainingTimeMode || _query.tCenterId != 0) &&
+      _query.name == _nameCtrl.text.trim() &&
+      _query.ic == _icCtrl.text.trim();
+  @override
+  Future<void> refreshLiveData() => _load();
+
   final _query = ReportQuery();
   final _nameCtrl = TextEditingController();
   final _icCtrl = TextEditingController();
@@ -73,22 +84,28 @@ class _InstructorReportListScreenState
 
   Future<void> _loadCentres(bool training) async {
     try {
-      final resp = training
-          ? await ApiCentres.training()
-          : await ApiCentres.exam();
+      final resp =
+          training ? await ApiCentres.training() : await ApiCentres.exam();
       final rows = findRecordList(resp).whereType<Map>();
       final list = <_Centre>[const _Centre(0, 'All centres')];
       for (final r in rows) {
-        final id = (r['id'] ?? r['centerId'] ?? r['tCenterId'] ??
-                r['eCenterId'] ?? r['value'] ?? 0);
-        final idInt = id is int
-            ? id
-            : int.tryParse(id.toString()) ?? 0;
+        final id = (r['id'] ??
+            r['centerId'] ??
+            r['tCenterId'] ??
+            r['eCenterId'] ??
+            r['value'] ??
+            0);
+        final idInt = id is int ? id : int.tryParse(id.toString()) ?? 0;
         // Reports/{Exam,Student}Centers return lowercase `centername`;
         // Listing endpoints return `text`; Reports/TrainingCenters `name`.
         final label = pickField(r, [
-          'name', 'centerName', 'centername', 'tCenterName', 'eCenterName',
-          'sCenterName', 'text',
+          'name',
+          'centerName',
+          'centername',
+          'tCenterName',
+          'eCenterName',
+          'sCenterName',
+          'text',
         ]);
         if (idInt != 0 && label.isNotEmpty) {
           list.add(_Centre(idInt, label));
@@ -117,10 +134,10 @@ class _InstructorReportListScreenState
       _query.ic = _icCtrl.text.trim();
       final resp = await _spec.fetch(_query);
       _rawResponse = resp;
-      setState(() => _data = findRecordList(resp));
+      if (mounted) setState(() => _data = findRecordList(resp));
     } catch (e) {
       debugPrint('${_spec.title} failed: $e');
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -149,7 +166,9 @@ class _InstructorReportListScreenState
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    final rows = _loading ? const <Map<String, dynamic>>[] : _visibleRows();
+    final rows = (_loading && !liveRefreshing)
+        ? const <Map<String, dynamic>>[]
+        : _visibleRows();
     return Scaffold(
       backgroundColor: c.background,
       body: SafeArea(
@@ -166,7 +185,7 @@ class _InstructorReportListScreenState
                 children: [
                   if (_spec.filters.isNotEmpty) _filterBar(c),
                   const SizedBox(height: Gaps.sm),
-                  if (_loading)
+                  if ((_loading && !liveRefreshing))
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
                       child: ShimmerList(count: 7, rowHeight: 72),
@@ -174,7 +193,9 @@ class _InstructorReportListScreenState
                   else if (_error != null)
                     _errorCard(c)
                   else if (_spec.trainingTimeMode && _query.tCenterId == 0)
-                    _promptCard(c, 'Select a training center above to see its '
+                    _promptCard(
+                        c,
+                        'Select a training center above to see its '
                         'weekly time table.')
                   else if (rows.isEmpty)
                     _emptyCard(c)
@@ -187,8 +208,8 @@ class _InstructorReportListScreenState
                             ? _trainingTimeCard(c, entry.value)
                             : (_spec.onRowTap != null
                                 ? InkWell(
-                                    onTap: () => _spec.onRowTap!(
-                                        context, entry.value),
+                                    onTap: () =>
+                                        _spec.onRowTap!(context, entry.value),
                                     borderRadius:
                                         BorderRadius.circular(Radii.lg),
                                     child: _rowCard(c, entry.value),
@@ -210,14 +231,12 @@ class _InstructorReportListScreenState
     for (final f in _spec.filters) {
       switch (f) {
         case RFilter.trainingCenter:
-          children.add(_centreDropdown(c, 'Training center',
-              _trainingCentres, _query.tCenterId,
-              (v) => setState(() => _query.tCenterId = v)));
+          children.add(_centreDropdown(c, 'Training center', _trainingCentres,
+              _query.tCenterId, (v) => setState(() => _query.tCenterId = v)));
           break;
         case RFilter.examCenter:
-          children.add(_centreDropdown(c, 'Exam center',
-              _examCentres, _query.eCenterId,
-              (v) => setState(() => _query.eCenterId = v)));
+          children.add(_centreDropdown(c, 'Exam center', _examCentres,
+              _query.eCenterId, (v) => setState(() => _query.eCenterId = v)));
           break;
         case RFilter.dateRange:
           children.add(_dateRow(c));
@@ -310,8 +329,8 @@ class _InstructorReportListScreenState
                         value: e.id,
                         child: Text(e.label,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: c.textPrimary, fontSize: 13)),
+                            style:
+                                TextStyle(color: c.textPrimary, fontSize: 13)),
                       ))
                   .toList(),
               onChanged: (v) => onChanged(v ?? 0),
@@ -345,8 +364,7 @@ class _InstructorReportListScreenState
                   DropdownMenuItem<String?>(
                     value: o,
                     child: Text(o,
-                        style:
-                            TextStyle(color: c.textPrimary, fontSize: 13)),
+                        style: TextStyle(color: c.textPrimary, fontSize: 13)),
                   ),
               ],
               onChanged: (v) => setState(() => _query.status = v),
@@ -359,18 +377,20 @@ class _InstructorReportListScreenState
 
   Widget _dateRow(AppColors c) {
     return Row(children: [
-      Expanded(child: _dateField(c, 'From', _query.fromDate, (d) {
+      Expanded(
+          child: _dateField(c, 'From', _query.fromDate, (d) {
         setState(() => _query.fromDate = d);
       })),
       const SizedBox(width: 10),
-      Expanded(child: _dateField(c, 'To', _query.toDate, (d) {
+      Expanded(
+          child: _dateField(c, 'To', _query.toDate, (d) {
         setState(() => _query.toDate = d);
       })),
     ]);
   }
 
-  Widget _dateField(
-      AppColors c, String label, DateTime? value, ValueChanged<DateTime> onPick) {
+  Widget _dateField(AppColors c, String label, DateTime? value,
+      ValueChanged<DateTime> onPick) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -392,7 +412,7 @@ class _InstructorReportListScreenState
             SizedBox(
               height: 44,
               child: Row(children: [
-                Icon(Icons.event, size: 15, color: c.textMuted),
+                Icon(AppIcons.event, size: 15, color: c.textMuted),
                 const SizedBox(width: 8),
                 Text(
                   value == null
@@ -489,8 +509,7 @@ class _InstructorReportListScreenState
               const SizedBox(height: 4),
               Text('Adjust the filters above and tap Apply.',
                   textAlign: TextAlign.center,
-                  style:
-                      TextStyle(color: c.textSecondary, fontSize: 12)),
+                  style: TextStyle(color: c.textSecondary, fontSize: 12)),
             ]),
           ),
           const SizedBox(height: 10),
@@ -525,22 +544,55 @@ class _InstructorReportListScreenState
   // `receiptAmount`, `ecName`, `invoiceDate`…), so each list is broad and the
   // matching set below keeps these keys out of the "extras" block.
   static const _titleKeys = [
-    'name', 'studentName', 'instructorName', 'tcName', 'centerName',
-    'centername', 'ecName', 'eCenterName', 'tCenterName', 'sCenterName',
-    'tournamentName', 'category', 'event', 'ageGroup',
-    'description', 'invoiceDescription', 'text', 'title',
+    'name',
+    'studentName',
+    'instructorName',
+    'tcName',
+    'centerName',
+    'centername',
+    'ecName',
+    'eCenterName',
+    'tCenterName',
+    'sCenterName',
+    'tournamentName',
+    'category',
+    'event',
+    'ageGroup',
+    'description',
+    'invoiceDescription',
+    'text',
+    'title',
   ];
   static const _amountKeys = [
-    'amount', 'dueAmount', 'paidAmount', 'totalAmount', 'receiptAmount',
-    'invoiceAmount', 'feeAmount', 'value', 'total',
+    'amount',
+    'dueAmount',
+    'paidAmount',
+    'totalAmount',
+    'receiptAmount',
+    'invoiceAmount',
+    'feeAmount',
+    'value',
+    'total',
   ];
   static const _dateKeys = [
-    'date', 'paymentDate', 'examDate', 'receiptDate', 'invoiceDate',
-    'closingDate', 'gradingDate', 'recordedTime', 'createdDate', 'dueDate',
+    'date',
+    'paymentDate',
+    'examDate',
+    'receiptDate',
+    'invoiceDate',
+    'closingDate',
+    'gradingDate',
+    'recordedTime',
+    'createdDate',
+    'dueDate',
   ];
   static const _statusKeys = [
-    'paymentStatus', 'examStatus', 'attendanceType', 'transactionType',
-    'actionStatus', 'status',
+    'paymentStatus',
+    'examStatus',
+    'attendanceType',
+    'transactionType',
+    'actionStatus',
+    'status',
   ];
 
   Widget _rowCard(AppColors c, Map<String, dynamic> row) {
@@ -550,7 +602,13 @@ class _InstructorReportListScreenState
     // a bare "Record"; remember the key so it isn't also shown as an "extra".
     String? fallbackTitleKey;
     if (title.isEmpty) {
-      for (final k in const ['gender', 'category', 'ageGroup', 'event', 'grade']) {
+      for (final k in const [
+        'gender',
+        'category',
+        'ageGroup',
+        'event',
+        'grade'
+      ]) {
         final v = (row[k] ?? '').toString().trim();
         if (v.isNotEmpty && v != 'null') {
           title = v;
@@ -575,7 +633,10 @@ class _InstructorReportListScreenState
         status.isEmpty ? c.textMuted : (ok ? c.success : c.danger);
 
     final shown = {
-      ..._titleKeys, ..._amountKeys, ..._dateKeys, ..._statusKeys,
+      ..._titleKeys,
+      ..._amountKeys,
+      ..._dateKeys,
+      ..._statusKeys,
     };
     final extras = <MapEntry<String, String>>[];
     for (final e in row.entries) {
@@ -649,7 +710,7 @@ class _InstructorReportListScreenState
             const SizedBox(height: 8),
             Row(children: [
               if (date.isNotEmpty) ...[
-                Icon(Icons.event, size: 13, color: c.textMuted),
+                Icon(AppIcons.event, size: 13, color: c.textMuted),
                 const SizedBox(width: 5),
                 Text(date,
                     style: TextStyle(
@@ -685,7 +746,11 @@ class _InstructorReportListScreenState
     final from = pickField(row, ['fromTime', 'startTime', 'timeFrom', 'start']);
     final to = pickField(row, ['toTime', 'endTime', 'timeTo', 'end']);
     final label = pickField(row, [
-      'name', 'text', 'description', 'tTimeName', 'sessionName',
+      'name',
+      'text',
+      'description',
+      'tTimeName',
+      'sessionName',
     ]);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -709,9 +774,7 @@ class _InstructorReportListScreenState
             (day.isEmpty ? '?' : day.substring(0, day.length.clamp(0, 3)))
                 .toUpperCase(),
             style: TextStyle(
-                color: c.primary,
-                fontSize: 12,
-                fontWeight: FontWeight.w900),
+                color: c.primary, fontSize: 12, fontWeight: FontWeight.w900),
           ),
         ),
         const SizedBox(width: 12),
@@ -734,8 +797,7 @@ class _InstructorReportListScreenState
                 ),
               if (day.isNotEmpty && label.isNotEmpty)
                 Text(label,
-                    style: TextStyle(
-                        color: c.textMuted, fontSize: 11.5)),
+                    style: TextStyle(color: c.textMuted, fontSize: 11.5)),
             ],
           ),
         ),
@@ -752,8 +814,8 @@ class _InstructorReportListScreenState
   }
 
   String _humanizeKey(String k) {
-    final spaced = k.replaceAllMapped(
-        RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
+    final spaced =
+        k.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
     if (spaced.isEmpty) return spaced;
     return spaced[0].toUpperCase() + spaced.substring(1).toLowerCase();
   }

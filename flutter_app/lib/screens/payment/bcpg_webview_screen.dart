@@ -1,18 +1,13 @@
+import '../../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-
+import '../../services/api_service.dart';
 
 /// In-app WebView that drives the BCPG payment flow.
 ///
-/// 1. Loads the BCPG-issued `paymentUrl` (the bank/FPX UI).
-/// 2. Watches every navigation; when the URL contains [returnUrlNeedle]
-///    (the merchant returnUrl host/path), closes the WebView.
-/// 3. Polls `getFPXPaymentDetails` until terminal and returns the result.
-///
-/// Result map shape (passed to Navigator.pop):
-///   { 'status': 'succeeded'|'expired'|'failed'|'denied'|'cancelled',
-///     'verification': <full response from getFPXPaymentDetails or null>,
-///     'referenceId': '<ref>' }
+/// Loads the backend-issued checkout URL and returns control to the caller
+/// after a merchant redirect or dismissal. The caller verifies the payment;
+/// a redirect or closing the browser is never proof of its outcome.
 class BcpgWebViewScreen extends StatefulWidget {
   /// The `paymentUrl` returned by BCPG `/v1/payments/init`.
   final String paymentUrl;
@@ -32,6 +27,21 @@ class BcpgWebViewScreen extends StatefulWidget {
     this.returnUrlNeedle = 'bcpg_redirect',
   });
 
+  static bool isMerchantReturn(String? url,
+      {String legacyPath = 'bcpg_redirect'}) {
+    final uri = Uri.tryParse(url ?? '');
+    if (uri == null) return false;
+    if (uri.scheme == 'dclix' && uri.host == 'bcpg-return') return true;
+    final allowedHosts = [
+      Uri.parse(ApiService.baseUrl).host,
+      Uri.parse(ApiService.boostBaseUrl).host
+    ];
+    if (!['http', 'https'].contains(uri.scheme) ||
+        !allowedHosts.contains(uri.host)) return false;
+    final path = uri.path.toLowerCase().replaceFirst(RegExp(r'/+$'), '');
+    return path == '/bcpg/redirect' || path == '/${legacyPath.toLowerCase()}';
+  }
+
   @override
   State<BcpgWebViewScreen> createState() => _BcpgWebViewScreenState();
 }
@@ -44,8 +54,8 @@ class _BcpgWebViewScreenState extends State<BcpgWebViewScreen> {
   /// Detect that the browser landed back on our return target. We don't
   /// trust the BCPG status param — always re-verify via the API.
   bool _isReturnUrl(String? url) {
-    if (url == null || url.isEmpty) return false;
-    return url.contains(widget.returnUrlNeedle);
+    return BcpgWebViewScreen.isMerchantReturn(url,
+        legacyPath: widget.returnUrlNeedle);
   }
 
   /// The gateway sent the browser back. Hand control to the caller.
@@ -59,23 +69,24 @@ class _BcpgWebViewScreenState extends State<BcpgWebViewScreen> {
     _returned = true;
     if (!mounted) return;
     setState(() => _verifying = true);
-    Navigator.of(context).pop({'returned': true, 'referenceId': widget.referenceId});
+    Navigator.of(context)
+        .pop({'returned': true, 'referenceId': widget.referenceId});
   }
 
   Future<bool> _confirmAbort() async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Cancel payment?'),
+        title: const Text('Close payment?'),
         content: const Text(
-            'Closing this screen will abort the payment. You can try again later. Continue?'),
+            'The bank may already be processing your payment. After closing, we will check its status. Check Payment History before paying again.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Stay')),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Cancel payment')),
+              child: const Text('Close and check')),
         ],
       ),
     );
@@ -102,7 +113,7 @@ class _BcpgWebViewScreenState extends State<BcpgWebViewScreen> {
         appBar: AppBar(
           title: const Text('Secure Payment'),
           leading: IconButton(
-            icon: const Icon(Icons.close),
+            icon: const Icon(AppIcons.close),
             onPressed: () async {
               if (_verifying) return;
               final abort = await _confirmAbort();
@@ -119,8 +130,7 @@ class _BcpgWebViewScreenState extends State<BcpgWebViewScreen> {
         body: Stack(
           children: [
             InAppWebView(
-              initialUrlRequest:
-                  URLRequest(url: WebUri(widget.paymentUrl)),
+              initialUrlRequest: URLRequest(url: WebUri(widget.paymentUrl)),
               initialSettings: InAppWebViewSettings(
                 javaScriptEnabled: true,
                 javaScriptCanOpenWindowsAutomatically: true,

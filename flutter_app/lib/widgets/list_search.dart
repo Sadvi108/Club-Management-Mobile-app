@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -69,7 +70,7 @@ class ListSearchBar extends StatelessWidget {
             border: Border.all(color: c.border),
           ),
           child: Row(children: [
-            Icon(Icons.search, size: 18, color: c.textMuted),
+            Icon(AppIcons.search, size: 18, color: c.textMuted),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
@@ -91,7 +92,7 @@ class ListSearchBar extends StatelessWidget {
                   controller.clear();
                   onSearch('');
                 },
-                child: Icon(Icons.close, size: 18, color: c.textMuted),
+                child: Icon(AppIcons.close, size: 18, color: c.textMuted),
               ),
           ]),
         ),
@@ -109,7 +110,7 @@ class ListSearchBar extends StatelessWidget {
                   // Trailing "clear all" chip.
                   return _chip(
                     c,
-                    icon: Icons.refresh,
+                    icon: AppIcons.refresh,
                     label: 'Reset',
                     activeAccent: c.danger,
                     onTap: () {
@@ -135,9 +136,7 @@ class ListSearchBar extends StatelessWidget {
                 ? 'Showing all $totalCount'
                 : 'Showing $resultCount of $totalCount',
             style: TextStyle(
-                color: c.textMuted,
-                fontSize: 11,
-                fontWeight: FontWeight.w600),
+                color: c.textMuted, fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ],
       ],
@@ -148,7 +147,9 @@ class ListSearchBar extends StatelessWidget {
     if (f.isToggle) {
       return _chip(
         c,
-        icon: f.value == true ? Icons.check_circle : Icons.radio_button_unchecked,
+        icon: f.value == true
+            ? AppIcons.check_circle
+            : Icons.radio_button_unchecked,
         label: f.label,
         activeAccent: f.value == true ? c.primary : null,
         onTap: () => f.onChanged?.call(!(f.value == true)),
@@ -163,7 +164,7 @@ class ListSearchBar extends StatelessWidget {
       trailing: active
           ? InkWell(
               onTap: () => f.onSelected?.call(null),
-              child: Icon(Icons.close, size: 14, color: c.surface),
+              child: Icon(AppIcons.close, size: 14, color: c.surface),
             )
           : null,
       onTap: () => _pickOption(context, c, f),
@@ -188,8 +189,8 @@ class ListSearchBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-              color: activeAccent != null ? activeAccent : c.border),
+          border:
+              Border.all(color: activeAccent != null ? activeAccent : c.border),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, size: 14, color: fg),
@@ -214,8 +215,8 @@ class ListSearchBar extends StatelessWidget {
         var query = '';
         return StatefulBuilder(builder: (ctx, setSheet) {
           final filtered = f.options
-              .where((o) =>
-                  o.toLowerCase().contains(query.trim().toLowerCase()))
+              .where(
+                  (o) => o.toLowerCase().contains(query.trim().toLowerCase()))
               .toList();
           return Container(
             constraints: BoxConstraints(
@@ -259,8 +260,7 @@ class ListSearchBar extends StatelessWidget {
                 ]),
               ),
               Padding(
-                padding:
-                    const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                 child: TextField(
                   controller: ctrl,
                   onChanged: (v) => setSheet(() => query = v),
@@ -268,7 +268,7 @@ class ListSearchBar extends StatelessWidget {
                   decoration: InputDecoration(
                     hintText: 'Search…',
                     prefixIcon:
-                        Icon(Icons.search, size: 18, color: c.textMuted),
+                        Icon(AppIcons.search, size: 18, color: c.textMuted),
                     isDense: true,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(Radii.md),
@@ -291,7 +291,7 @@ class ListSearchBar extends StatelessWidget {
                               color: c.textPrimary,
                               fontWeight: FontWeight.w600)),
                       trailing: isSel
-                          ? Icon(Icons.check, color: c.primary, size: 18)
+                          ? Icon(AppIcons.check, color: c.primary, size: 18)
                           : null,
                       onTap: () => Navigator.pop(ctx, opt),
                     );
@@ -340,7 +340,8 @@ class ListFilter {
         selected = null,
         onSelected = null;
 
-  bool get isActive => isToggle ? (value == true) : (selected != null && selected!.isNotEmpty);
+  bool get isActive =>
+      isToggle ? (value == true) : (selected != null && selected!.isNotEmpty);
 
   void clear() {
     if (isToggle) {

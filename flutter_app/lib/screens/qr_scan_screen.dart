@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -22,7 +23,8 @@ class QRScanScreen extends StatefulWidget {
   State<QRScanScreen> createState() => _QRScanScreenState();
 }
 
-class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderStateMixin {
+class _QRScanScreenState extends State<QRScanScreen>
+    with SingleTickerProviderStateMixin {
   late final MobileScannerController _controller;
   late final AnimationController _laser;
   bool _scanned = false;
@@ -45,7 +47,9 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
       detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
     );
-    _laser = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))..repeat(reverse: true);
+    _laser = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1400))
+      ..repeat(reverse: true);
   }
 
   @override
@@ -70,7 +74,8 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
     } catch (e) {
       debugPrint('QRCode generate failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _generating = false);
@@ -79,7 +84,8 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
 
   void _onDetect(BarcodeCapture capture) {
     if (_scanned) return;
-    final code = capture.barcodes.isNotEmpty ? capture.barcodes.first.rawValue : null;
+    final code =
+        capture.barcodes.isNotEmpty ? capture.barcodes.first.rawValue : null;
     if (code == null || !mounted) return;
     final payload = QrContent.parse(code);
     if (payload == null) {
@@ -124,7 +130,7 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
         });
         return;
       }
-      if (outcome.needsClassTime) {
+      if (outcome.needsClassTime && tTimeId == 0) {
         // Server wants the class time — offer the sessions it returned
         // and re-POST with the chosen id.
         final picked = await _pickClassTime(outcome.sessions);
@@ -149,8 +155,7 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
     }
   }
 
-  Future<AttendanceSession?> _pickClassTime(
-      List<AttendanceSession> sessions) {
+  Future<AttendanceSession?> _pickClassTime(List<AttendanceSession> sessions) {
     if (sessions.length == 1) {
       return Future.value(sessions.first);
     }
@@ -163,7 +168,8 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
                     color: c.border, borderRadius: BorderRadius.circular(99)),
               ),
@@ -175,7 +181,8 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
                       fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
               ...sessions.map((s) => ListTile(
-                    leading: Icon(Icons.schedule, color: c.primary, size: 20),
+                    leading:
+                        Icon(AppIcons.schedule, color: c.primary, size: 20),
                     title: Text(s.text,
                         style: TextStyle(
                             color: c.textPrimary,
@@ -216,30 +223,36 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
 
         // Top bar
         Positioned(
-          top: 0, left: 0, right: 0,
+          top: 0,
+          left: 0,
+          right: 0,
           child: SafeArea(
             bottom: false,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                AppIconButton(
-                  icon: Icons.close,
-                  onPressed: () => context.pop(_attendancePosted),
-                  backgroundColor: Colors.white.withOpacity(0.12),
-                  foregroundColor: Colors.white,
-                ),
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  _tabBtn('Scan', !_generateMode, () => setState(() => _generateMode = false)),
-                  const SizedBox(width: 6),
-                  _tabBtn('Generate', _generateMode, () => setState(() => _generateMode = true)),
-                ]),
-                AppIconButton(
-                  icon: Icons.flash_on,
-                  onPressed: () => _controller.toggleTorch(),
-                  backgroundColor: Colors.white.withOpacity(0.12),
-                  foregroundColor: Colors.white,
-                ),
-              ]),
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    AppIconButton(
+                      icon: AppIcons.close,
+                      onPressed: () => context.pop(_attendancePosted),
+                      backgroundColor: Colors.white.withOpacity(0.12),
+                      foregroundColor: Colors.white,
+                    ),
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      _tabBtn('Scan', !_generateMode,
+                          () => setState(() => _generateMode = false)),
+                      const SizedBox(width: 6),
+                      _tabBtn('Generate', _generateMode,
+                          () => setState(() => _generateMode = true)),
+                    ]),
+                    AppIconButton(
+                      icon: AppIcons.flash_on,
+                      onPressed: () => _controller.toggleTorch(),
+                      backgroundColor: Colors.white.withOpacity(0.12),
+                      foregroundColor: Colors.white,
+                    ),
+                  ]),
             ),
           ),
         ),
@@ -248,177 +261,242 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
         if (_generateMode)
           _buildGeneratePanel(c)
         else
-        Align(
-          alignment: Alignment.center,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text(
-                _scanned
-                    ? (_attendancePosted
-                        ? 'Check-in Successful!'
-                        : _attendanceFailed
-                            ? 'Check-in failed'
-                            : 'Recording attendance…')
-                    : (_cameraFailed
-                        ? 'Camera unavailable'
-                        : 'Align the QR within the frame'),
-                style: const TextStyle(color: Color(0xE6FFFFFF), fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              if (_invalidHint != null) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: c.danger.withOpacity(0.85),
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                  child: Text(_invalidHint!,
-                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+          Align(
+            alignment: Alignment.center,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(
+                  _scanned
+                      ? (_attendancePosted
+                          ? 'Check-in Successful!'
+                          : _attendanceFailed
+                              ? 'Check-in failed'
+                              : 'Recording attendance…')
+                      : (_cameraFailed
+                          ? 'Camera unavailable'
+                          : 'Align the QR within the frame'),
+                  style: const TextStyle(
+                      color: Color(0xE6FFFFFF),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500),
                 ),
-              ],
-              const SizedBox(height: 28),
-              SizedBox(
-                width: 240, height: 240,
-                child: Stack(children: [
-                  _corner(c, top: 0, left: 0, borders: const [_Side.top, _Side.left]),
-                  _corner(c, top: 0, right: 0, borders: const [_Side.top, _Side.right]),
-                  _corner(c, bottom: 0, left: 0, borders: const [_Side.bottom, _Side.left]),
-                  _corner(c, bottom: 0, right: 0, borders: const [_Side.bottom, _Side.right]),
-                  if (!_scanned && !_cameraFailed)
-                    AnimatedBuilder(
-                      animation: _laser,
-                      builder: (_, __) => Positioned(
-                        top: 10 + (220 * _laser.value), left: 10, right: 10,
-                        child: Container(
-                          height: 3,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [const Color(0x00F97316), c.primary, const Color(0x00F97316)],
+                if (_invalidHint != null) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: c.danger.withOpacity(0.85),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Text(_invalidHint!,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                ],
+                const SizedBox(height: 28),
+                SizedBox(
+                  width: 240,
+                  height: 240,
+                  child: Stack(children: [
+                    _corner(c,
+                        top: 0,
+                        left: 0,
+                        borders: const [_Side.top, _Side.left]),
+                    _corner(c,
+                        top: 0,
+                        right: 0,
+                        borders: const [_Side.top, _Side.right]),
+                    _corner(c,
+                        bottom: 0,
+                        left: 0,
+                        borders: const [_Side.bottom, _Side.left]),
+                    _corner(c,
+                        bottom: 0,
+                        right: 0,
+                        borders: const [_Side.bottom, _Side.right]),
+                    if (!_scanned && !_cameraFailed)
+                      AnimatedBuilder(
+                        animation: _laser,
+                        builder: (_, __) => Positioned(
+                          top: 10 + (220 * _laser.value),
+                          left: 10,
+                          right: 10,
+                          child: Container(
+                            height: 3,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  const Color(0x00F97316),
+                                  c.primary,
+                                  const Color(0x00F97316)
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  if (_cameraFailed && !_scanned)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Text(
-                          'Use a device with a camera to check in by QR.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 13),
+                    if (_cameraFailed && !_scanned)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                            'Use a device with a camera to check in by QR.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: Color(0xB3FFFFFF), fontSize: 13),
+                          ),
                         ),
                       ),
-                    ),
-                  if (_scanned)
-                    Center(
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(
-                          _attendancePosted
-                              ? Icons.check_circle
-                              : _attendanceFailed
-                                  ? Icons.error_outline
-                                  : Icons.hourglass_top,
-                          size: 70,
-                          color: _attendancePosted
-                              ? c.success
-                              : _attendanceFailed
-                                  ? c.danger
-                                  : Colors.white70,
-                        ),
-                        const SizedBox(height: 12),
-                        Text(_scannedCode, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 4),
-                        if (_attendancePosted)
-                          Text(_serverMessage ?? 'Attendance recorded ✓',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Color(0xFF86EFAC), fontSize: 12, fontWeight: FontWeight.w700))
-                        else if (_attendanceFailed)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Text(_serverMessage ?? 'Attendance sync failed',
+                    if (_scanned)
+                      Center(
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(
+                            _attendancePosted
+                                ? AppIcons.check_circle
+                                : _attendanceFailed
+                                    ? Icons.error_outline
+                                    : Icons.hourglass_top,
+                            size: 70,
+                            color: _attendancePosted
+                                ? c.success
+                                : _attendanceFailed
+                                    ? c.danger
+                                    : Colors.white70,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(_scannedCode,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 4),
+                          if (_attendancePosted)
+                            Text(_serverMessage ?? 'Attendance recorded ✓',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 12)),
-                          )
-                        else
-                          const Text('Recording attendance…', style: TextStyle(color: Color(0xB3FFFFFF), fontSize: 12)),
-                      ]),
-                    ),
-                ]),
-              ),
-              const SizedBox(height: 26),
-              Text(
-                _scanned
-                    ? (_attendancePosted ? 'Attendance marked for today' : '')
-                    : 'Make sure camera has good lighting',
-                style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 12),
-                textAlign: TextAlign.center,
-              ),
-              if (_scanned && (_attendancePosted || _attendanceFailed)) ...[
-                const SizedBox(height: 28),
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (_attendanceFailed) ...[
+                                style: const TextStyle(
+                                    color: Color(0xFF86EFAC),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700))
+                          else if (_attendanceFailed)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              child: Text(
+                                  _serverMessage ?? 'Attendance sync failed',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      color: Color(0xFFFCA5A5), fontSize: 12)),
+                            )
+                          else
+                            const Text('Recording attendance…',
+                                style: TextStyle(
+                                    color: Color(0xB3FFFFFF), fontSize: 12)),
+                        ]),
+                      ),
+                  ]),
+                ),
+                const SizedBox(height: 26),
+                Text(
+                  _scanned
+                      ? (_attendancePosted ? 'Attendance marked for today' : '')
+                      : 'Make sure camera has good lighting',
+                  style:
+                      const TextStyle(color: Color(0x99FFFFFF), fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+                if (_scanned && (_attendancePosted || _attendanceFailed)) ...[
+                  const SizedBox(height: 28),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (_attendanceFailed) ...[
+                      InkWell(
+                        onTap: _rescan,
+                        borderRadius: BorderRadius.circular(Radii.md),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 28, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(Radii.md),
+                          ),
+                          child: const Text('Rescan',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 15)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
                     InkWell(
-                      onTap: _rescan,
+                      onTap: () => context.pop(_attendancePosted),
                       borderRadius: BorderRadius.circular(Radii.md),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 44, vertical: 14),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.14),
+                          gradient: LinearGradient(colors: c.gradient),
                           borderRadius: BorderRadius.circular(Radii.md),
+                          boxShadow: Shadows.strong(c),
                         ),
-                        child: const Text('Rescan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                        child: const Text('Done',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 15)),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                  ],
+                  ]),
+                ],
+                if (_cameraFailed && !_scanned) ...[
+                  const SizedBox(height: 28),
                   InkWell(
-                    onTap: () => context.pop(_attendancePosted),
+                    onTap: () => context.pop(false),
                     borderRadius: BorderRadius.circular(Radii.md),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 44, vertical: 14),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: c.gradient),
+                        color: Colors.white.withOpacity(0.14),
                         borderRadius: BorderRadius.circular(Radii.md),
-                        boxShadow: Shadows.strong(c),
                       ),
-                      child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                      child: const Text('Close',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15)),
                     ),
                   ),
-                ]),
-              ],
-              if (_cameraFailed && !_scanned) ...[
-                const SizedBox(height: 28),
-                InkWell(
-                  onTap: () => context.pop(false),
-                  borderRadius: BorderRadius.circular(Radii.md),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.14),
-                      borderRadius: BorderRadius.circular(Radii.md),
-                    ),
-                    child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
-                  ),
-                ),
-              ],
-            ]),
+                ],
+              ]),
+            ),
           ),
-        ),
 
         // Footer
         Positioned(
-          bottom: 0, left: 0, right: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
           child: SafeArea(
             top: false,
             child: Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
-                Icon(Icons.verified_user, size: 14, color: Color(0x99FFFFFF)),
-                SizedBox(width: 6),
-                Text('Secure · End-to-end encrypted', style: TextStyle(color: Color(0x99FFFFFF), fontSize: 11, fontWeight: FontWeight.w500)),
-              ]),
+              child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(AppIcons.verified_user,
+                        size: 14, color: Color(0x99FFFFFF)),
+                    SizedBox(width: 6),
+                    Text('Secure · End-to-end encrypted',
+                        style: TextStyle(
+                            color: Color(0x99FFFFFF),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500)),
+                  ]),
             ),
           ),
         ),
@@ -445,7 +523,8 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [Colors.black, Color(0xFF0A0A0B), Color(0xFF1F1610)],
         ),
       ),
@@ -475,8 +554,13 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('Generate QR', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const Text('Generate QR',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800)),
           const SizedBox(height: 14),
           Material(
             color: Colors.white,
@@ -485,7 +569,8 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
               controller: _genCtrl,
               decoration: const InputDecoration(
                 hintText: 'Enter text to encode',
-                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 border: InputBorder.none,
               ),
             ),
@@ -502,7 +587,10 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
                 borderRadius: BorderRadius.circular(Radii.md),
               ),
               child: Text(_generating ? 'Generating…' : 'Generate',
-                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800)),
             ),
           ),
           const SizedBox(height: 18),
@@ -511,11 +599,18 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
               child: _genBytes != null
                   ? Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(Radii.md)),
-                      child: Image.memory(_genBytes!, width: 240, height: 240, fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => const Text('Cannot render image')),
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(Radii.md)),
+                      child: Image.memory(_genBytes!,
+                          width: 240,
+                          height: 240,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) =>
+                              const Text('Cannot render image')),
                     )
-                  : const Text('No QR generated yet', style: TextStyle(color: Color(0x99FFFFFF))),
+                  : const Text('No QR generated yet',
+                      style: TextStyle(color: Color(0x99FFFFFF))),
             ),
           ),
         ]),
@@ -523,23 +618,51 @@ class _QRScanScreenState extends State<QRScanScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _corner(AppColors c, {double? top, double? bottom, double? left, double? right, required List<_Side> borders}) {
+  Widget _corner(AppColors c,
+      {double? top,
+      double? bottom,
+      double? left,
+      double? right,
+      required List<_Side> borders}) {
     return Positioned(
-      top: top, bottom: bottom, left: left, right: right,
+      top: top,
+      bottom: bottom,
+      left: left,
+      right: right,
       child: Container(
-        width: 40, height: 40,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           border: Border(
-            top: borders.contains(_Side.top) ? BorderSide(color: c.primary, width: 4) : BorderSide.none,
-            bottom: borders.contains(_Side.bottom) ? BorderSide(color: c.primary, width: 4) : BorderSide.none,
-            left: borders.contains(_Side.left) ? BorderSide(color: c.primary, width: 4) : BorderSide.none,
-            right: borders.contains(_Side.right) ? BorderSide(color: c.primary, width: 4) : BorderSide.none,
+            top: borders.contains(_Side.top)
+                ? BorderSide(color: c.primary, width: 4)
+                : BorderSide.none,
+            bottom: borders.contains(_Side.bottom)
+                ? BorderSide(color: c.primary, width: 4)
+                : BorderSide.none,
+            left: borders.contains(_Side.left)
+                ? BorderSide(color: c.primary, width: 4)
+                : BorderSide.none,
+            right: borders.contains(_Side.right)
+                ? BorderSide(color: c.primary, width: 4)
+                : BorderSide.none,
           ),
           borderRadius: BorderRadius.only(
-            topLeft: borders.contains(_Side.top) && borders.contains(_Side.left) ? const Radius.circular(12) : Radius.zero,
-            topRight: borders.contains(_Side.top) && borders.contains(_Side.right) ? const Radius.circular(12) : Radius.zero,
-            bottomLeft: borders.contains(_Side.bottom) && borders.contains(_Side.left) ? const Radius.circular(12) : Radius.zero,
-            bottomRight: borders.contains(_Side.bottom) && borders.contains(_Side.right) ? const Radius.circular(12) : Radius.zero,
+            topLeft: borders.contains(_Side.top) && borders.contains(_Side.left)
+                ? const Radius.circular(12)
+                : Radius.zero,
+            topRight:
+                borders.contains(_Side.top) && borders.contains(_Side.right)
+                    ? const Radius.circular(12)
+                    : Radius.zero,
+            bottomLeft:
+                borders.contains(_Side.bottom) && borders.contains(_Side.left)
+                    ? const Radius.circular(12)
+                    : Radius.zero,
+            bottomRight:
+                borders.contains(_Side.bottom) && borders.contains(_Side.right)
+                    ? const Radius.circular(12)
+                    : Radius.zero,
           ),
         ),
       ),

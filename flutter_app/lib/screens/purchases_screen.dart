@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/response_utils.dart';
@@ -18,7 +20,13 @@ class PurchasesScreen extends StatefulWidget {
   State<PurchasesScreen> createState() => _PurchasesScreenState();
 }
 
-class _PurchasesScreenState extends State<PurchasesScreen> {
+class _PurchasesScreenState extends State<PurchasesScreen>
+    with LiveRefreshMixin<PurchasesScreen> {
+  @override
+  bool get canLiveRefresh => !_loading;
+  @override
+  Future<void> refreshLiveData() => _load();
+
   bool _loading = true;
   String? _error;
   List<PurchaseRow> _rows = const [];
@@ -51,8 +59,18 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
   }
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   String _fmtDate(DateTime? d) => d == null
@@ -71,8 +89,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
           title: 'My Purchases',
           showBack: true,
           trailing: AppIconButton(
-            icon: Icons.refresh,
-            onPressed: _loading ? null : _load,
+            icon: AppIcons.refresh,
+            onPressed: (_loading && !liveRefreshing) ? null : _load,
             backgroundColor: c.surfaceAlt,
             foregroundColor: c.primary,
           ),
@@ -88,7 +106,8 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
   }
 
   Widget _body(AppColors c) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if ((_loading && !liveRefreshing))
+      return const Center(child: CircularProgressIndicator());
 
     // Always a scrollable, so pull-to-refresh works from the error and empty states too —
     // otherwise a member who hits a transient error has no way to retry but to leave.
@@ -122,11 +141,13 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
   Widget _empty(AppColors c) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 60),
         child: Column(children: [
-          Icon(Icons.shopping_bag_outlined, size: 44, color: c.textMuted),
+          Icon(AppIcons.shopping_bag_outlined, size: 44, color: c.textMuted),
           const SizedBox(height: Gaps.sm),
           Text('No purchase requests',
               style: TextStyle(
-                  color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
+                  color: c.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
           Text('Your purchase history will appear here',
               style: TextStyle(color: c.textSecondary, fontSize: 13)),
@@ -152,17 +173,21 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
         Container(
           width: 38,
           height: 38,
-          decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
-          child: Icon(Icons.shopping_bag, size: 18, color: c.primary),
+          decoration:
+              BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+          child: Icon(AppIcons.shopping_bag, size: 18, color: c.primary),
         ),
         const SizedBox(width: Gaps.md),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(r.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+                    color: c.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700)),
             if (meta.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
@@ -178,7 +203,9 @@ class _PurchasesScreenState extends State<PurchasesScreen> {
             padding: const EdgeInsets.only(left: Gaps.sm),
             child: Text(_fmtRM(r.amount!),
                 style: TextStyle(
-                    color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w800)),
+                    color: c.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800)),
           ),
       ]),
     );

@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api.dart';
@@ -5,7 +7,6 @@ import '../services/response_utils.dart';
 import '../theme/app_theme.dart';
 import '../widgets/anim.dart';
 import '../widgets/app_header.dart';
-import '../widgets/responsive.dart';
 
 class InstructorCollectionsScreen extends StatefulWidget {
   const InstructorCollectionsScreen({super.key});
@@ -16,9 +17,16 @@ class InstructorCollectionsScreen extends StatefulWidget {
 }
 
 class _InstructorCollectionsScreenState
-    extends State<InstructorCollectionsScreen> {
+    extends State<InstructorCollectionsScreen>
+    with LiveRefreshMixin<InstructorCollectionsScreen> {
+  @override
+  bool get canLiveRefresh => !_loading && !_updating;
+  @override
+  Future<void> refreshLiveData() => _load();
+
   Map<String, dynamic>? _counts;
   bool _loading = true;
+  bool _updating = false;
   String? _error;
 
   @override
@@ -36,11 +44,13 @@ class _InstructorCollectionsScreenState
       final resp = await Api.outstandingCollectionCount();
       final data = resp is Map && resp['data'] is Map
           ? Map<String, dynamic>.from(resp['data'] as Map)
-          : (resp is Map ? Map<String, dynamic>.from(resp) : <String, dynamic>{});
-      setState(() => _counts = data);
+          : (resp is Map
+              ? Map<String, dynamic>.from(resp)
+              : <String, dynamic>{});
+      if (mounted) setState(() => _counts = data);
     } catch (e) {
       debugPrint('CollectionCount failed: $e');
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -76,38 +86,9 @@ class _InstructorCollectionsScreenState
       body: SafeArea(
         bottom: false,
         child: Column(children: [
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(
-                Gaps.lg,
-                context.topInset + 16,
-                Gaps.lg,
-                20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: c.gradient,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('COLLECTIONS',
-                    style: TextStyle(
-                        color: Color(0xCCFFFFFF),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2)),
-                const SizedBox(height: 2),
-                const Text('Payments overview',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800)),
-              ],
-            ),
-          ),
+          const AppHeader(
+              title: 'Collections',
+              subtitle: 'Track payments received across your club'),
           Expanded(
             child: RefreshIndicator(
               onRefresh: _load,
@@ -133,23 +114,29 @@ class _InstructorCollectionsScreenState
                     children: [
                       _tile(
                           c,
-                          Icons.payments_outlined,
+                          AppIcons.payments_outlined,
                           'Cash Payments',
-                          _loading ? null : cash,
+                          (_loading && !liveRefreshing) || _error != null
+                              ? null
+                              : cash,
                           () => _openList(context, 1, 'Cash Payments'),
                           0),
                       _tile(
                           c,
-                          Icons.credit_card,
+                          AppIcons.credit_card,
                           'Online Payments',
-                          _loading ? null : online,
+                          (_loading && !liveRefreshing) || _error != null
+                              ? null
+                              : online,
                           () => _openList(context, 2, 'Online Payments'),
                           1),
                       _tile(
                           c,
-                          Icons.receipt_long,
+                          AppIcons.receipt_long,
                           'Payment Slips',
-                          _loading ? null : slip,
+                          (_loading && !liveRefreshing) || _error != null
+                              ? null
+                              : slip,
                           // dbt count comes from CollectionCount; its records
                           // live in CollectionCountList(3) (paymentMethod=DBT),
                           // not /Reports/PaymentSlips (a different, empty list)
@@ -158,10 +145,10 @@ class _InstructorCollectionsScreenState
                           2),
                       _tile(
                           c,
-                          Icons.tune,
-                          'Update Collection',
+                          AppIcons.autorenew,
+                          _updating ? 'Updating…' : 'Update Collection',
                           null,
-                          () => _openUpdateSheet(context),
+                          _updateCollections,
                           3),
                     ],
                   ),
@@ -189,57 +176,21 @@ class _InstructorCollectionsScreenState
             border: c.isDark ? Border.all(color: c.border) : null,
             boxShadow: Shadows.card(c),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: c.primary.withOpacity(0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(icon, color: c.primary, size: 20),
-                ),
-                const Spacer(),
-                if (count != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: c.primary.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text('$count',
-                        style: TextStyle(
-                            color: c.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w900)),
-                  ),
-              ]),
-              const Spacer(),
-              Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Container(
+                width: 50,
+                height: 50,
+                decoration:
+                    BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+                child: Icon(icon, color: c.primary, size: 24)),
+            const SizedBox(height: 12),
+            Text(count == null ? label : '$label ($count)',
+                textAlign: TextAlign.center,
                 style: TextStyle(
                     color: c.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14),
-              ),
-              const SizedBox(height: 2),
-              Row(children: [
-                Text('View',
-                    style: TextStyle(
-                        color: c.textMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700)),
-                Icon(Icons.chevron_right, size: 15, color: c.textMuted),
-              ]),
-            ],
-          ),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14)),
+          ]),
         ),
       ),
     );
@@ -256,75 +207,25 @@ class _InstructorCollectionsScreenState
     );
   }
 
-  Future<void> _openUpdateSheet(BuildContext context) async {
-    final c = context.appColors;
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final types = const [
-          {'id': 1, 'label': 'Cash Payments'},
-          {'id': 2, 'label': 'Online Payments'},
-          {'id': 3, 'label': 'Payment Slips'},
-        ];
-        return Container(
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: c.border, borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 12),
-            Text('Update Collection',
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16)),
-            const SizedBox(height: 12),
-            for (final t in types)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(children: [
-                  Expanded(
-                    child: Text(t['label'].toString(),
-                        style: TextStyle(
-                            color: c.textPrimary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14)),
-                  ),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.add, size: 16),
-                    label: const Text('+1'),
-                    onPressed: () async {
-                      try {
-                        await Api.outstandingUpdateCollectionCount(t['id']!);
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('${t['label']} +1')),
-                        );
-                        await _load();
-                      } catch (e) {
-                        debugPrint('UpdateCollectionCount failed: $e');
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed: $e')),
-                        );
-                      }
-                    },
-                  ),
-                ]),
-              ),
-          ]),
-        );
-      },
-    );
+  Future<void> _updateCollections() async {
+    if (_updating) return;
+    setState(() => _updating = true);
+    try {
+      for (final type in [1, 2, 3]) {
+        await Api.outstandingUpdateCollectionCount(type);
+      }
+      if (!mounted) return;
+      await _load();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Collection counts refreshed')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
   }
 }
 
@@ -337,7 +238,13 @@ class _SimpleListScreen extends StatefulWidget {
   State<_SimpleListScreen> createState() => _SimpleListScreenState();
 }
 
-class _SimpleListScreenState extends State<_SimpleListScreen> {
+class _SimpleListScreenState extends State<_SimpleListScreen>
+    with LiveRefreshMixin<_SimpleListScreen> {
+  @override
+  bool get canLiveRefresh => !_loading;
+  @override
+  Future<void> refreshLiveData() => _load();
+
   dynamic _data;
   dynamic _rawResponse;
   bool _loading = true;
@@ -358,10 +265,10 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
     try {
       final resp = await widget.fetcher();
       _rawResponse = resp;
-      setState(() => _data = findRecordList(resp));
+      if (mounted) setState(() => _data = findRecordList(resp));
     } catch (e) {
       debugPrint('${widget.title} failed: $e');
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -382,9 +289,10 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
               onRefresh: _load,
               color: c.primary,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(Gaps.lg, Gaps.sm, Gaps.lg, 24),
+                padding:
+                    const EdgeInsets.fromLTRB(Gaps.lg, Gaps.sm, Gaps.lg, 24),
                 children: [
-                  if (_loading)
+                  if ((_loading && !liveRefreshing))
                     const Padding(
                       padding: EdgeInsets.only(top: 8),
                       child: ShimmerList(count: 6, rowHeight: 78),
@@ -411,9 +319,8 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
                           decoration: BoxDecoration(
                             color: c.surface,
                             borderRadius: BorderRadius.circular(Radii.lg),
-                            border: c.isDark
-                                ? Border.all(color: c.border)
-                                : null,
+                            border:
+                                c.isDark ? Border.all(color: c.border) : null,
                             boxShadow: Shadows.card(c),
                           ),
                           child: Column(children: [
@@ -430,20 +337,18 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
                                 'There are no ${widget.title.toLowerCase()} for this period.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                    color: c.textSecondary,
-                                    fontSize: 12)),
+                                    color: c.textSecondary, fontSize: 12)),
                           ]),
                         ),
                         const SizedBox(height: 10),
                         TextButton(
-                          onPressed: () =>
-                              setState(() => _showRaw = !_showRaw),
+                          onPressed: () => setState(() => _showRaw = !_showRaw),
                           child: Text(
                               _showRaw
                                   ? 'Hide raw response'
                                   : 'Show raw response',
-                              style: TextStyle(
-                                  color: c.textMuted, fontSize: 12)),
+                              style:
+                                  TextStyle(color: c.textMuted, fontSize: 12)),
                         ),
                         if (_showRaw)
                           Container(
@@ -451,8 +356,7 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: c.surfaceAlt,
-                              borderRadius:
-                                  BorderRadius.circular(Radii.md),
+                              borderRadius: BorderRadius.circular(Radii.md),
                               border: Border.all(color: c.border),
                             ),
                             child: SelectableText(
@@ -482,22 +386,34 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
 
   Widget _rowCard(AppColors c, Map row, int index) {
     final title = pickField(row, [
-      'studentName', 'name', 'payerName', 'memberName', 'description',
+      'studentName',
+      'name',
+      'payerName',
+      'memberName',
+      'description',
     ]);
     final amount = pickAmount(row, [
-      'amount', 'dueAmount', 'paidAmount', 'value', 'total', 'totalAmount',
+      'amount',
+      'dueAmount',
+      'paidAmount',
+      'value',
+      'total',
+      'totalAmount',
     ]);
     final dateRaw = pickField(row, [
-      'date', 'paymentDate', 'recordedTime', 'createdDate', 'slipDate',
+      'date',
+      'paymentDate',
+      'recordedTime',
+      'createdDate',
+      'slipDate',
     ]);
     final date = dateRaw.length >= 10 ? dateRaw.substring(0, 10) : dateRaw;
     final status = pickField(row, ['status', 'paymentStatus', 'remarks']);
     final ok = status.toLowerCase().contains('paid') ||
         status.toLowerCase().contains('approve') ||
         status.toLowerCase().contains('success');
-    final statusColor = status.isEmpty
-        ? c.textMuted
-        : (ok ? c.success : c.danger);
+    final statusColor =
+        status.isEmpty ? c.textMuted : (ok ? c.success : c.danger);
 
     return FadeSlideIn.at(
       index,
@@ -536,7 +452,7 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
               const SizedBox(height: 8),
               Row(children: [
                 if (date.isNotEmpty) ...[
-                  Icon(Icons.event, size: 13, color: c.textMuted),
+                  Icon(AppIcons.event, size: 13, color: c.textMuted),
                   const SizedBox(width: 5),
                   Text(date,
                       style: TextStyle(
@@ -547,8 +463,8 @@ class _SimpleListScreenState extends State<_SimpleListScreen> {
                 const Spacer(),
                 if (status.isNotEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 9, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                     decoration: BoxDecoration(
                       color: statusColor.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(999),

@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -42,16 +43,23 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
         ? 'Instructor'
         : (_pick(['roleName', 'role', 'designation', 'userTypeName']));
     final fields = <(IconData, String, String)>[
-      (Icons.badge_outlined, 'Name', session.displayName),
+      (AppIcons.badge_outlined, 'Name', session.displayName),
       (Icons.tag, 'Registration No', session.registrationNo),
-      (Icons.credit_card, 'IC Number', _pick(['icNo', 'IcNo', 'icNumber', 'nric'])),
+      (
+        AppIcons.credit_card,
+        'IC Number',
+        _pick(['icNo', 'IcNo', 'icNumber', 'nric'])
+      ),
       (Icons.verified_user_outlined, 'Role', role),
       (Icons.wc, 'Gender', _pick(['gender', 'Gender'])),
-      (Icons.phone_outlined, 'Phone', session.phone),
-      (Icons.email_outlined, 'Email', session.email),
+      (AppIcons.phone_outlined, 'Phone', session.phone),
+      (AppIcons.email_outlined, 'Email', session.email),
       (Icons.apartment_outlined, 'Club', session.clubDisplayName),
-      (Icons.location_city_outlined, 'Branch',
-          _pick(['branchName', 'branch', 'branchText', 'BranchName'])),
+      (
+        Icons.location_city_outlined,
+        'Branch',
+        _pick(['branchName', 'branch', 'branchText', 'BranchName'])
+      ),
       (Icons.fitness_center_outlined, 'Training Centre', session.tCenterName),
       (Icons.toggle_on_outlined, 'Status', _pick(['status', 'Status'])),
     ];
@@ -62,7 +70,8 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
     final c = context.appColors;
     final session = UserSession.instance;
     final fields = _profileFields();
-    final name = session.displayName.isNotEmpty ? session.displayName : 'Instructor';
+    final name =
+        session.displayName.isNotEmpty ? session.displayName : 'Instructor';
 
     await showModalBottomSheet<void>(
       context: context,
@@ -82,15 +91,18 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
           child: ListView(controller: ctrl, children: [
             Center(
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 margin: const EdgeInsets.only(bottom: 14),
-                decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(
+                    color: c.border, borderRadius: BorderRadius.circular(2)),
               ),
             ),
             // Avatar + name header.
             Row(children: [
               Container(
-                width: 52, height: 52,
+                width: 52,
+                height: 52,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(colors: c.gradient),
                   shape: BoxShape.circle,
@@ -98,46 +110,64 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
                 alignment: Alignment.center,
                 child: Text(name[0].toUpperCase(),
                     style: const TextStyle(
-                        color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900)),
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(name,
-                      style: TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800, fontSize: 18)),
-                  Text('My Profile',
-                      style: TextStyle(color: c.textMuted, fontWeight: FontWeight.w600, fontSize: 12)),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          style: TextStyle(
+                              color: c.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 18)),
+                      Text('My Profile',
+                          style: TextStyle(
+                              color: c.textMuted,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12)),
+                    ]),
               ),
             ]),
             const SizedBox(height: 18),
             if (fields.isEmpty)
-              Text('No profile data available.', style: TextStyle(color: c.textSecondary))
+              Text('No profile data available.',
+                  style: TextStyle(color: c.textSecondary))
             else
               for (final f in fields)
                 Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   decoration: BoxDecoration(
                     color: c.surfaceAlt,
                     borderRadius: BorderRadius.circular(Radii.md),
                     border: Border.all(color: c.border),
                   ),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Icon(f.$1, size: 18, color: c.primary),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 110,
-                      child: Text(f.$2,
-                          style: TextStyle(
-                              color: c.textSecondary, fontWeight: FontWeight.w600, fontSize: 12)),
-                    ),
-                    Expanded(
-                      child: Text(f.$3,
-                          style: TextStyle(
-                              color: c.textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
-                    ),
-                  ]),
+                  child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(f.$1, size: 18, color: c.primary),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 110,
+                          child: Text(f.$2,
+                              style: TextStyle(
+                                  color: c.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12)),
+                        ),
+                        Expanded(
+                          child: Text(f.$3,
+                              style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13)),
+                        ),
+                      ]),
                 ),
           ]),
         ),
@@ -283,8 +313,7 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
         ]),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
             onPressed: () async {
               try {
@@ -335,7 +364,8 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
     final c = context.appColors;
     final theme = context.watch<ThemeProvider>();
     final session = context.watch<UserSession>();
-    final name = session.displayName.isNotEmpty ? session.displayName : 'Instructor';
+    final name =
+        session.displayName.isNotEmpty ? session.displayName : 'Instructor';
     return Scaffold(
       backgroundColor: c.background,
       body: SafeArea(
@@ -361,11 +391,13 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
                   ),
                   child: Row(children: [
                     Container(
-                      width: 56, height: 56,
+                      width: 56,
+                      height: 56,
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.22),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
+                        border: Border.all(
+                            color: Colors.white.withOpacity(0.4), width: 2),
                       ),
                       alignment: Alignment.center,
                       child: Text(
@@ -397,7 +429,7 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.verified_user,
+                                const Icon(AppIcons.verified_user,
                                     size: 11, color: Colors.white),
                                 const SizedBox(width: 4),
                                 Text(session.clubDisplayName,
@@ -415,15 +447,15 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
                 ),
                 const SizedBox(height: Gaps.lg),
                 _sectionLabel(c, 'Account'),
-                _row(c, Icons.person_outline, 'Profile', _openProfile),
+                _row(c, AppIcons.person_outline, 'Profile', _openProfile),
                 _row(c, Icons.swap_horiz, 'Switch Branch', _openSwitchBranch),
                 const SizedBox(height: Gaps.md),
                 _sectionLabel(c, 'Preferences'),
                 _themeToggleRow(c, theme),
-                _row(c, Icons.support_agent, 'Help Desk', _openHelpDesk),
-                _row(c, Icons.info_outline, 'About', _showAbout),
+                _row(c, AppIcons.support_agent, 'Help Desk', _openHelpDesk),
+                _row(c, AppIcons.info_outline, 'About', _showAbout),
                 const SizedBox(height: Gaps.md),
-                _row(c, Icons.logout, 'Logout', _logout, danger: true),
+                _row(c, AppIcons.logout, 'Logout', _logout, danger: true),
               ],
             ),
           ),
@@ -467,14 +499,13 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
       ),
       child: Row(children: [
         Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(
-              color: c.surfaceAlt, shape: BoxShape.circle),
+          width: 38,
+          height: 38,
+          decoration:
+              BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
           alignment: Alignment.center,
-          child: Icon(
-              theme.isDark ? Icons.dark_mode : Icons.light_mode,
-              color: c.primary,
-              size: 18),
+          child: Icon(theme.isDark ? Icons.dark_mode : Icons.light_mode,
+              color: c.primary, size: 18),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -488,8 +519,7 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
                       fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Text(theme.isDark ? 'Orange & black' : 'Orange & white',
-                  style: TextStyle(
-                      color: c.textSecondary, fontSize: 11)),
+                  style: TextStyle(color: c.textSecondary, fontSize: 11)),
             ],
           ),
         ),
@@ -513,34 +543,39 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(Radii.md),
         child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(Radii.md),
             border: Border.all(color: c.border),
-            boxShadow: c.isDark ? null : [
-              BoxShadow(
-                color: const Color(0xFF0F172A).withOpacity(0.03),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            boxShadow: c.isDark
+                ? null
+                : [
+                    BoxShadow(
+                      color: const Color(0xFF0F172A).withOpacity(0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
           child: Row(children: [
             Container(
-              width: 38, height: 38,
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
                 gradient: danger
-                    ? LinearGradient(
-                        colors: [c.danger.withOpacity(0.18), c.danger.withOpacity(0.28)])
-                    : LinearGradient(
-                        colors: [c.primary.withOpacity(0.14), c.primary.withOpacity(0.24)]),
+                    ? LinearGradient(colors: [
+                        c.danger.withOpacity(0.18),
+                        c.danger.withOpacity(0.28)
+                      ])
+                    : LinearGradient(colors: [
+                        c.primary.withOpacity(0.14),
+                        c.primary.withOpacity(0.24)
+                      ]),
                 borderRadius: BorderRadius.circular(11),
               ),
               alignment: Alignment.center,
-              child: Icon(icon,
-                  color: danger ? c.danger : c.primary, size: 18),
+              child: Icon(icon, color: danger ? c.danger : c.primary, size: 18),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -550,7 +585,7 @@ class _InstructorSettingsScreenState extends State<InstructorSettingsScreen> {
                       fontWeight: FontWeight.w700,
                       fontSize: 14)),
             ),
-            Icon(Icons.chevron_right,
+            Icon(AppIcons.chevron_right,
                 size: 20, color: danger ? c.danger : c.textMuted),
           ]),
         ),
