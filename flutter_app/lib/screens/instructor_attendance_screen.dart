@@ -1,286 +1,403 @@
-import '../services/live_refresh.dart';
-import '../theme/app_icons.dart';
+import 'dart:io';
 import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
+
 import '../services/api.dart';
 import '../services/api_service.dart';
 import '../services/response_utils.dart';
+import '../services/rn_api.dart';
 import '../services/user_session.dart';
+import '../services/web_download.dart';
 import '../theme/app_theme.dart';
+import '../theme/ion.dart';
 import '../utils/qr_content.dart';
-import '../widgets/app_header.dart';
-import '../widgets/gradient_button.dart';
+import '../widgets/report_kit.dart';
+import '../widgets/rn_kit.dart';
+import '../widgets/use_api.dart';
 
-/// Attendance/Add identifies the token holder; it cannot mark another student.
-/// Match Expo's class list + centre QR flow instead of offering unsupported writes.
+/// Port of `frontend/app/update-attendance.tsx` (Expo v2.11.1) — Class Check-In.
+///
+/// There is deliberately no "mark present" button and no register: `/Attendance/Add` only
+/// ever checks in the token holder, and `/Reports/Attendance` returns nothing to an
+/// instructor. What is left is proven useful: the class list and the QR students scan.
 class InstructorAttendanceScreen extends StatefulWidget {
   const InstructorAttendanceScreen({super.key});
   @override
-  State<InstructorAttendanceScreen> createState() =>
-      _InstructorAttendanceScreenState();
+  State<InstructorAttendanceScreen> createState() => _InstructorAttendanceScreenState();
 }
 
 class _InstructorAttendanceScreenState extends State<InstructorAttendanceScreen>
-    with LiveRefreshMixin<InstructorAttendanceScreen> {
-  @override
-  bool get canLiveRefresh => !_loading && !_loadingClass && !_posterBusy;
-  @override
-  Future<void> refreshLiveData() async {
-    final center = _centerId;
-    if (center == null) return _loadCenters();
-    final generation = _generation;
-    try {
-      final results = await Future.wait([
-        Api.listingTrainingTimeByTcId(center),
-        Api.listingStudentListByTcId(center),
-      ]);
-      if (!mounted || generation != _generation || center != _centerId) return;
-      setState(() {
-        _times = findRecordList(results[0]).whereType<Map>().toList();
-        _students = findRecordList(results[1]).whereType<Map>().toList();
-        if (!_times.any((row) => '${row['id']}' == _timeId)) _timeId = null;
-        _error = null;
-      });
-    } catch (e) {
-      if (mounted && generation == _generation)
-        setState(() => _error = friendlyError(e));
-    }
-  }
+    with UseApi<InstructorAttendanceScreen> {
+  Object? _centerId;
+  Object? _timeId;
+  bool _poster = false;
 
-  List<Map> _centers = [], _times = [], _students = [];
-  String? _centerId, _timeId, _error;
-  bool _loading = true, _loadingClass = false, _posterBusy = false;
-  int _generation = 0;
+  late final _centers = useApi(() => RnApi.dropdownListByType(3));
+  late final _times = useApi<List<Map<String, dynamic>>>(
+      () async => _centerId == null ? const <Map<String, dynamic>>[] : await RnApi.trainingTimeByTcId(RnApi.number(_centerId).toInt()),
+      autoRun: false);
+  // The roster is CENTRE-scoped — there is no roster-by-training-time endpoint.
+  late final _roster = useApi<List<Map<String, dynamic>>>(
+      () async => _centerId == null ? const <Map<String, dynamic>>[] : await RnApi.studentListByTcId(RnApi.number(_centerId).toInt()),
+      autoRun: false);
 
   @override
   void initState() {
     super.initState();
-    _loadCenters();
+    _centers;
+    _times;
+    _roster;
   }
 
-  Future<void> _loadCenters() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final rows = findRecordList(await Api.listingDropdownListByType(3))
-          .whereType<Map>()
-          .toList();
-      if (mounted) setState(() => _centers = rows);
-    } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e));
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _loadClass(String id) async {
-    final generation = ++_generation;
-    setState(() {
-      _centerId = id;
-      _timeId = null;
-      _times = [];
-      _students = [];
-      _loadingClass = true;
-      _error = null;
-    });
-    try {
-      final results = await Future.wait([
-        Api.listingTrainingTimeByTcId(id),
-        Api.listingStudentListByTcId(id)
-      ]);
-      if (!mounted || generation != _generation) return;
-      setState(() {
-        _times = findRecordList(results[0]).whereType<Map>().toList();
-        _students = findRecordList(results[1]).whereType<Map>().toList();
-      });
-    } catch (e) {
-      if (mounted && generation == _generation)
-        setState(() => _error = friendlyError(e));
-    } finally {
-      if (mounted && generation == _generation)
-        setState(() => _loadingClass = false);
-    }
-  }
-
-  String _label(List<Map> rows, String? id) =>
-      '${rows.where((r) => '${r['id']}' == id).firstOrNull?['text'] ?? ''}';
-
-  Future<void> _showQr() async {
-    final id = int.tryParse(_centerId ?? '');
-    if (id == null || id <= 0) return;
-    final name = _label(_centers, _centerId);
-    final code = QrContent.trainingCenter(id);
-    // Capture the centre when opening, so changing selection cannot relabel an old QR.
-    final image =
-        Api.utilitiesQRCodeBytes(content: code, width: 300, height: 300);
-    await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        builder: (context) => SafeArea(
-            child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(name,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 6),
-                  Text(_label(_times, _timeId)),
-                  const SizedBox(height: 16),
-                  FutureBuilder<Uint8List>(
-                      future: image,
-                      builder: (context, snapshot) {
-                        if (snapshot.hasError)
-                          return Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Text(friendlyError(snapshot.error)));
-                        if (!snapshot.hasData)
-                          return const SizedBox(
-                              height: 240,
-                              child:
-                                  Center(child: CircularProgressIndicator()));
-                        return Image.memory(snapshot.data!,
-                            width: 260,
-                            height: 260,
-                            errorBuilder: (_, __, ___) =>
-                                const Text('QR image unavailable'));
-                      }),
-                  const SizedBox(height: 12),
-                  Text(code),
-                  const SizedBox(height: 6),
-                  const Text(
-                      'Students scan this QR in their own app to check in.',
-                      textAlign: TextAlign.center),
-                  TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Close')),
-                ]))));
-  }
+  String get _centerCode => QrContent.trainingCenter(RnApi.number(_centerId).toInt());
 
   Future<void> _openPoster() async {
     final clubId = UserSession.instance.authData?['clubId'];
     if (clubId == null || _centerId == null) return;
-    setState(() => _posterBusy = true);
+    setState(() => _poster = true);
+    final fname = 'CENTRE_QR_$_centerCode.pdf';
     try {
-      final bytes = await ApiService.getBytes(
-          '/Utilities/TrainingCenterQRCode/${Uri.encodeComponent('$clubId')}/${Uri.encodeComponent(_centerId!)}');
-      await Printing.sharePdf(
-          bytes: bytes,
-          filename:
-              'CENTRE_QR_${QrContent.trainingCenter(int.parse(_centerId!))}.pdf');
+      final bytes = await ApiService.getPdfSmart(
+          '/Utilities/TrainingCenterQRCode/${Uri.encodeComponent('$clubId')}/${Uri.encodeComponent('${RnApi.number(_centerId).toInt()}')}');
+      if (kIsWeb) {
+        downloadBytesWeb(bytes, fname, 'application/pdf');
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$fname');
+      await file.writeAsBytes(bytes, flush: true);
+      final res = await OpenFilex.open(file.path, type: 'application/pdf');
+      if (res.type != ResultType.done) await Printing.sharePdf(bytes: bytes, filename: fname);
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      if (mounted) await notify(context, "Couldn't open the poster", friendlyError(e));
     } finally {
-      if (mounted) setState(() => _posterBusy = false);
+      if (mounted) setState(() => _poster = false);
     }
+  }
+
+  Future<void> _showQr(String centerName) async {
+    if (_centerId == null) {
+      await notify(context, 'Select a centre', 'Choose a training centre to show its check-in QR.');
+      return;
+    }
+    await Navigator.of(context).push(PageRouteBuilder(
+      opaque: true,
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (_, __, ___) => _CentreQrPage(
+        centerName: centerName,
+        code: _centerCode,
+        content: _centerCode,
+        onPoster: _openPoster,
+        posterBusy: () => _poster,
+      ),
+      transitionsBuilder: (_, a, __, child) => FadeTransition(opacity: a, child: child),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    Widget picker(String label, List<Map> rows, String? selected,
-            ValueChanged<String?>? changed) =>
-        Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: DropdownButtonFormField<String>(
-                key: ValueKey('$label-$selected-${rows.length}'),
-                initialValue: selected,
-                isExpanded: true,
-                decoration: InputDecoration(labelText: label),
-                hint: const Text('Select'),
-                items: [
-                  for (final row in rows)
-                    DropdownMenuItem(
-                        value: '${row['id']}',
-                        child: Text('${row['text'] ?? ''}',
-                            overflow: TextOverflow.ellipsis))
-                ],
-                onChanged: changed));
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    final roster = _roster.data ?? const <Map<String, dynamic>>[];
+    final centerOptions = <RkOption>[for (final o in _centers.data ?? const <Map<String, dynamic>>[]) (id: (o['id'] ?? '') as Object, text: '${o['text'] ?? ''}')];
+    final timeOptions = <RkOption>[for (final o in _times.data ?? const <Map<String, dynamic>>[]) (id: (o['id'] ?? '') as Object, text: '${o['text'] ?? ''}')];
+    final centerName = centerOptions.where((o) => '${o.id}' == '$_centerId').firstOrNull?.text ?? '';
+    final timeName = timeOptions.where((o) => '${o.id}' == '$_timeId').firstOrNull?.text ?? '';
+    final firstError = _centers.error ?? _times.error ?? _roster.error;
+    final hasCenter = _centerId != null;
+
     return Scaffold(
-        body: Column(children: [
-      AppHeader(
+      backgroundColor: c.background,
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ScreenHeader(
           title: 'Class Check-In',
-          subtitle: _centerId == null
-              ? null
-              : '${_students.length} students at this centre',
-          showBack: true),
-      Expanded(
+          subtitle: hasCenter ? '${roster.length} student${roster.length == 1 ? '' : 's'} at this centre' : null,
+        ),
+        Expanded(
           child: RefreshIndicator(
-              onRefresh: () async {
-                await _loadCenters();
-                if (_centerId != null) await _loadClass(_centerId!);
-              },
-              child: ListView(padding: const EdgeInsets.all(20), children: [
-                picker(
-                    'Training Centre',
-                    _centers,
-                    _centerId,
-                    _loading
-                        ? null
-                        : (id) {
-                            if (id != null) _loadClass(id);
-                          }),
-                picker(
-                    'Training Time',
-                    _times,
-                    _timeId,
-                    _loadingClass || _centerId == null
-                        ? null
-                        : (id) => setState(() => _timeId = id)),
-                if (_loading || _loadingClass)
-                  const Center(child: CircularProgressIndicator()),
-                if (_error != null)
-                  Column(children: [
-                    Text(_error!),
-                    TextButton(
-                        onPressed: () {
-                          if (_centerId != null) {
-                            _loadClass(_centerId!);
-                          } else {
-                            _loadCenters();
-                          }
-                        },
-                        child: const Text('Retry'))
+            color: c.primary,
+            onRefresh: () => Future.wait([_roster.reload(), _times.reload()]),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.only(bottom: 40 + bottom),
+              children: [
+                Container(
+                  margin: const EdgeInsets.fromLTRB(Gaps.xl, 4, Gaps.xl, 0),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: BorderRadius.circular(Radii.xl)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    SelectField(
+                      label: 'Training Centre',
+                      placeholder: 'Select centre',
+                      value: _centerId,
+                      options: centerOptions,
+                      loading: _centers.loading,
+                      onChange: (id, _) {
+                        setState(() {
+                          _centerId = id;
+                          _timeId = null;
+                          // A failed fetch keeps old data; never show another centre's roster.
+                          _times.data = null;
+                          _roster.data = null;
+                        });
+                        _times.reload();
+                        _roster.reload();
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    SelectField(
+                      label: 'Training Time',
+                      placeholder: hasCenter ? 'Select time' : 'Select centre first',
+                      value: _timeId,
+                      options: timeOptions,
+                      loading: _times.loading,
+                      disabled: !hasCenter,
+                      onChange: (id, _) => setState(() => _timeId = id),
+                    ),
                   ]),
-                const SizedBox(height: 12),
-                GradientButton(
-                    label: 'Show Centre QR',
-                    trailingIcon: AppIcons.qr_code,
-                    onPressed: _centerId == null ? null : _showQr),
-                const SizedBox(height: 14),
-                const Text(
-                    'Students check in by scanning the centre QR on their own phones. This list shows who trains at the centre; it is not a live attendance register.'),
-                if (_centerId != null &&
-                    UserSession.instance.authData?['clubId'] != null)
-                  TextButton.icon(
-                      onPressed: _posterBusy ? null : _openPoster,
-                      icon: const Icon(Icons.picture_as_pdf_outlined),
-                      label: Text(
-                          _posterBusy ? 'Opening…' : 'Open QR Poster (PDF)')),
-                const SizedBox(height: 20),
-                if (_centerId == null)
-                  const Text('Select a training centre to see its class list.')
-                else if (!_loadingClass && _error == null && _students.isEmpty)
-                  const Text('No students at this centre.')
-                else
-                  for (final student in _students)
-                    Card(
-                        color: c.surface,
-                        child: ListTile(
-                          leading: CircleAvatar(
-                              backgroundColor: c.surfaceAlt,
-                              child: Icon(AppIcons.person_outline,
-                                  color: c.primary)),
-                          title: Text(
-                              '${student['text'] ?? student['name'] ?? 'Student'}'),
-                          subtitle: Text('${student['value'] ?? ''}'),
-                        )),
-              ]))),
-    ]));
+                ),
+                if (firstError != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Gaps.xl, 12, Gaps.xl, 0),
+                    child: ErrorState(
+                      message: firstError,
+                      onRetry: () {
+                        _centers.reload();
+                        _times.reload();
+                        _roster.reload();
+                      },
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(Gaps.xl, 16, Gaps.xl, 0),
+                  child: Touchable(
+                    activeOpacity: 0.9,
+                    onPress: () => _showQr(centerName),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: c.gradient),
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: Shadows.strong(c),
+                      ),
+                      child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Icon(Ion.qrCode, size: 20, color: Colors.white),
+                        SizedBox(width: 10),
+                        Text('Show Centre QR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                      ]),
+                    ),
+                  ),
+                ),
+                Container(
+                  margin: const EdgeInsets.fromLTRB(Gaps.xl, 14, Gaps.xl, 0),
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: BorderRadius.circular(Radii.lg)),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Ion.informationCircleOutline, size: 17, color: c.textSecondary),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                          "Students check in by scanning this QR with their own D-CLIX app, and it appears in their attendance straight away. Instructor accounts can't record or view check-ins on the current API — marking the register from here needs a backend update.",
+                          style: TextStyle(fontSize: 11.5, color: c.textSecondary, height: 17 / 11.5)),
+                    ),
+                  ]),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(Gaps.xl, 24, Gaps.xl, 4),
+                  child: Row(children: [
+                    Expanded(
+                      child: Text('Class List', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: c.textPrimary)),
+                    ),
+                    if (_roster.loading && hasCenter)
+                      SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary))
+                    else if (hasCenter)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: c.primary.hexA('1A'), borderRadius: BorderRadius.circular(12)),
+                        child: Text('${roster.length}',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: c.primary)),
+                      ),
+                  ]),
+                ),
+                if (timeName.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(Gaps.xl, 0, Gaps.xl, 10),
+                    child: Text('$centerName · $timeName',
+                        style: TextStyle(fontSize: 11.5, color: c.textSecondary, fontWeight: FontWeight.w600)),
+                  ),
+                if (roster.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: _roster.loading && hasCenter
+                        ? Center(
+                            child: SizedBox(
+                                width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 3, color: c.primary)))
+                        : Column(children: [
+                            Icon(Ion.peopleOutline, size: 44, color: c.textMuted),
+                            const SizedBox(height: 10),
+                            Text(
+                                !hasCenter
+                                    ? 'Select a training centre to load the class list.'
+                                    : 'No students at this centre.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: c.textSecondary, fontSize: 14)),
+                          ]),
+                  ),
+                for (final (i, item) in roster.indexed)
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(Gaps.xl, 0, Gaps.xl, 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: rnCard(c),
+                    child: Row(children: [
+                      SizedBox(
+                        width: 20,
+                        child: Text('${i + 1}',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.textMuted)),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+                        child: Icon(Ion.person, size: 18, color: c.primary),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('${item['text'] ?? ''}'.isEmpty ? '—' : '${item['text']}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                          if ('${item['value'] ?? ''}'.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text('${item['value']}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                          ],
+                        ]),
+                      ),
+                    ]),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+/// Full-screen centre QR — held up for the class to scan.
+class _CentreQrPage extends StatefulWidget {
+  final String centerName;
+  final String code;
+  final String content;
+  final Future<void> Function() onPoster;
+  final bool Function() posterBusy;
+  const _CentreQrPage({
+    required this.centerName,
+    required this.code,
+    required this.content,
+    required this.onPoster,
+    required this.posterBusy,
+  });
+
+  @override
+  State<_CentreQrPage> createState() => _CentreQrPageState();
+}
+
+class _CentreQrPageState extends State<_CentreQrPage> {
+  Uint8List? _bytes;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Api.utilitiesQRCodeBytes(width: 600, height: 600, content: widget.content).then((b) {
+      if (mounted) setState(() => _bytes = b);
+    }).catchError((_) {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    return Scaffold(
+      backgroundColor: c.background,
+      body: Stack(children: [
+        Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(Gaps.xl),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(widget.centerName.isEmpty ? 'Training Centre' : widget.centerName,
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: c.textPrimary)),
+              const SizedBox(height: 6),
+              Text('Scan with the D-CLIX app to check in', style: TextStyle(fontSize: 13, color: c.textSecondary)),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    color: Colors.white, borderRadius: BorderRadius.circular(Radii.xl), boxShadow: Shadows.card(c)),
+                child: SizedBox(
+                  width: 260,
+                  height: 260,
+                  child: _bytes == null
+                      ? Center(child: CircularProgressIndicator(color: c.primary))
+                      : Image.memory(_bytes!, fit: BoxFit.contain, gaplessPlayback: true),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(widget.code,
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: c.textPrimary, letterSpacing: 2)),
+              const SizedBox(height: 6),
+              Text("Can't scan? Students can type this code on their check-in screen.",
+                  textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: c.textSecondary)),
+              const SizedBox(height: 26),
+              Touchable(
+                onPress: _busy
+                    ? null
+                    : () async {
+                        setState(() => _busy = true);
+                        await widget.onPoster();
+                        if (mounted) setState(() => _busy = false);
+                      },
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 46),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: c.primary.hexA('55'), width: 1.5),
+                    color: c.primary.hexA('12'),
+                  ),
+                  child: _busy
+                      ? Center(
+                          child: SizedBox(
+                              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)))
+                      : Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Ion.printOutline, size: 16, color: c.primary),
+                          const SizedBox(width: 8),
+                          Text('Open printable poster',
+                              style: TextStyle(color: c.primary, fontWeight: FontWeight.w800, fontSize: 13.5)),
+                        ]),
+                ),
+              ),
+            ]),
+          ),
+        ),
+        Positioned(
+          top: 54,
+          right: 20,
+          child: RnCircleButton(icon: Ion.close, iconSize: 26, size: 44, onPress: () => Navigator.of(context).pop()),
+        ),
+      ]),
+    );
   }
 }

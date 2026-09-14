@@ -118,7 +118,7 @@ void main() {
     await tester.tap(find.text('Update Collection'));
     await settle(tester);
     expect(updates, ['1', '2', '3']);
-    expect(find.text('Collection counts refreshed'), findsOneWidget);
+    expect(find.text('Counts refreshed from the server.'), findsOneWidget);
     expect(find.text('+1'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -219,7 +219,7 @@ void main() {
             : ok([]));
     await tester.pumpWidget(wrap(const ScheduleScreen()));
     await settle(tester);
-    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
     expect(find.text('Rest Day'), findsNothing);
   });
 
@@ -243,19 +243,20 @@ void main() {
     });
     await tester.pumpWidget(wrap(const InstructorAttendanceScreen()));
     await settle(tester);
-    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    // The centre picker is a bottom-sheet list (reportkit SelectField).
+    await tester.tap(find.text('Select centre'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Centre A').last);
     await settle(tester);
     expect(find.text('Alice'), findsOneWidget);
     expect(find.text('Show Centre QR'), findsOneWidget);
     expect(find.text('Mark Present'), findsNothing);
-    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.tap(find.text('Centre A'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Centre B').last);
     await settle(tester);
     expect(find.text('Alice'), findsNothing);
-    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
     expect(writes, isEmpty);
     expect(tester.takeException(), isNull);
   });
@@ -275,7 +276,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(wrap(const PaymentsScreen(initialTab: 'history')));
     await settle(tester);
-    expect(find.text('Payment History'), findsOneWidget);
+    expect(find.text('No receipts found.'), findsOneWidget);
     expect(find.text('Auto Pay'), findsNothing);
     await tester.tap(find.text('Advance Payment'));
     await settle(tester);
@@ -287,6 +288,10 @@ void main() {
       (tester) async {
     UserSession.instance.homeStats = null;
     UserSession.instance.homeStatsError = 'unavailable';
+    ApiService.client = MockClient((request) async =>
+        request.url.path == '/Reports/HomePageStats'
+            ? http.Response('unavailable', 503)
+            : ok([]));
     final router = GoRouter(routes: [
       GoRoute(
           path: '/',
@@ -319,17 +324,18 @@ void main() {
     await settle(tester);
     await tester.enterText(find.byType(TextField).first, 'CLUB');
     await settle(tester);
-    await tester.ensureVisible(find.text('Tap to load branches'));
-    await tester.tap(find
-        .ancestor(
-            of: find.text('Tap to load branches'),
-            matching: find.byType(InkWell))
-        .first);
+    await tester.ensureVisible(find.text('Select branch'));
+    await tester.tap(find.text('Select branch'));
     await settle(tester);
-    await tester.enterText(find.byType(TextField).last, 'South');
+    // The sheet lists the branches for the club code just typed…
+    expect(find.text('North'), findsOneWidget);
+    expect(find.text('South'), findsOneWidget);
+    await tester.tap(find.text('South'));
     await settle(tester);
+    // …and the pick lands in the field, with the typed club code untouched.
+    expect(find.text('South'), findsOneWidget);
     expect(find.text('North'), findsNothing);
-    expect(find.text('South'), findsWidgets);
+    expect(find.text('CLUB'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

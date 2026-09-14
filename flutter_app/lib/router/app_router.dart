@@ -37,10 +37,11 @@ import '../screens/instructor_attendance_screen.dart';
 import '../screens/instructor_home_screen.dart';
 import '../screens/instructor_collections_screen.dart';
 import '../screens/instructor_reports_screen.dart';
-import '../screens/instructor_settings_screen.dart';
 import '../screens/instructor_report_list_screen.dart';
 import '../screens/instructor_reports/report_spec.dart';
 import '../screens/instructor_reports/student_detail_screen.dart';
+import '../screens/instructor_reports/rn_reports.dart';
+import '../screens/profile_screen.dart' show ProfileScreen;
 import '../services/api.dart';
 import '../services/live_refresh.dart';
 import '../services/user_session.dart';
@@ -166,62 +167,53 @@ final GoRouter appRouter = GoRouter(
             path: '/instructor/reports',
             pageBuilder: (_, s) =>
                 _tabFade(s.pageKey, const InstructorReportsScreen())),
+        // The instructor Settings tab is the role-aware Profile screen, as in Expo v2.11.1.
         GoRoute(
             path: '/instructor/settings',
-            pageBuilder: (_, s) =>
-                _tabFade(s.pageKey, const InstructorSettingsScreen())),
+            pageBuilder: (_, s) => _tabFade(s.pageKey, const ProfileScreen())),
       ],
     ),
     // Drill-down report routes (outside the shell so they appear full-screen
     // with their own back button).
-    _reportRoute('/instructor/reports/student-centers', 'Student Centers',
-        Api.reportsStudentCenters),
-    _reportRoute('/instructor/reports/training-centers', 'Training Centers',
-        Api.reportsTrainingCenters),
-    _reportRoute('/instructor/reports/exam-centers', 'Exam Centers',
-        Api.reportsExamCenters),
-    _reportRoute('/instructor/reports/student-list', 'Student List',
-        Api.reportsStudentDetails),
-    _reportRoute('/instructor/reports/training-time', 'Training Time',
-        Api.listingTrainingCenters),
-    _reportRoute('/instructor/reports/grading-schedule', 'Grading Schedule',
-        Api.reportsGradingSchedule),
-    _reportRoute('/instructor/reports/outstanding', 'Outstanding Report',
-        Api.outstandingFetch),
-    _reportRoute('/instructor/reports/attendance', 'Attendance Report',
-        Api.reportsAttendance),
-    _reportRoute('/instructor/reports/receipt', 'Receipt', Api.reportsReceipts),
-    _reportRoute('/instructor/reports/grading-past', 'Grading Past',
-        Api.reportsGradingSchedule),
-    _reportRoute('/instructor/reports/purchase-request', 'Purchase Request',
-        Api.reportsPurchaseRequests),
-    _reportRoute(
-        '/instructor/reports/activity', 'Activities', Api.reportsActivity),
+    GoRoute(path: '/instructor/reports/student-centers', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RStudentCentersScreen())),
+    GoRoute(path: '/instructor/reports/training-centers', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RTrainingCentersScreen())),
+    GoRoute(path: '/instructor/reports/exam-centers', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RExamCentersScreen())),
+    GoRoute(path: '/instructor/reports/student-list', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RStudentListScreen())),
+    GoRoute(path: '/instructor/reports/training-time', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RTrainingScheduleScreen())),
+    GoRoute(path: '/instructor/reports/grading-schedule', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RGradingScreen())),
+    GoRoute(path: '/instructor/reports/grading-past', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RGradingScreen(title: 'Grade Completed'))),
+    GoRoute(path: '/instructor/reports/outstanding', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const ROutstandingScreen())),
+    GoRoute(path: '/instructor/reports/attendance', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RAttendanceScreen())),
+    GoRoute(path: '/instructor/reports/receipt', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RReceiptsScreen())),
+    GoRoute(path: '/instructor/reports/purchase-request', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RPurchaseRequestsScreen())),
+    GoRoute(path: '/instructor/reports/payment-slip', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RPaymentSlipsScreen())),
+    GoRoute(path: '/instructor/reports/tournament-past', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RTournamentScreen(title: 'Tournament (Past)'))),
+    GoRoute(path: '/instructor/reports/tournament-upcoming', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RTournamentScreen(title: 'Upcoming Tournament'))),
+    GoRoute(path: '/instructor/reports/contribution', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RContributionScreen())),
+    GoRoute(path: '/instructor/reports/reimbursement', pageBuilder: (_, s) => _fadeThrough(s.pageKey, const RReimbursementScreen())),
+    // Reports this app has that Expo listed as "coming soon" — generic list screens.
+    _reportRoute('/instructor/reports/activity', 'Activities', Api.reportsActivity),
+    _reportRoute('/instructor/reports/tournament', 'Tournament Schedule', Api.reportsTournamentSummary),
+    _reportRoute('/instructor/reports/missing-invoice', 'Missing Invoice', Api.outstandingFetch),
+    _reportRoute('/instructor/reports/fee-master', 'Invoice Types', Api.listingInvoceTypes),
     GoRoute(
-        path: '/instructor/reports/tournament-past',
-        builder: (_, __) =>
-            const CompetitionScreen(title: 'Tournament (Past)')),
-    GoRoute(
-        path: '/instructor/reports/tournament-upcoming',
-        builder: (_, __) =>
-            const CompetitionScreen(title: 'Upcoming Tournament')),
-    _reportRoute('/instructor/reports/tournament', 'Tournament Schedule',
-        Api.reportsTournamentSummary),
-    _reportRoute('/instructor/reports/missing-invoice', 'Missing Invoice',
-        Api.outstandingFetch),
-    _reportRoute('/instructor/reports/fee-master', 'Invoice Types',
-        Api.listingInvoceTypes),
+      path: '/instructor/collections/:typeId',
+      pageBuilder: (_, state) => _fadeThrough(
+        state.pageKey,
+        CollectionListScreen(
+          typeId: int.tryParse(state.pathParameters['typeId'] ?? '') ?? 1,
+          label: state.uri.queryParameters['label'] ?? 'Collections',
+        ),
+      ),
+    ),
     GoRoute(
         path: '/instructor/reports/new-student',
         builder: (_, __) => const NewStudentScreen()),
     GoRoute(
         path: '/instructor/student-particulars/:id',
         builder: (_, state) => StudentParticularsScreen(
-            id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0)),
-    _reportRoute('/instructor/reports/payment-slip', 'Payment Slip',
-        Api.reportsPaymentSlips),
-    _reportRoute('/instructor/reports/reimbursement', 'Reimbursement',
-        Api.reportsReimbursement),
+            id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+            name: state.uri.queryParameters['name'] ?? '')),
     GoRoute(
       path: '/instructor/student-detail',
       pageBuilder: (_, state) {
@@ -235,8 +227,6 @@ final GoRouter appRouter = GoRouter(
         );
       },
     ),
-    _reportRoute('/instructor/reports/contribution', 'Contribution',
-        Api.reportsContribution),
     GoRoute(
         path: '/instructor/attendance',
         pageBuilder: (_, s) =>
@@ -335,7 +325,8 @@ final GoRouter appRouter = GoRouter(
         state.pageKey,
         ChatThreadScreen(
           threadKey: state.pathParameters['groupId'] ?? '',
-          title: 'Conversation',
+          title: state.uri.queryParameters['t'] ?? 'Conversation',
+          replyable: state.uri.queryParameters['ro'] != '1',
         ),
       ),
     ),

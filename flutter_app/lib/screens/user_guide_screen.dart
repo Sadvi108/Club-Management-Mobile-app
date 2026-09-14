@@ -1,14 +1,12 @@
-import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../data/guide_content.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_header.dart';
+import '../theme/ion.dart';
+import '../widgets/rn_kit.dart';
 
-/// User Guide — swipeable pages, no network.
-///
-/// Deliberately makes no API calls: the guide is linked from the sign-in screen, so it has
-/// to work for someone who does not have an account yet.
+/// Port of `frontend/app/user-guide.tsx` (Expo v2.11.1) — a paged walkthrough with real
+/// screenshots of this build. No API calls: it has to work before signing in.
 class UserGuideScreen extends StatefulWidget {
   const UserGuideScreen({super.key});
 
@@ -26,229 +24,176 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
     super.dispose();
   }
 
-  void _go(int index) {
-    if (index < 0 || index >= kGuideSteps.length) return;
-    _controller.animateToPage(index,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic);
+  void _go(int i) {
+    final clamped = i.clamp(0, kGuideSteps.length - 1);
+    _controller.animateToPage(clamped, duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic);
+    setState(() => _page = clamped);
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
+    final width = MediaQuery.sizeOf(context).width;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    // Fixed pixel size so the 480x1039 capture is never cropped or magnified.
+    final shotW = (width * 0.55).round().clamp(0, 200).toDouble();
+    final shotH = (shotW * 1039 / 480).roundToDouble();
     final last = _page == kGuideSteps.length - 1;
 
     return Scaffold(
       backgroundColor: c.background,
-      body: Column(children: [
-        AppHeader(
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        RnHeader(
           title: 'User Guide',
-          subtitle: 'Step ${_page + 1} of ${kGuideSteps.length}',
-          showBack: true,
+          horizontal: Gaps.lg,
+          onBack: () => safeBack(context),
+          trailing: Touchable(
+            onPress: () => safeBack(context),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: Text('Skip', style: TextStyle(color: c.primary, fontWeight: FontWeight.w800, fontSize: 13)),
+            ),
+          ),
         ),
-        _progress(c),
         Expanded(
           child: PageView.builder(
             controller: _controller,
             onPageChanged: (i) => setState(() => _page = i),
             itemCount: kGuideSteps.length,
-            itemBuilder: (_, i) => _page_(c, kGuideSteps[i]),
+            itemBuilder: (_, i) {
+              final s = kGuideSteps[i];
+              return ListView(
+                padding: const EdgeInsets.fromLTRB(Gaps.xl, 0, Gaps.xl, 36),
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(color: c.primary.hexA('14'), borderRadius: BorderRadius.circular(10)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(s.icon, size: 14, color: c.primary),
+                        const SizedBox(width: 6),
+                        Text('STEP ${i + 1} OF ${kGuideSteps.length}',
+                            style: TextStyle(color: c.primary, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(s.title,
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.3, color: c.textPrimary)),
+                  const SizedBox(height: 4),
+                  Text(s.intro, style: TextStyle(fontSize: 13.5, color: c.textSecondary, height: 19 / 13.5)),
+                  const SizedBox(height: 14),
+                  if (s.shot.isNotEmpty)
+                    Center(
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 18),
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: c.isDark ? const Color(0xFF334155) : const Color(0xFF1F2937), width: 6),
+                          boxShadow: Shadows.card(c),
+                        ),
+                        child: Image.asset(s.shot, width: shotW, height: shotH, fit: BoxFit.cover),
+                      ),
+                    ),
+                  for (final d in s.details)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Container(
+                          width: 24,
+                          height: 24,
+                          margin: const EdgeInsets.only(top: 1),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle),
+                          child: Text('${d.n}',
+                              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(d.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: c.textPrimary)),
+                            const SizedBox(height: 2),
+                            Text(d.text, style: TextStyle(fontSize: 13, color: c.textSecondary, height: 19 / 13)),
+                          ]),
+                        ),
+                      ]),
+                    ),
+                  if (s.note.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 2, bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: c.primary.hexA('12'),
+                        borderRadius: BorderRadius.circular(Radii.md),
+                        border: Border.all(color: c.primary.hexA('40')),
+                      ),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Icon(Ion.alertCircle, size: 18, color: c.primary),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(s.note, style: TextStyle(fontSize: 12.5, color: c.textPrimary, height: 18 / 12.5))),
+                      ]),
+                    ),
+                  for (final t in s.tips)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Icon(Ion.bulbOutline, size: 15, color: c.textSecondary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(t,
+                              style: TextStyle(
+                                  fontSize: 12.5, color: c.textSecondary, height: 18 / 12.5, fontStyle: FontStyle.italic)),
+                        ),
+                      ]),
+                    ),
+                ],
+              );
+            },
           ),
         ),
-        _nav(c, last),
+        Container(
+          padding: EdgeInsets.fromLTRB(Gaps.xl, 10, Gaps.xl, bottom > 12 ? bottom : 12),
+          decoration: BoxDecoration(color: c.surface, border: Border(top: BorderSide(color: c.border))),
+          child: Row(children: [
+            Opacity(
+              opacity: _page == 0 ? 0.4 : 1,
+              child: RnCircleButton(icon: Ion.chevronBack, iconSize: 18, onPress: _page == 0 ? null : () => _go(_page - 1)),
+            ),
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                for (var i = 0; i < kGuideSteps.length; i++)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: i == _page ? 18 : 6,
+                    height: 6,
+                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                    decoration: BoxDecoration(
+                        color: i == _page ? c.primary : c.border, borderRadius: BorderRadius.circular(3)),
+                  ),
+                ]),
+              ),
+            ),
+            Touchable(
+              activeOpacity: 0.9,
+              onPress: last ? () => safeBack(context) : () => _go(_page + 1),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(gradient: LinearGradient(colors: c.gradient), borderRadius: BorderRadius.circular(999)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(last ? 'Got it' : 'Next',
+                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                  const SizedBox(width: 6),
+                  Icon(last ? Ion.checkmark : Ion.chevronForward, size: 16, color: Colors.white),
+                ]),
+              ),
+            ),
+          ]),
+        ),
       ]),
     );
   }
-
-  Widget _progress(AppColors c) => Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: Gaps.lg, vertical: Gaps.sm),
-        child: Row(children: [
-          for (var i = 0; i < kGuideSteps.length; i++)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => _go(i),
-                child: Container(
-                  height: 4,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: i <= _page ? c.primary : c.border,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-            ),
-        ]),
-      );
-
-  Widget _page_(AppColors c, GuideStep s) => ListView(
-        padding: const EdgeInsets.fromLTRB(Gaps.lg, Gaps.md, Gaps.lg, Gaps.lg),
-        children: [
-          Row(children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: c.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(Radii.md),
-              ),
-              child: Icon(s.icon, size: 24, color: c.primary),
-            ),
-            const SizedBox(width: Gaps.md),
-            Expanded(
-              child: Text(s.title,
-                  style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 21,
-                      fontWeight: FontWeight.w900)),
-            ),
-          ]),
-          const SizedBox(height: Gaps.md),
-          Text(s.intro,
-              style: TextStyle(
-                  color: c.textSecondary, fontSize: 14, height: 1.55)),
-          if (s.shot.isNotEmpty) _shot(c, s.shot),
-          const SizedBox(height: Gaps.lg),
-          for (final d in s.details) _detail(c, d),
-          if (s.note.isNotEmpty) _note(c, s.note),
-          if (s.tips.isNotEmpty) _tips(c, s.tips),
-        ],
-      );
-
-  /// A capture of the real screen.
-  ///
-  /// Height-capped and top-aligned: these are full-length screens, and letting one run to
-  /// its natural height would push every numbered step below the fold.
-  Widget _shot(AppColors c, String asset) => Padding(
-        padding: const EdgeInsets.only(top: Gaps.md),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(Radii.lg),
-          child: Container(
-            constraints: const BoxConstraints(maxHeight: 320),
-            width: double.infinity,
-            decoration: BoxDecoration(border: Border.all(color: c.border)),
-            child: Image.asset(
-              asset,
-              fit: BoxFit.fitWidth,
-              alignment: Alignment.topCenter,
-              // A missing asset must not blank the page the member is reading.
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-            ),
-          ),
-        ),
-      );
-
-  Widget _detail(AppColors c, GuideDetail d) => Padding(
-        padding: const EdgeInsets.only(bottom: Gaps.md),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 26,
-            height: 26,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle),
-            child: Text('${d.n}',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w900)),
-          ),
-          const SizedBox(width: Gaps.md),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(d.title,
-                  style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w800)),
-              const SizedBox(height: 3),
-              Text(d.text,
-                  style: TextStyle(
-                      color: c.textSecondary, fontSize: 13.5, height: 1.5)),
-            ]),
-          ),
-        ]),
-      );
-
-  /// The "read this or you will get it wrong" callout — warning-coloured so it reads
-  /// differently from the numbered steps around it.
-  Widget _note(AppColors c, String text) => Container(
-        margin: const EdgeInsets.only(top: Gaps.sm, bottom: Gaps.md),
-        padding: const EdgeInsets.all(Gaps.md),
-        decoration: BoxDecoration(
-          color: c.warning.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(Radii.md),
-          border: Border.all(color: c.warning.withValues(alpha: 0.35)),
-        ),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(Icons.priority_high, size: 18, color: c.warning),
-          const SizedBox(width: Gaps.sm),
-          Expanded(
-            child: Text(text,
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 13,
-                    height: 1.5,
-                    fontWeight: FontWeight.w600)),
-          ),
-        ]),
-      );
-
-  Widget _tips(AppColors c, List<String> tips) => Container(
-        padding: const EdgeInsets.all(Gaps.md),
-        decoration: BoxDecoration(
-          color: c.surfaceAlt,
-          borderRadius: BorderRadius.circular(Radii.md),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('TIPS',
-              style: TextStyle(
-                  color: c.textSecondary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8)),
-          const SizedBox(height: Gaps.sm),
-          for (final t in tips)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child:
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(Icons.lightbulb_outline, size: 15, color: c.primary),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(t,
-                      style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 12.5,
-                          height: 1.45)),
-                ),
-              ]),
-            ),
-        ]),
-      );
-
-  Widget _nav(AppColors c, bool last) => Container(
-        padding: EdgeInsets.fromLTRB(Gaps.lg, Gaps.sm, Gaps.lg,
-            MediaQuery.of(context).padding.bottom + Gaps.md),
-        decoration: BoxDecoration(
-          color: c.background,
-          border: Border(top: BorderSide(color: c.border)),
-        ),
-        child: Row(children: [
-          TextButton.icon(
-            onPressed: _page == 0 ? null : () => _go(_page - 1),
-            icon: const Icon(AppIcons.chevron_left),
-            label: const Text('Back'),
-          ),
-          const Spacer(),
-          FilledButton.icon(
-            onPressed: last
-                ? () => Navigator.of(context).maybePop()
-                : () => _go(_page + 1),
-            icon: Icon(last ? AppIcons.check : AppIcons.chevron_right),
-            label: Text(last ? 'Done' : 'Next'),
-            style: FilledButton.styleFrom(backgroundColor: c.primary),
-          ),
-        ]),
-      );
 }

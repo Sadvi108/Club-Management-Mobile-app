@@ -1,630 +1,473 @@
-import '../services/live_refresh.dart';
-import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api.dart';
 import '../services/class_booking.dart';
 import '../services/response_utils.dart';
+import '../services/rn_api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_header.dart';
-import '../widgets/gradient_button.dart';
+import '../theme/ion.dart';
+import '../widgets/report_kit.dart';
+import '../widgets/rn_kit.dart';
+import '../widgets/use_api.dart';
 
-/// Book a class.
+const _monthsLong = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const _monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _wdShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const _wdLong = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+/// `toLocaleDateString("en-GB", {weekday: "short", day: "2-digit", month: "short"})`.
+String _wdDayMon(DateTime d) => '${_wdShort[d.weekday - 1]}, ${d.day.toString().padLeft(2, '0')} ${_monthsShort[d.month - 1]}';
+
+int _intOf(dynamic v) => v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
+
+/// Port of `frontend/app/book-class.tsx` (Expo v2.11.1).
 ///
-/// Work down the screen: centre → instructor → month → session → date.
-///
-/// The server does very little checking here (see lib/services/class_booking.dart): the
-/// timetable it returns is weekly and month-independent, `classLimit` is capacity rather
-/// than availability, and BookNow accepts both duplicates and a date whose weekday does not
-/// match the slot. So the date choice and the duplicate guard live in the app, and the
-/// student picks the date rather than having one computed behind their back.
+/// The timetable is weekly and BookNow accepts any date, so the app owns the date choice
+/// and the duplicate check — see `class_booking.dart`.
 class BookClassScreen extends StatefulWidget {
   const BookClassScreen({super.key});
-
   @override
   State<BookClassScreen> createState() => _BookClassScreenState();
 }
 
-class _BookClassScreenState extends State<BookClassScreen>
-    with LiveRefreshMixin<BookClassScreen> {
-  @override
-  bool get canLiveRefresh => !_loading && !_slotsLoading && !_booking;
-  @override
-  Future<void> refreshLiveData() async {
-    final center = _centerId, instructor = _instructorId, month = _monthOffset;
-    await _refreshBookings();
-    await _loadPackage();
-    if (center == 0 || instructor == 0) return;
-    try {
-      final res = await Api.classBookingTrainingTimeWithDateAndInstructor(
-        month: _month.month,
-        year: _month.year,
-        tCenterId: center,
-        instructorId: instructor,
-      );
-      if (!mounted ||
-          center != _centerId ||
-          instructor != _instructorId ||
-          month != _monthOffset) return;
-      setState(() {
-        _slots = _rows(res);
-        if (_chosenSlot == null) {
-          _slotId = null;
-          _date = null;
-        }
-        _error = null;
-      });
-    } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e));
-    }
+class _BookClassScreenState extends State<BookClassScreen> with UseApi<BookClassScreen> {
+  final int _studentId = _intOf(UserSession.instance.authData?['id']);
+  late final _centers = useApi(RnApi.trainingCenters);
+  late final _instructors = useApi(RnApi.instructors);
+  late final _info = useApi(RnApi.myInfo);
+  late final _bookings = useApi(RnApi.getBookings);
+  late final _pkg = useApi<Map<String, dynamic>?>(() async {
+    if (_studentId == 0) return null;
+    final d = unwrapData(await Api.classBookingPackageInfo(_studentId));
+    return d is Map ? Map<String, dynamic>.from(d) : null;
+  });
+  late final _slots = useApi<List<Map<String, dynamic>>>(() async {
+    if (_tCenterId == 0 || _instructorId == 0) return const [];
+    final d = unwrapData(await Api.classBookingTrainingTimeWithDateAndInstructor(
+        month: _month, year: _year, tCenterId: _tCenterId, instructorId: _instructorId));
+    return d is List ? d.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList() : const [];
+  }, autoRun: false);
+
+  int _tCenterId = 0;
+  int _instructorId = 0;
+  int _monthOffset = 0;
+  int? _selectedSlot;
+  String? _selectedDate;
+  bool _booking = false;
+  bool _defaultsApplied = false;
+
+  DateTime get _target {
+    final base = DateTime.now();
+    return DateTime(base.year, base.month + _monthOffset, 1);
   }
 
-  static const _monthNames = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-  ];
-
-  List<Map<String, dynamic>> _centers = [];
-  List<Map<String, dynamic>> _instructors = [];
-  List<Map<String, dynamic>> _slots = [];
-  List<dynamic> _bookings = [];
-  String? _packageType;
-
-  int _centerId = 0;
-  int _instructorId = 0;
-  int _monthOffset = 0; // 0 = this month, 1 = next
-  int? _slotId;
-  String? _date;
-
-  bool _loading = true;
-  bool _slotsLoading = false;
-  bool _booking = false;
-  String? _error;
-
-  DateTime get _month =>
-      DateTime(DateTime.now().year, DateTime.now().month + _monthOffset);
+  int get _month => _target.month;
+  int get _year => _target.year;
 
   @override
   void initState() {
     super.initState();
-    _loadPickers();
+    _centers;
+    _instructors;
+    _info;
+    _bookings;
+    _pkg;
+    _slots;
   }
 
-  List<Map<String, dynamic>> _rows(dynamic res) => findRecordList(res)
-      .whereType<Map>()
-      .map((m) => Map<String, dynamic>.from(m))
-      .toList();
-
-  int _idOf(Map m) {
-    final v = m['id'] ?? m['value'];
-    return v is int ? v : int.tryParse('$v') ?? 0;
+  /// Default the centre to the student's own, the instructor to their own — once MyInfo has
+  /// resolved, so the match is known before a default is locked in.
+  void _applyDefaults() {
+    if (_defaultsApplied || _info.loading) return;
+    final centers = _centers.data;
+    final instructors = _instructors.data;
+    if (centers == null || instructors == null || centers.isEmpty || instructors.isEmpty) return;
+    final info = _info.data ?? const <String, dynamic>{};
+    final mineC = centers.where((c) => c['text'] == info['tCenterName'] || c['value'] == info['tCenterName']).firstOrNull;
+    final mineI = instructors
+        .where((i) => _intOf(i['id']) == _intOf(info['instructorId']) || i['text'] == info['instructorName'])
+        .firstOrNull;
+    _defaultsApplied = true;
+    _tCenterId = _intOf((mineC ?? centers.first)['id']);
+    _instructorId = _intOf((mineI ?? instructors.first)['id']);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _slots.reload());
   }
 
-  String _textOf(Map m) =>
-      (m['text'] ?? m['name'] ?? m['value'] ?? '').toString().trim();
-
-  Future<void> _loadPickers() async {
+  void _select(void Function() fn) {
     setState(() {
-      _loading = true;
-      _error = null;
+      fn();
+      _selectedSlot = null;
+      _selectedDate = null;
+      _slots.data = null;
     });
-    try {
-      final results = await Future.wait([
-        Api.listingTrainingCenters(),
-        Api.listingInstructors(),
-        Api.classBookingGetBookings(),
-      ]);
-      final centers = _rows(results[0]);
-      final instructors = _rows(results[1]);
-      if (!mounted) return;
-      setState(() {
-        _centers = centers;
-        _instructors = instructors;
-        _bookings = findRecordList(results[2]);
-        _centerId = centers.isNotEmpty ? _idOf(centers.first) : 0;
-        _instructorId = instructors.isNotEmpty ? _idOf(instructors.first) : 0;
-        _loading = false;
-      });
-      await _loadPackage();
-      await _loadSlots();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = friendlyError(e);
-        _loading = false;
-      });
-    }
+    _slots.reload();
   }
 
-  Future<void> _loadPackage() async {
-    final studentId = UserSession.instance.currentStudentId;
-    if (studentId == null) return;
-    try {
-      final res = await Api.classBookingPackageInfo(studentId);
-      final data = unwrapData(res);
-      if (!mounted) return;
-      setState(() => _packageType =
-          (data is Map ? data['packageType'] : null)?.toString());
-    } catch (_) {
-      // The package only decorates the request; a failure must not block booking.
-    }
-  }
-
-  Future<void> _loadSlots() async {
-    if (_centerId == 0 || _instructorId == 0) {
-      setState(() => _slots = []);
+  Future<void> _confirm(Map<String, dynamic> chosen, bool alreadyBooked) async {
+    if (_studentId == 0 || _booking) return;
+    if (_selectedDate == null) {
+      await notify(context, 'Pick a date', 'Choose which date you want to attend this class.');
       return;
     }
-    setState(() {
-      _slotsLoading = true;
-      // Any change to the picker invalidates the current selection.
-      _slotId = null;
-      _date = null;
-    });
-    try {
-      final res = await Api.classBookingTrainingTimeWithDateAndInstructor(
-        month: _month.month,
-        year: _month.year,
-        tCenterId: _centerId,
-        instructorId: _instructorId,
-      );
-      if (!mounted) return;
-      setState(() {
-        _slots = _rows(res);
-        _slotsLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _slots = [];
-        _slotsLoading = false;
-        _error = friendlyError(e);
-      });
-    }
-  }
-
-  Future<void> _refreshBookings() async {
-    try {
-      final res = await Api.classBookingGetBookings();
-      if (!mounted) return;
-      setState(() => _bookings = findRecordList(res));
-    } catch (_) {/* the list is a nicety; booking already succeeded */}
-  }
-
-  Map<String, dynamic>? get _chosenSlot {
-    if (_slotId == null) return null;
-    for (final s in _slots) {
-      if (_idOf(s) == _slotId) return s;
-    }
-    return null;
-  }
-
-  List<DateTime> get _dateOptions {
-    final slot = _chosenSlot;
-    if (slot == null) return const [];
-    return datesForDayOfWeek(
-        (slot['dayOfWeek'] ?? '').toString(), _month.month, _month.year);
-  }
-
-  void _selectSlot(int id) {
-    setState(() {
-      _slotId = id;
-      final slot = _chosenSlot;
-      final opts = slot == null
-          ? <DateTime>[]
-          : datesForDayOfWeek(
-              (slot['dayOfWeek'] ?? '').toString(), _month.month, _month.year);
-      // Default to a date they have not already booked, so the first tap is actionable.
-      _date = preferredDate(opts, takenDates(_bookings, id));
-    });
-  }
-
-  Future<void> _confirm() async {
-    final slot = _chosenSlot;
-    final studentId = UserSession.instance.currentStudentId;
-    if (slot == null || studentId == null || _booking) return;
-
-    if (_date == null) {
-      _toast('Choose which date you want to attend this class.');
+    if (alreadyBooked) {
+      await notify(context, 'Already booked', "You've already booked this class on that date. Pick another date.");
       return;
     }
-    // BookNow will happily create a second identical booking — this is the only guard.
-    if (isAlreadyBooked(_bookings, _idOf(slot), _date!)) {
-      _toast(
-          'You have already booked this class on that date. Pick another date.');
-      return;
-    }
-
     setState(() => _booking = true);
     try {
+      final date = _selectedDate!;
       await Api.classBookingBookNow(bookNowBody(
-        tCenterId: _centerId,
+        tCenterId: _tCenterId,
         instructorId: _instructorId,
-        studentId: studentId,
-        timeId: _idOf(slot),
-        date: _date!,
-        slotName: (slot['name'] ?? '').toString(),
-        packageType: _packageType,
-        centerName: (slot['centerName'] ?? '').toString(),
-        instructorName: (slot['instructorName'] ?? '').toString(),
+        studentId: _studentId,
+        timeId: _intOf(chosen['id']),
+        date: date,
+        slotName: '${chosen['name'] ?? ''}',
+        packageType: _pkg.data?['packageType']?.toString(),
+        centerName: '${chosen['centerName'] ?? ''}',
+        instructorName: '${chosen['instructorName'] ?? ''}',
       ));
-      if (!mounted) return;
-      final booked = _date!;
+      final when = DateTime.parse('${date}T00:00:00');
       setState(() {
-        _slotId = null;
-        _date = null;
-        _booking = false;
+        _selectedSlot = null;
+        _selectedDate = null;
       });
-      await _refreshBookings();
+      _bookings.reload();
       if (!mounted) return;
-      _toast('Class booked for ${_prettyDate(booked)}.');
+      await notify(context, 'Class booked',
+          '${chosen['name']}\n${_wdLong[when.weekday - 1]}, ${when.day.toString().padLeft(2, '0')} ${_monthsShort[when.month - 1]} · ${chosen['centerName'] ?? ''}');
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _booking = false);
-      _toast('Booking failed: ${friendlyError(e)}');
+      if (mounted) await notify(context, 'Booking failed', friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _booking = false);
     }
-  }
-
-  void _toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 4)));
-
-  String _prettyDate(String iso) {
-    final d = DateTime.tryParse(iso);
-    if (d == null) return iso;
-    const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return '${wd[d.weekday - 1]} ${d.day} ${_monthNames[d.month - 1].substring(0, 3)}';
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    // Scaffold, not a bare Container: these are STANDALONE routes, so nothing above them
-    // provides Material, and AppHeader's back button is an InkWell — which asserts
-    // "No Material widget found". The tab screens get away with a Container only because
-    // TabsShell wraps them in its own Scaffold.
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    _applyDefaults();
+
+    final centers = _centers.data ?? const <Map<String, dynamic>>[];
+    final instructors = _instructors.data ?? const <Map<String, dynamic>>[];
+    final slotList = _slots.data ?? const <Map<String, dynamic>>[];
+    final bookings = _bookings.data ?? const <Map<String, dynamic>>[];
+    final chosen = slotList.where((s) => _intOf(s['id']) == _selectedSlot).firstOrNull;
+    final centerName = '${centers.where((x) => _intOf(x['id']) == _tCenterId).firstOrNull?['text'] ?? ''}';
+    final instructorName = '${instructors.where((x) => _intOf(x['id']) == _instructorId).firstOrNull?['text'] ?? ''}';
+    final monthLabel = '${_monthsLong[_month - 1]} $_year';
+
+    final dateOptions = chosen == null ? const <DateTime>[] : datesForDayOfWeek('${chosen['dayOfWeek'] ?? ''}', _month, _year);
+    final taken = chosen == null ? const <String>{} : takenDates(bookings, _intOf(chosen['id']));
+    // Preselect the first date not already booked, once a slot is chosen.
+    if (chosen != null && (_selectedDate == null || !dateOptions.any((d) => isoDate(d) == _selectedDate))) {
+      _selectedDate = preferredDate(dateOptions, taken);
+    }
+    final alreadyBooked = chosen != null && _selectedDate != null && taken.contains(_selectedDate);
+    final myBookings = sortBookings(bookings);
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+
+    Widget label(String t) => Padding(
+          padding: const EdgeInsets.only(top: 18, bottom: 10),
+          child: RkLabel(t),
+        );
+    Widget section(String t) => Padding(
+          padding: const EdgeInsets.only(top: 24, bottom: 12),
+          child: Text(t, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textPrimary)),
+        );
+    Widget chip(String text, bool on, VoidCallback onTap) => Touchable(
+          onPress: onTap,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: on ? c.primary : c.surface,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: on ? c.primary : c.border),
+            ),
+            child: Text(text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: on ? Colors.white : c.textPrimary)),
+          ),
+        );
+    Widget chipRow(List<Widget> chips) => SizedBox(
+          height: 42,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: chips.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) => chips[i],
+          ),
+        );
+    Widget emptySub(String t) => Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text(t, style: TextStyle(fontSize: 13, color: c.textSecondary)),
+        );
+
+    final canConfirm = chosen != null && _selectedDate != null && !alreadyBooked && !_booking;
+    final confirmLabel = chosen == null
+        ? 'Select a session'
+        : alreadyBooked
+            ? 'Already booked'
+            : _selectedDate == null
+                ? 'Pick a date'
+                : 'Confirm · ${_wdDayMon(DateTime.parse('${_selectedDate!}T00:00:00'))}';
+
     return Scaffold(
       backgroundColor: c.background,
-      body: Column(children: [
-        const AppHeader(title: 'Book a Class', showBack: true),
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const RnHeader(title: 'Book a Class'),
         Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : RefreshIndicator(
-                  onRefresh: _loadPickers,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(
-                        Gaps.xl, Gaps.md, Gaps.xl, Gaps.xxxl),
-                    children: [
-                      if (_error != null) _errorBanner(c, _error!),
-                      _label(c, 'TRAINING CENTER'),
-                      _chips(c, _centers, _centerId, (id) {
-                        setState(() => _centerId = id);
-                        _loadSlots();
-                      }),
-                      const SizedBox(height: Gaps.lg),
-                      _label(c, 'INSTRUCTOR'),
-                      _chips(c, _instructors, _instructorId, (id) {
-                        setState(() => _instructorId = id);
-                        _loadSlots();
-                      }),
-                      const SizedBox(height: Gaps.lg),
-                      _label(c, 'MONTH'),
-                      _monthChips(c),
-                      const SizedBox(height: Gaps.xl),
-                      _label(c,
-                          'AVAILABLE SESSIONS · ${_monthNames[_month.month - 1]} ${_month.year}'),
-                      _sessions(c),
-                      if (_chosenSlot != null) ...[
-                        const SizedBox(height: Gaps.xl),
-                        _label(c, 'PICK A DATE'),
-                        _dates(c),
-                      ],
-                      const SizedBox(height: Gaps.xl),
-                      _label(c, 'MY BOOKINGS'),
-                      _myBookings(c),
-                    ],
-                  ),
-                ),
-        ),
-        _bottomBar(c),
-      ]),
-    );
-  }
-
-  Widget _errorBanner(AppColors c, String msg) => Container(
-        margin: const EdgeInsets.only(bottom: Gaps.lg),
-        padding: const EdgeInsets.all(Gaps.md),
-        decoration: BoxDecoration(
-          color: c.danger.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: c.danger.withValues(alpha: 0.4)),
-        ),
-        child: Row(children: [
-          Icon(Icons.error_outline, size: 18, color: c.danger),
-          const SizedBox(width: Gaps.sm),
-          Expanded(
-              child: Text(msg,
-                  style: TextStyle(color: c.textPrimary, fontSize: 12.5))),
-        ]),
-      );
-
-  Widget _label(AppColors c, String t) => Padding(
-        padding: const EdgeInsets.only(bottom: Gaps.sm),
-        child: Text(t,
-            style: TextStyle(
-                color: c.textMuted,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.8)),
-      );
-
-  Widget _chips(AppColors c, List<Map<String, dynamic>> rows, int selected,
-      ValueChanged<int> onTap) {
-    if (rows.isEmpty) {
-      return Text('None available',
-          style: TextStyle(color: c.textSecondary, fontSize: 13));
-    }
-    return Wrap(
-      spacing: Gaps.sm,
-      runSpacing: Gaps.sm,
-      children: rows.map((r) {
-        final id = _idOf(r);
-        final on = id == selected;
-        return GestureDetector(
-          onTap: () => onTap(id),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: on ? c.primary : c.surfaceAlt,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(_textOf(r),
-                style: TextStyle(
-                    color: on ? Colors.white : c.textPrimary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700)),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _monthChips(AppColors c) {
-    final now = DateTime.now();
-    return Row(
-      children: List.generate(2, (i) {
-        final m = DateTime(now.year, now.month + i);
-        final on = _monthOffset == i;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: i == 0 ? Gaps.sm : 0),
-            child: GestureDetector(
-              onTap: () {
-                setState(() => _monthOffset = i);
-                _loadSlots();
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 11),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: on ? c.primary : c.surfaceAlt,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(_monthNames[m.month - 1],
-                    style: TextStyle(
-                        color: on ? Colors.white : c.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800)),
-              ),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _sessions(AppColors c) {
-    if (_slotsLoading) {
-      return const Padding(
-          padding: EdgeInsets.symmetric(vertical: Gaps.xl),
-          child: Center(child: CircularProgressIndicator()));
-    }
-    if (_slots.isEmpty) {
-      return _empty(c, Icons.event_busy, 'No sessions here',
-          'Try another centre, instructor or month.');
-    }
-    return Column(
-      children: _slots.map((s) {
-        final id = _idOf(s);
-        final on = id == _slotId;
-        return GestureDetector(
-          onTap: () => _selectSlot(id),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: Gaps.sm),
-            padding: const EdgeInsets.all(Gaps.md),
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: on ? c.primary : c.border, width: on ? 1.6 : 1),
-            ),
-            child: Row(children: [
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text((s['name'] ?? '').toString(),
-                          style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 3),
-                      Text(
-                        [
-                          (s['centerName'] ?? '').toString(),
-                          (s['instructorName'] ?? '').toString(),
-                        ].where((x) => x.isNotEmpty).join(' · '),
-                        style:
-                            TextStyle(color: c.textSecondary, fontSize: 11.5),
+          child: ListView(
+            padding: EdgeInsets.fromLTRB(Gaps.xl, Gaps.xl - 18, Gaps.xl, 150 + bottom),
+            children: [
+              label('Training Center'),
+              if (_centers.loading)
+                const RnSpinner(vertical: 12)
+              else
+                chipRow([
+                  for (final x in centers)
+                    chip('${x['text'] ?? x['value'] ?? ''}', _intOf(x['id']) == _tCenterId,
+                        () => _select(() => _tCenterId = _intOf(x['id']))),
+                ]),
+              label('Instructor'),
+              if (_instructors.loading)
+                const RnSpinner(vertical: 12)
+              else
+                chipRow([
+                  for (final x in instructors)
+                    chip('${x['text'] ?? x['value'] ?? ''}', _intOf(x['id']) == _instructorId,
+                        () => _select(() => _instructorId = _intOf(x['id']))),
+                ]),
+              label('Month'),
+              Row(children: [
+                for (final off in const [0, 1]) ...[
+                  if (off > 0) const SizedBox(width: 10),
+                  Expanded(
+                    child: Touchable(
+                      onPress: () => _select(() => _monthOffset = off),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: off == _monthOffset ? c.primary : c.surface,
+                          borderRadius: BorderRadius.circular(Radii.md),
+                          border: Border.all(color: off == _monthOffset ? c.primary : c.border),
+                        ),
+                        child: Text(_monthsLong[DateTime(today.year, today.month + off, 1).month - 1],
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: off == _monthOffset ? Colors.white : c.textPrimary)),
                       ),
-                    ]),
-              ),
-              Icon(
-                  on
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
-                  size: 20,
-                  color: on ? c.primary : c.textMuted),
-            ]),
-          ),
-        );
-      }).toList(),
-    );
-  }
+                    ),
+                  ),
+                ],
+              ]),
 
-  Widget _dates(AppColors c) {
-    final opts = _dateOptions;
-    if (opts.isEmpty) {
-      return Text('No remaining dates for this session this month.',
-          style: TextStyle(color: c.textSecondary, fontSize: 12.5));
-    }
-    final taken = takenDates(_bookings, _slotId ?? 0);
-    return Wrap(
-      spacing: Gaps.sm,
-      runSpacing: Gaps.sm,
-      children: opts.map((d) {
-        final iso = isoDate(d);
-        final on = iso == _date;
-        final already = taken.contains(iso);
-        return GestureDetector(
-          onTap: () => setState(() => _date = iso),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: on ? c.primary : c.surfaceAlt,
-              borderRadius: BorderRadius.circular(12),
-              border: already ? Border.all(color: c.warning, width: 1.2) : null,
-            ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text(_prettyDate(iso),
-                  style: TextStyle(
-                      color: on ? Colors.white : c.textPrimary,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700)),
-              if (already) ...[
-                const SizedBox(width: 5),
-                Icon(AppIcons.check_circle,
-                    size: 13, color: on ? Colors.white : c.warning),
-              ],
-            ]),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _myBookings(AppColors c) {
-    final rows = sortBookings(_bookings);
-    if (rows.isEmpty) {
-      return _empty(c, Icons.event_note, 'No bookings yet',
-          'Sessions you book will appear here.');
-    }
-    final today = DateTime.now();
-    return Column(
-      children: rows.take(12).map((b) {
-        final d = DateTime.tryParse((b['trainingDate'] ?? '').toString());
-        final past = d != null &&
-            d.isBefore(DateTime(today.year, today.month, today.day));
-        return Container(
-          margin: const EdgeInsets.only(bottom: Gaps.sm),
-          padding: const EdgeInsets.all(Gaps.md),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: c.border),
-          ),
-          child: Row(children: [
-            Icon(past ? Icons.history : AppIcons.event_available,
-                size: 18, color: past ? c.textMuted : c.success),
-            const SizedBox(width: Gaps.md),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text((b['name'] ?? 'Class').toString(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: c.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(d == null ? '' : _prettyDate(isoDate(d)),
-                        style:
-                            TextStyle(color: c.textSecondary, fontSize: 11.5)),
+              section('Available Sessions · $monthLabel'),
+              if (_slots.loading) const RnSpinner(vertical: 20),
+              if (_slots.error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(_slots.error!, style: TextStyle(color: c.danger, fontSize: 13)),
+                ),
+              if (!_slots.loading && slotList.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: Column(children: [
+                    Icon(Ion.calendarOutline, size: 40, color: c.textMuted),
+                    const SizedBox(height: 12),
+                    Text('No sessions here',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textPrimary)),
+                    emptySub(
+                        "${instructorName.isNotEmpty ? "$instructorName doesn't teach at " : 'No timetable at '}${centerName.isEmpty ? 'this centre' : centerName}. Pick another instructor or centre above."),
                   ]),
-            ),
-            Text((b['status'] ?? (past ? 'Done' : 'Booked')).toString(),
-                style: TextStyle(
-                    color: past ? c.textMuted : c.success,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800)),
-          ]),
-        );
-      }).toList(),
-    );
-  }
+                ),
+              for (final s in slotList)
+                Builder(builder: (context) {
+                  final on = _intOf(s['id']) == _selectedSlot;
+                  final limit = _intOf(s['classLimit']);
+                  return Touchable(
+                    activeOpacity: 0.85,
+                    onPress: () => setState(() {
+                      _selectedSlot = _intOf(s['id']);
+                      _selectedDate = null;
+                    }),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: c.surface,
+                        borderRadius: BorderRadius.circular(Radii.lg),
+                        boxShadow: Shadows.soft(c),
+                        border: Border.all(color: on ? c.primary : c.border, width: on ? 2 : 1),
+                      ),
+                      child: Row(children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                              color: on ? c.primary : c.surfaceAlt, borderRadius: BorderRadius.circular(Radii.md)),
+                          child: Text('${s['dayOfWeek'] ?? ''}'.substring(0, ('${s['dayOfWeek'] ?? ''}'.length).clamp(0, 3)).toUpperCase(),
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: on ? Colors.white : c.primary)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('${s['name'] ?? ''}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                            const SizedBox(height: 3),
+                            Text('${s['centerName'] ?? ''} · ${s['instructorName'] ?? ''}${limit > 0 ? ' · max $limit' : ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                          ]),
+                        ),
+                        const SizedBox(width: 12),
+                        Icon(on ? Ion.radioButtonOn : Ion.radioButtonOff, size: 22, color: on ? c.primary : c.textMuted),
+                      ]),
+                    ),
+                  );
+                }),
 
-  Widget _empty(AppColors c, IconData icon, String title, String sub) =>
-      Container(
-        padding: const EdgeInsets.symmetric(vertical: Gaps.xxl),
-        alignment: Alignment.center,
-        child: Column(children: [
-          Icon(icon, size: 34, color: c.textMuted),
-          const SizedBox(height: Gaps.sm),
-          Text(title,
-              style: TextStyle(
-                  color: c.textPrimary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800)),
-          const SizedBox(height: 2),
-          Text(sub, style: TextStyle(color: c.textSecondary, fontSize: 12)),
-        ]),
-      );
+              if (chosen != null) ...[
+                section('Pick a date'),
+                if (dateOptions.isEmpty)
+                  emptySub('No ${chosen['dayOfWeek']} left in $monthLabel. Choose next month above.')
+                else
+                  SizedBox(
+                    height: 64,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: dateOptions.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (_, i) {
+                        final d = dateOptions[i];
+                        final key = isoDate(d);
+                        final on = key == _selectedDate;
+                        final isTaken = taken.contains(key);
+                        return Opacity(
+                          opacity: isTaken ? 0.55 : 1,
+                          child: Touchable(
+                            onPress: () => setState(() => _selectedDate = key),
+                            child: Container(
+                              constraints: const BoxConstraints(minWidth: 62),
+                              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: on ? c.primary : c.surface,
+                                borderRadius: BorderRadius.circular(Radii.md),
+                                border: Border.all(color: on ? c.primary : c.border),
+                              ),
+                              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                Text('${d.day}',
+                                    style: TextStyle(
+                                        fontSize: 17, fontWeight: FontWeight.w800, color: on ? Colors.white : c.textPrimary)),
+                                const SizedBox(height: 2),
+                                Text(isTaken ? 'booked' : _monthsShort[d.month - 1],
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: on ? Colors.white : c.textSecondary)),
+                              ]),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                if (alreadyBooked)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text('You already have this class booked on that date.',
+                        style: TextStyle(fontSize: 12, color: c.warning, fontWeight: FontWeight.w600)),
+                  ),
+              ],
 
-  Widget _bottomBar(AppColors c) {
-    final slot = _chosenSlot;
-    final ready = slot != null && _date != null;
-    final dup = ready && isAlreadyBooked(_bookings, _idOf(slot), _date!);
-    return Container(
-      padding: EdgeInsets.fromLTRB(Gaps.xl, Gaps.md, Gaps.xl,
-          Gaps.md + MediaQuery.of(context).padding.bottom),
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border(top: BorderSide(color: c.border)),
-      ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        if (dup)
-          Padding(
-            padding: const EdgeInsets.only(bottom: Gaps.sm),
-            child: Text('Already booked on that date — pick another.',
-                style: TextStyle(color: c.warning, fontSize: 12)),
+              section('My Bookings'),
+              if (_bookings.loading) const RnSpinner(vertical: 16),
+              if (!_bookings.loading && bookings.isEmpty) emptySub('No bookings yet.'),
+              for (final b in myBookings)
+                Builder(builder: (context) {
+                  final t = DateTime.tryParse('${b['trainingDate'] ?? ''}');
+                  final past = t != null && t.isBefore(todayDate);
+                  final status = '${b['status'] ?? ''}';
+                  final ok = RegExp('confirm|approv', caseSensitive: false).hasMatch(status);
+                  return Opacity(
+                    opacity: past ? 0.55 : 1,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 9),
+                      padding: const EdgeInsets.all(13),
+                      decoration: rnCard(c, radius: Radii.md),
+                      child: Row(children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+                          child: Icon(past ? Ion.timeOutline : Ion.checkmarkDone, size: 18, color: c.primary),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text('${b['title'] ?? ''}'.isEmpty ? 'Class' : '${b['title']}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                            const SizedBox(height: 3),
+                            Text('${t == null ? '' : _wdDayMon(t)} · ${b['centerName'] ?? ''}${past ? ' · past' : ''}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                          ]),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(status.isEmpty ? 'Pending' : status,
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: ok ? c.success : c.warning)),
+                      ]),
+                    ),
+                  );
+                }),
+            ],
           ),
-        GradientButton(
-          label: ready ? 'Confirm booking' : 'Select a session',
-          loading: _booking,
-          onPressed: ready && !dup ? _confirm : null,
+        ),
+        Container(
+          padding: EdgeInsets.fromLTRB(Gaps.xl, Gaps.xl, Gaps.xl, bottom + 12 > 28 ? bottom + 12 : 28),
+          decoration: BoxDecoration(color: c.background, border: Border(top: BorderSide(color: c.border))),
+          child: Opacity(
+            opacity: canConfirm ? 1 : 0.5,
+            child: Touchable(
+              activeOpacity: 0.9,
+              onPress: canConfirm ? () => _confirm(chosen, alreadyBooked) : null,
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: c.gradient),
+                  borderRadius: BorderRadius.circular(999),
+                  boxShadow: Shadows.strong(c),
+                ),
+                child: _booking
+                    ? const Center(
+                        child: SizedBox(
+                            width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white)))
+                    : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        const Icon(Ion.addCircle, size: 20, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(confirmLabel,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                      ]),
+              ),
+            ),
+          ),
         ),
       ]),
     );

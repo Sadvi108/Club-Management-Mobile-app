@@ -1,612 +1,296 @@
-import '../services/live_refresh.dart';
-import '../theme/app_icons.dart';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../services/api.dart';
+import '../services/rn_api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
-import '../widgets/responsive_body.dart';
+import '../theme/ion.dart';
+import '../widgets/rn_kit.dart';
+import '../widgets/use_api.dart';
 
-/// Progress / Performance screen — D-Clix 2026 design.
-///
-/// Layout (top → bottom):
-///   • Header — back chevron · eyebrow `YOUR PROGRESS` · `Performance` title
-///     · trailing `+N this mo` pill
-///   • Overall score card — large fitness ring on the left, headline +
-///     body copy on the right
-///   • Skill breakdown — one card per skill (Speed, Power, Technique,
-///     Agility, Endurance) with a coloured bar
-///   • Trainer feedback — chat-bubble card per comment
-///
-/// All numeric inputs (fitness score, skill values, monthly delta) come
-/// from /Reports/Activity if available; otherwise we render reasonable
-/// defaults so the UI never breaks on accounts without progress data yet.
+const _belts = [
+  (name: 'White', color: Color(0xFFE5E7EB)),
+  (name: 'Yellow', color: Color(0xFFFDE68A)),
+  (name: 'Orange', color: Color(0xFFFED7AA)),
+  (name: 'Green', color: Color(0xFF86EFAC)),
+  (name: 'Blue', color: Color(0xFF93C5FD)),
+  (name: 'Purple', color: Color(0xFFC4B5FD)),
+  (name: 'Brown', color: Color(0xFFD6D3D1)),
+  (name: 'Black', color: Color(0xFF1F2937)),
+];
+
+/// Port of `frontend/app/progress.tsx` (Expo v2.11.1).
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
-
   @override
   State<ProgressScreen> createState() => _ProgressScreenState();
 }
 
-class _ProgressScreenState extends State<ProgressScreen>
-    with LiveRefreshMixin<ProgressScreen> {
-  @override
-  bool get canLiveRefresh => !_loading;
-  @override
-  Future<void> refreshLiveData() => _loadProgress();
-
-  bool _loading = false;
-  Map<String, dynamic>? _live; // merged map of skill/fitness fields
-  List<dynamic> _attendance = const [];
-  List<dynamic> _grading = const [];
+class _ProgressScreenState extends State<ProgressScreen> with UseApi<ProgressScreen> {
+  final _range = RnApi.defaultRange();
+  late final _info = useApi(RnApi.myInfo);
+  late final _grading =
+      useApi(() => RnApi.gradingSchedule({'fromDate': _range.fromDate, 'toDate': _range.toDate}));
+  late final _att = useApi(() => RnApi.attendanceReport({'fromDate': _range.fromDate, 'toDate': _range.toDate}));
 
   @override
   void initState() {
     super.initState();
-    _loadProgress();
-  }
-
-  Future<void> _loadProgress() async {
-    setState(() => _loading = true);
-    final out = <String, dynamic>{};
-    try {
-      // Real, per-student sources: attendance records + grading history.
-      final results = await Future.wait([
-        _safe(() => Api.reportsAttendance(const {})),
-        _safe(() => Api.reportsGradingSchedule(const {})),
-        _safe(Api.reportsActivity),
-      ]);
-      _attendance = results[0] is List ? results[0] as List : const [];
-      _grading = results[1] is List ? results[1] as List : const [];
-      final activity = results[2];
-      if (activity is Map) out.addAll(Map<String, dynamic>.from(activity));
-      if (activity is List && activity.isNotEmpty && activity.first is Map) {
-        out.addAll(Map<String, dynamic>.from(activity.first as Map));
-      }
-    } catch (e) {
-      debugPrint('progress load failed: $e');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _live = out.isEmpty ? null : out;
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  /// Attendance rows scoped to the logged-in student (or picked guardian
-  /// child) — the report endpoint returns the whole branch otherwise.
-  List<Map> get _scopedAttendance =>
-      UserSession.instance.scopedRows(_attendance).whereType<Map>().toList();
-
-  // scopedRows narrows to the logged-in student (or the picked guardian
-  // child); filterByActiveStudent alone leaves a direct student login seeing
-  // the whole branch's grading rows.
-  List<Map> get _scopedGrading =>
-      UserSession.instance.scopedRows(_grading).whereType<Map>().toList();
-
-  bool _isPresent(Map r) {
-    final s = (r['attendanceType'] ?? r['status'] ?? r['value'] ?? '')
-        .toString()
-        .toLowerCase();
-    return s.contains('present') || s == '1' || s == 'p' || s == 'yes';
-  }
-
-  /// {attendancePct, classes, classesThisMonth, gradesPassed, gradesTotal}.
-  Map<String, int> _realStats() {
-    final att = _scopedAttendance;
-    final present = att.where(_isPresent).toList();
-    final pct = att.isEmpty ? 0 : ((present.length / att.length) * 100).round();
-    final now = DateTime.now();
-    int thisMonth = 0;
-    for (final r in present) {
-      final d =
-          DateTime.tryParse((r['recordedTime'] ?? r['date'] ?? '').toString());
-      if (d != null && d.year == now.year && d.month == now.month) {
-        thisMonth++;
-      }
-    }
-    final grading = _scopedGrading;
-    final passed = grading.where((g) {
-      final s =
-          (g['examStatus'] ?? g['remarks'] ?? '').toString().toLowerCase();
-      return s.contains('pass');
-    }).length;
-    return {
-      'attendancePct': pct,
-      'classes': present.length,
-      'classesThisMonth': thisMonth,
-      'gradesPassed': passed,
-      'gradesTotal': grading.length,
-    };
-  }
-
-  Future<dynamic> _safe(Future<dynamic> Function() fn) async {
-    try {
-      final r = await fn();
-      if (r is Map && r.containsKey('data')) return r['data'];
-      return r;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // ─── Derived values ────────────────────────────────────────────────────
-  String _str(List<String> keys, String fallback) {
-    for (final m in [
-      _live,
-      UserSession.instance.myInfo,
-      UserSession.instance.studentAddtnlInfo
-    ]) {
-      if (m == null) continue;
-      for (final k in keys) {
-        final v = m[k];
-        if (v != null && v.toString().trim().isNotEmpty) return v.toString();
-      }
-    }
-    return fallback;
+    _info;
+    _grading;
+    _att;
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
     final session = context.watch<UserSession>();
-    final w = MediaQuery.of(context).size.width;
-    final compact = w < 380;
+    final user = session.authData ?? const <String, dynamic>{};
 
-    final stats = _realStats();
-    final fitness = stats['attendancePct']!;
-    final deltaThisMonth = stats['classesThisMonth']!;
-    final nextBelt = _str(['nextBelt', 'nextGrade'],
-        session.currentGrade.isNotEmpty ? session.currentGrade : '');
-    final gradingRows = _scopedGrading;
+    final infoGrade = '${_info.data?['currentGrade'] ?? ''}';
+    final grade = infoGrade.isNotEmpty
+        ? infoGrade
+        : ('${user['currentGrade'] ?? ''}'.isNotEmpty ? '${user['currentGrade']}' : '—');
+    final beltName = (RegExp(r'\(([^)]+)\)').firstMatch(grade)?.group(1) ?? '—').trim();
+    // A belt outside the list is unknown (-1), never silently White.
+    final currentIdx = _belts.indexWhere((b) => b.name.toLowerCase() == beltName.toLowerCase());
+    final nextBelt = currentIdx < 0 || currentIdx >= _belts.length - 1 ? null : _belts[currentIdx + 1];
 
-    // Clear a hardware notch when the OS reports no inset (web/preview).
-    final topPad = (MediaQuery.of(context).padding.top > 0 ? 0.0 : 44.0) + 14;
-    return Scaffold(
-      backgroundColor: c.background,
-      body: SafeArea(
-        bottom: false,
-        child: RefreshIndicator(
-          color: c.primary,
-          onRefresh: _loadProgress,
-          child: ResponsiveBody(
-              child: ListView(
-            padding: EdgeInsets.fromLTRB(Gaps.xl, topPad, Gaps.xl, 140),
-            children: [
-              _buildHeader(c, deltaThisMonth, context),
-              const SizedBox(height: 18),
-              _buildOverallCard(c, fitness, deltaThisMonth, nextBelt,
-                  compact: compact),
-              const SizedBox(height: 14),
-              _buildMetricRow(c, stats),
-              const SizedBox(height: 22),
-              Text(
-                'Grading history',
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3),
-              ),
-              const SizedBox(height: 12),
-              if ((_loading && !liveRefreshing))
-                Center(
-                    child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: CircularProgressIndicator(color: c.primary),
-                ))
-              else if (gradingRows.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    borderRadius: BorderRadius.circular(Radii.lg),
-                    border: c.isDark ? Border.all(color: c.border) : null,
-                    boxShadow: Shadows.card(c),
-                  ),
-                  child: Row(children: [
-                    Icon(AppIcons.school_outlined,
-                        size: 20, color: c.textMuted),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'No grading records yet. They appear here after your first belt evaluation.',
-                        style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                            height: 1.4),
-                      ),
-                    ),
-                  ]),
-                )
-              else
-                ...gradingRows.map((g) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _buildGradingCard(c, g),
-                    )),
-            ],
-          )),
-        ),
-      ),
-    );
-  }
+    final records = session.scopedRows(_att.data).whereType<Map>().toList();
+    final present =
+        records.where((r) => RegExp('present', caseSensitive: false).hasMatch('${r['attendanceType'] ?? ''}')).length;
+    final pct = records.isEmpty ? 0 : (present / records.length * 100).round();
 
-  // ─── Header (back chevron, eyebrow, title, +N pill) ───────────────────
-  Widget _buildHeader(AppColors c, int delta, BuildContext ctx) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        InkWell(
-          onTap: ctx.canPop() ? () => ctx.pop() : null,
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: c.surfaceAlt,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: Icon(Icons.arrow_back, color: c.primary, size: 20),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'YOUR PROGRESS',
-                style: TextStyle(
-                    color: c.primary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2.5),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Performance',
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(colors: c.gradient),
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: Shadows.strong(c),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.arrow_upward, color: Colors.white, size: 12),
-            const SizedBox(width: 4),
-            Text(
-              '$delta this mo',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800),
-            ),
-          ]),
-        ),
-      ],
-    );
-  }
+    // Upcoming exams only (undated rows stay), soonest first.
+    final now = DateTime.now();
+    final cutoff = DateTime(now.year, now.month, now.day);
+    DateTime? at(dynamic iso) => DateTime.tryParse('${iso ?? ''}');
+    final gradeRows = (_grading.data ?? const <Map<String, dynamic>>[]).where((g) {
+      final t = at(g['examDate']);
+      return t == null || !t.isBefore(cutoff);
+    }).toList()
+      ..sort((a, b) => (at(a['examDate']) ?? DateTime(0)).compareTo(at(b['examDate']) ?? DateTime(0)));
 
-  // ─── Overall score card (ring + headline) ─────────────────────────────
-  Widget _buildOverallCard(
-    AppColors c,
-    int fitness,
-    int delta,
-    String nextBelt, {
-    required bool compact,
-  }) {
-    final ringSize = compact ? 100.0 : 120.0;
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.xl),
-        border: c.isDark ? Border.all(color: c.border) : null,
-        boxShadow: Shadows.card(c),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _FitnessRing(value: fitness, size: ringSize, gradient: c.gradient),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'OVERALL SCORE',
-                  style: TextStyle(
-                      color: c.primary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  delta > 0 ? "You're on fire" : 'Keep going',
-                  style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3),
-                ),
-                const SizedBox(height: 4),
-                if (delta > 0) const Text('🔥', style: TextStyle(fontSize: 16)),
-                const SizedBox(height: 6),
-                Text(
-                  delta > 0
-                      ? 'Attended $delta ${delta == 1 ? "class" : "classes"} this month. ${nextBelt.isNotEmpty ? "Keep it up for the $nextBelt evaluation." : "Keep the consistency going."}'
-                      : 'No classes logged this month yet. Attend a session to lift your attendance score.',
-                  style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      height: 1.4),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Real-metric summary row (3 tiles from live data) ──────────────────
-  Widget _buildMetricRow(AppColors c, Map<String, int> stats) {
-    Widget tile(IconData icon, String value, String label) => Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: BorderRadius.circular(Radii.lg),
-              border: c.isDark ? Border.all(color: c.border) : null,
-              boxShadow: Shadows.card(c),
-            ),
-            child: Column(children: [
-              Icon(icon, color: c.primary, size: 20),
-              const SizedBox(height: 6),
-              Text(value,
-                  style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800)),
-              const SizedBox(height: 2),
-              Text(label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: c.textSecondary,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600)),
-            ]),
-          ),
+    Widget section(String t) => Padding(
+          padding: const EdgeInsets.only(top: 22, bottom: 10),
+          child: Text(t, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textPrimary)),
         );
-    return Row(children: [
-      tile(
-          AppIcons.event_available, '${stats['classes']}', 'Classes\nattended'),
-      const SizedBox(width: 10),
-      tile(AppIcons.calendar_month, '${stats['classesThisMonth']}',
-          'This\nmonth'),
-      const SizedBox(width: 10),
-      tile(
-          Icons.workspace_premium,
-          '${stats['gradesPassed']}/${stats['gradesTotal']}',
-          'Gradings\npassed'),
-    ]);
-  }
 
-  // ─── Grading history card (one real /Reports/GradingSchedule row) ──────
-  Widget _buildGradingCard(AppColors c, Map g) {
-    final current = (g['currentGrade'] ?? '').toString();
-    final next = (g['nextGrade'] ?? '').toString();
-    final examDateRaw = (g['examDate'] ?? '').toString();
-    final examDate =
-        examDateRaw.length >= 10 ? examDateRaw.substring(0, 10) : examDateRaw;
-    final status = (g['examStatus'] ?? g['remarks'] ?? '').toString().trim();
-    final payStatus = (g['paymentStatus'] ?? '').toString().trim();
-    final passed = status.toLowerCase().contains('pass');
-    final statusColor =
-        passed ? c.success : (status.isEmpty ? c.textMuted : c.danger);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: c.isDark ? Border.all(color: c.border) : null,
-        boxShadow: Shadows.card(c),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
+    Widget commentCard({required IconData icon, required Widget child, VoidCallback? onTap}) {
+      final card = Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: rnCard(c),
+        child: Row(children: [
           Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-                passed ? AppIcons.check_circle : AppIcons.school_outlined,
-                color: statusColor,
-                size: 19),
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+            child: Icon(icon, size: 16, color: c.primary),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  next.isNotEmpty && next != current
-                      ? '$current → $next'
-                      : (current.isNotEmpty ? current : 'Grading'),
-                  style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800),
-                ),
-                if (examDate.isNotEmpty)
-                  Text('Exam: $examDate',
-                      style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w500)),
-              ],
-            ),
-          ),
-          if (status.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(status,
-                  style: TextStyle(
-                      color: statusColor,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w800)),
-            ),
+          Expanded(child: child),
         ]),
-        if (payStatus.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Row(children: [
-            Icon(AppIcons.payments_outlined, size: 13, color: c.textMuted),
-            const SizedBox(width: 5),
-            Text('Payment: $payStatus',
-                style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600)),
-          ]),
-        ],
+      );
+      return onTap == null ? card : Touchable(activeOpacity: 0.8, onPress: onTap, child: card);
+    }
+
+    TextStyle commentTxt() => TextStyle(fontSize: 13, color: c.textPrimary, fontWeight: FontWeight.w500, height: 18 / 13);
+    TextStyle commentMeta() => TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w600);
+
+    return Scaffold(
+      backgroundColor: c.background,
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const RnHeader(title: 'Progress', horizontal: Gaps.lg),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(Gaps.xl, Gaps.xl, Gaps.xl, 120),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: c.gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  borderRadius: BorderRadius.circular(Radii.xxl),
+                  boxShadow: Shadows.strong(c),
+                ),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('CURRENT GRADE',
+                          style: TextStyle(
+                              color: Color(0xFFFFF7ED), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+                      const SizedBox(height: 4),
+                      Text(beltName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 38, fontWeight: FontWeight.w800, letterSpacing: -1)),
+                      Text(grade,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Color(0xE6FFFFFF), fontSize: 12)),
+                    ]),
+                  ),
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: const BoxDecoration(color: Color(0x2EFFFFFF), shape: BoxShape.circle),
+                    child: const Icon(Ion.ribbon, size: 48, color: Color(0xE6FFFFFF)),
+                  ),
+                ]),
+              ),
+
+              Container(
+                margin: const EdgeInsets.only(top: 16),
+                padding: const EdgeInsets.all(18),
+                decoration: rnCard(c, radius: Radii.xl),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Text('Belt Journey',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textPrimary)),
+                  ),
+                  SizedBox(
+                    height: 32,
+                    child: Row(children: [
+                      for (var i = 0; i < _belts.length; i++)
+                        Expanded(
+                          flex: i < _belts.length - 1 ? 1 : 0,
+                          child: Row(children: [
+                            Builder(builder: (context) {
+                              final done = i < currentIdx;
+                              final current = i == currentIdx;
+                              return Container(
+                                width: current ? 32 : 26,
+                                height: current ? 32 : 26,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: current ? c.primary : _belts[i].color,
+                                  border: current ? Border.all(color: c.primary, width: 2) : null,
+                                ),
+                                child: done
+                                    ? const Icon(Ion.checkmark, size: 12, color: Color(0xFF0F172A))
+                                    : current
+                                        ? const Icon(Ion.star, size: 14, color: Colors.white)
+                                        : null,
+                              );
+                            }),
+                            if (i < _belts.length - 1)
+                              Expanded(
+                                child: Container(height: 2, color: i < currentIdx ? c.primary : c.border),
+                              ),
+                          ]),
+                        ),
+                    ]),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 8, 6, 0),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      for (var i = 0; i < _belts.length; i++)
+                        SizedBox(
+                          width: 26,
+                          child: Text(_belts[i].name[0],
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: i == currentIdx ? c.primary : c.textSecondary,
+                                  fontWeight: i == currentIdx ? FontWeight.w800 : FontWeight.w600)),
+                        ),
+                    ]),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    padding: const EdgeInsets.only(top: 14),
+                    decoration: BoxDecoration(border: Border(top: BorderSide(color: c.borderLight))),
+                    child: Row(children: [
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('CURRENT BELT',
+                              style: TextStyle(
+                                  fontSize: 10, color: c.textSecondary, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                          const SizedBox(height: 4),
+                          Text(beltName, style: TextStyle(fontSize: 15, color: c.textPrimary, fontWeight: FontWeight.w800)),
+                        ]),
+                      ),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                          Text('NEXT BELT',
+                              style: TextStyle(
+                                  fontSize: 10, color: c.textSecondary, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                          const SizedBox(height: 4),
+                          Text(nextBelt?.name ?? '—',
+                              style: TextStyle(fontSize: 15, color: c.textPrimary, fontWeight: FontWeight.w800)),
+                        ]),
+                      ),
+                    ]),
+                  ),
+                ]),
+              ),
+
+              section('Training Activity'),
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: rnCard(c, radius: Radii.xl),
+                child: Row(children: [
+                  for (final s in [
+                    (n: '$present', l: 'Present', accent: false),
+                    (n: '${records.length}', l: 'Total', accent: false),
+                    (n: '$pct%', l: 'Rate', accent: true),
+                  ])
+                    Expanded(
+                      child: Column(children: [
+                        Text(s.n,
+                            style: TextStyle(
+                                fontSize: 22, fontWeight: FontWeight.w800, color: s.accent ? c.primary : c.textPrimary)),
+                        const SizedBox(height: 2),
+                        Text(s.l, style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w600)),
+                      ]),
+                    ),
+                ]),
+              ),
+
+              section('Upcoming Grading'),
+              if (_grading.loading) const RnSpinner(vertical: 16),
+              // A failed fetch is not an empty schedule.
+              if (!_grading.loading && _grading.error != null)
+                commentCard(
+                  icon: Ion.cloudOfflineOutline,
+                  onTap: _grading.reload,
+                  child: Text("Couldn't load the grading schedule — tap to try again.", style: commentTxt()),
+                ),
+              if (!_grading.loading && _grading.error == null && gradeRows.isEmpty)
+                commentCard(
+                  icon: Ion.calendarOutline,
+                  child: Text(
+                      'No upcoming grading scheduled. Your academy will notify you when the next exam is set.',
+                      style: commentTxt()),
+                ),
+              for (final g in gradeRows)
+                commentCard(
+                  icon: Ion.school,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('${g['ecName'] ?? ''}'.trim().isEmpty ? 'Grading exam' : '${g['ecName']}'.trim(),
+                        maxLines: 2, overflow: TextOverflow.ellipsis, style: commentTxt()),
+                    const SizedBox(height: 6),
+                    Text(
+                        () {
+                          final parts = [fmtDateGB(g['examDate']), '${g['examTime'] ?? ''}']
+                              .where((s) => s.isNotEmpty)
+                              .join(' · ');
+                          return parts.isEmpty ? 'Date to be confirmed' : parts;
+                        }(),
+                        maxLines: 1,
+                        style: commentMeta()),
+                    if ('${g['closingDate'] ?? ''}'.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text('Registration closes ${fmtDateGB(g['closingDate'])}', maxLines: 1, style: commentMeta()),
+                    ],
+                  ]),
+                ),
+            ],
+          ),
+        ),
       ]),
     );
   }
-}
-
-/// Custom-painted fitness ring (no extra dep needed). Renders a gradient
-/// stroke from primary-light → primary-dark along the progress arc.
-class _FitnessRing extends StatelessWidget {
-  final int value; // 0..100
-  final double size;
-  final List<Color> gradient;
-  const _FitnessRing({
-    required this.value,
-    required this.size,
-    required this.gradient,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.appColors;
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            size: Size.square(size),
-            painter: _RingPainter(
-              progress: value / 100,
-              gradient: gradient,
-              trackColor: c.borderLight,
-              strokeWidth: size * 0.075,
-            ),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '$value',
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: size * 0.32,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    height: 1.0),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'FITNESS',
-                style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: size * 0.085,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RingPainter extends CustomPainter {
-  final double progress;
-  final List<Color> gradient;
-  final Color trackColor;
-  final double strokeWidth;
-
-  const _RingPainter({
-    required this.progress,
-    required this.gradient,
-    required this.trackColor,
-    required this.strokeWidth,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = (size.shortestSide - strokeWidth) / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    // Track
-    final trackPaint = Paint()
-      ..color = trackColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawCircle(center, radius, trackPaint);
-
-    // Progress arc with sweep gradient — start from top (−π/2)
-    final sweep = 2 * math.pi * progress.clamp(0.0, 1.0);
-    final shader = SweepGradient(
-      startAngle: -math.pi / 2,
-      endAngle: -math.pi / 2 + 2 * math.pi,
-      colors: gradient,
-      stops: const [0.0, 0.5, 1.0],
-    ).createShader(rect);
-    final progressPaint = Paint()
-      ..shader = shader
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, -math.pi / 2, sweep, false, progressPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _RingPainter old) =>
-      old.progress != progress ||
-      old.gradient != gradient ||
-      old.trackColor != trackColor ||
-      old.strokeWidth != strokeWidth;
 }

@@ -36,19 +36,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Signing in'), findsOneWidget);
-      expect(find.text('Step 1 of 12'), findsOneWidget);
+      expect(find.text('STEP 1 OF 12'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       // Walk every page: each one lays out its own steps, tips and callout.
       for (var i = 2; i <= 12; i++) {
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
-        expect(find.text('Step $i of 12'), findsOneWidget,
+        expect(find.text('STEP $i OF 12'), findsOneWidget,
             reason: 'stuck before page $i');
         expect(tester.takeException(), isNull, reason: 'page $i threw');
       }
-      // The last page offers Done, not Next.
-      expect(find.text('Done'), findsOneWidget);
+      // The last page offers Got it, not Next.
+      expect(find.text('Got it'), findsOneWidget);
     });
   });
 
@@ -88,7 +88,7 @@ void main() {
       };
       await tester.pumpWidget(_wrap(const OfferDetailScreen(code: 'GONE')));
       await tester.pump();
-      expect(find.text('This offer is no longer available.'), findsOneWidget);
+      expect(find.text('Offer not found'), findsOneWidget);
       expect(find.text('Members Only 30%'), findsNothing);
       expect(tester.takeException(), isNull);
     });
@@ -104,7 +104,7 @@ void main() {
       await tester.pump();
       expect(find.text('Members Only 30%'), findsOneWidget);
       expect(find.text('REAL'), findsOneWidget);
-      expect(find.text('D-123'), findsOneWidget);
+      expect(find.text('Show this screen to redeem'), findsOneWidget);
       expect(find.text('01 Jun 2099'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

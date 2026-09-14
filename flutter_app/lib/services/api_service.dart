@@ -33,9 +33,19 @@ class ApiService {
 
   static bool isBoostPath(String endpoint) => endpoint.startsWith('/Bcpg');
 
+  /// Web preview only: the local CORS proxy (port 8082). Browsers cannot call Club.Api
+  /// directly — it 401s CORS preflight on authenticated routes. Native builds ignore this.
+  /// Set with `--dart-define=WEB_API_PROXY=http://localhost:8082`.
+  static const String webApiProxy = String.fromEnvironment('WEB_API_PROXY');
+
   /// Base URL for a given endpoint — Boost routes may live on a different host.
-  static String baseUrlFor(String endpoint) =>
-      isBoostPath(endpoint) ? boostBaseUrl : baseUrl;
+  static String baseUrlFor(String endpoint) {
+    final boost = isBoostPath(endpoint);
+    if (kIsWeb && webApiProxy.isNotEmpty) {
+      return '$webApiProxy/@${boost ? 'uat' : 'prod'}';
+    }
+    return boost ? boostBaseUrl : baseUrl;
+  }
 
   /// The HTTP client every request goes through.
   ///

@@ -5,14 +5,13 @@ import '../services/api.dart';
 import '../services/response_utils.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_header.dart';
-import '../widgets/gradient_button.dart';
+import '../theme/ion.dart';
+import '../widgets/rn_kit.dart';
 
-/// Help Desk — send a message to the club.
+/// Port of `frontend/app/helpdesk.tsx` (Expo v2.11.1).
 ///
 /// Posts `/Profile/Send2ClubHelpDesk`. The API keeps no copy on the sender's side, so the
-/// club's reply comes back as a NEW notification with its own groupId rather than landing
-/// in a thread — which is why Chat Academy pins sent help desk messages locally.
+/// club's reply comes back as a NEW notification rather than landing in a thread.
 class HelpDeskScreen extends StatefulWidget {
   const HelpDeskScreen({super.key});
 
@@ -33,101 +32,133 @@ class _HelpDeskScreenState extends State<HelpDeskScreen> {
   }
 
   Future<void> _submit() async {
-    final body = _message.text.trim();
-    if (body.isEmpty) {
-      _toast('Please type your message.');
+    if (_message.text.trim().isEmpty) {
+      await notify(context, 'Help Desk', 'Please type your message.');
       return;
     }
     setState(() => _sending = true);
     try {
-      // Same three fields the working Chat Academy send uses. No `id` — it is not in the
-      // shape either the Expo app or chat_thread_screen posts.
       await Api.profileSend2ClubHelpDesk({
         'text': _subject.text.trim().isEmpty ? 'Help Desk' : _subject.text.trim(),
-        'value': body,
+        'value': _message.text.trim(),
         'notificationType': 'HelpDesk',
       });
       if (!mounted) return;
       setState(() => _sending = false);
-      _toast('Your message has been sent to the club help desk.');
-      Navigator.of(context).maybePop();
+      await notify(context, 'Sent', 'Your message has been sent to the club help desk.');
+      if (mounted) safeBack(context);
     } catch (e) {
       if (!mounted) return;
       setState(() => _sending = false);
-      _toast('Could not send your message: ${friendlyError(e)}', seconds: 6);
+      notify(context, 'Failed', friendlyError(e));
     }
-  }
-
-  void _toast(String msg, {int seconds = 4}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), duration: Duration(seconds: seconds)));
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    final club = context.watch<UserSession>().clubDisplayName;
+    final user = context.watch<UserSession>().authData ?? const <String, dynamic>{};
+    final club = '${user['clubName'] ?? ''}'.isEmpty ? 'Club' : '${user['clubName']}';
+
+    Widget label(String t) => Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 8),
+          child: Text(t, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textSecondary)),
+        );
+
+    InputDecoration deco(String hint) => InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(color: c.textMuted, fontSize: 15),
+          filled: true,
+          fillColor: c.surface,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.md), borderSide: BorderSide(color: c.border)),
+          enabledBorder:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.md), borderSide: BorderSide(color: c.border)),
+          focusedBorder:
+              OutlineInputBorder(borderRadius: BorderRadius.circular(Radii.md), borderSide: BorderSide(color: c.border)),
+        );
 
     return Scaffold(
       backgroundColor: c.background,
-      body: Column(children: [
-        const AppHeader(title: 'Help Desk', showBack: true),
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const RnHeader(title: 'Help Desk'),
         Expanded(
           child: ListView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(Gaps.lg, Gaps.md, Gaps.lg, Gaps.xxxl),
+            padding: const EdgeInsets.fromLTRB(Gaps.xl, Gaps.xl, Gaps.xl, 60),
             children: [
               Container(
-                padding: const EdgeInsets.all(Gaps.md),
-                decoration: BoxDecoration(
-                  color: c.surface,
-                  borderRadius: BorderRadius.circular(Radii.lg),
-                  border: c.isDark ? Border.all(color: c.border) : null,
-                  boxShadow: Shadows.card(c),
-                ),
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(16),
+                decoration: rnCard(c, radius: Radii.xl),
                 child: Row(children: [
                   Container(
-                    width: 46,
-                    height: 46,
-                    decoration:
-                        BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
-                    child: Icon(Icons.headset_mic, size: 24, color: c.primary),
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+                    child: Icon(Ion.headset, size: 24, color: c.primary),
                   ),
-                  const SizedBox(width: Gaps.md),
+                  const SizedBox(width: 14),
                   Expanded(
-                    child:
-                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('${club.isEmpty ? "Club" : club} Help Desk',
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('$club Help Desk',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800)),
-                      const SizedBox(height: 2),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: c.textPrimary)),
+                      const SizedBox(height: 3),
                       Text('Send a message and the club will get back to you.',
                           maxLines: 2,
-                          style: TextStyle(color: c.textSecondary, fontSize: 12)),
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: c.textSecondary)),
                     ]),
                   ),
                 ]),
               ),
-              _label(c, 'SUBJECT'),
-              _input(c, _subject, hint: 'e.g. Payment query'),
-              _label(c, 'MESSAGE'),
-              _input(c, _message, hint: 'Type your message...', maxLines: 6),
-              const SizedBox(height: Gaps.xl),
-              GradientButton(
-                label: 'Send message',
-                trailingIcon: Icons.send,
-                loading: _sending,
-                onPressed: _sending ? null : _submit,
+              label('Subject'),
+              TextField(
+                controller: _subject,
+                style: TextStyle(fontSize: 15, color: c.textPrimary),
+                cursorColor: c.primary,
+                decoration: deco('e.g. Payment query'),
               ),
-              const SizedBox(height: Gaps.md),
-              Text(
-                'The club replies as a new notification, so look for it in Chat Academy.',
-                style: TextStyle(color: c.textMuted, fontSize: 11.5),
+              const SizedBox(height: 16),
+              label('Message'),
+              SizedBox(
+                height: 130,
+                child: TextField(
+                  controller: _message,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  style: TextStyle(fontSize: 15, color: c.textPrimary),
+                  cursorColor: c.primary,
+                  decoration: deco('Type your message…'),
+                ),
+              ),
+              const SizedBox(height: 22),
+              Touchable(
+                onPress: _sending ? null : _submit,
+                activeOpacity: 0.9,
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 52),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: c.gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
+                    borderRadius: BorderRadius.circular(Radii.md),
+                    boxShadow: Shadows.strong(c),
+                  ),
+                  child: _sending
+                      ? const Center(
+                          child: SizedBox(
+                              width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white)))
+                      : const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(Ion.send, size: 16, color: Colors.white),
+                          SizedBox(width: 8),
+                          Text('Send Message',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                        ]),
+                ),
               ),
             ],
           ),
@@ -135,44 +166,4 @@ class _HelpDeskScreenState extends State<HelpDeskScreen> {
       ]),
     );
   }
-
-  Widget _label(AppColors c, String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6, top: Gaps.md),
-        child: Text(text,
-            style: TextStyle(
-                color: c.textSecondary,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5)),
-      );
-
-  Widget _input(AppColors c, TextEditingController controller,
-          {String? hint, int maxLines = 1}) =>
-      TextField(
-        controller: controller,
-        maxLines: maxLines,
-        enabled: !_sending,
-        textCapitalization: TextCapitalization.sentences,
-        style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: c.textMuted, fontWeight: FontWeight.w400),
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          filled: true,
-          fillColor: c.surface,
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(Radii.lg),
-            borderSide: BorderSide(color: c.border),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(Radii.lg),
-            borderSide: BorderSide(color: c.primary),
-          ),
-          disabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(Radii.lg),
-            borderSide: BorderSide(color: c.border),
-          ),
-        ),
-      );
 }
