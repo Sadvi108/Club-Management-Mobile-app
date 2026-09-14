@@ -11,7 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dclix_app/router/app_router.dart';
 import 'package:dclix_app/screens/instructor_reports_screen.dart';
 import 'package:dclix_app/screens/more_screen.dart';
-import 'package:dclix_app/data/mock_data.dart';
+import 'package:dclix_app/screens/home_screen.dart';
 
 /// Flatten the router tree (ShellRoutes nest their children) into the set of paths.
 Set<String> _registeredPaths(List<RouteBase> routes) {
@@ -51,7 +51,7 @@ void main() {
   });
 
   test('every instructor report tile points at a registered route', () {
-    final dead = InstructorReportsScreen.reportRoutes
+    final dead = kInstructorReports.map((r) => r.route)
         .where((r) => !registered.contains(Uri.parse(r).path))
         .toSet();
     expect(dead, isEmpty,
@@ -59,7 +59,7 @@ void main() {
   });
 
   test('every home quick-access tile points at a registered route', () {
-    final dead = kQuickCards
+    final dead = kStudentQuickCards
         .map((q) => q.route)
         .where((r) => !registered.contains(Uri.parse(r).path));
     expect(dead, isEmpty, reason: 'dead tiles on the home grid: $dead');
@@ -69,12 +69,10 @@ void main() {
       () {
     // These have no quick-access tile of their own, so losing them from the catalogue
     // would strand the screen with no entry point anywhere in the app.
-    final quick = kQuickCards.map((q) => q.route).toSet();
-    for (final orphan in [
-      '/book-class',
-      '/invoices',
-      '/notification-settings'
-    ]) {
+    final quick = kStudentQuickCards.map((q) => q.route).toSet();
+    // /invoices (Pay Your Dues) is instructor-only: reached from the Reports tab and the
+    // instructor home dues card, as in Expo v2.11.1 — not from the student catalogue.
+    for (final orphan in ['/book-class', '/notification-settings']) {
       expect(quick, isNot(contains(orphan)));
       expect(MoreScreen.catalogueRoutes, contains(orphan),
           reason: '$orphan would be unreachable');

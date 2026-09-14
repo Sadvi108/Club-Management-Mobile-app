@@ -1,294 +1,234 @@
-import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../services/api.dart';
+import '../services/notification_service.dart';
 import '../services/user_session.dart';
-import '../services/notification_diff.dart';
-import '../services/notification_prefs.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_header.dart';
-import '../widgets/app_icon_button.dart';
+import '../theme/ion.dart';
+import '../widgets/rn_kit.dart';
 
-/// Notifications — everything the club has sent this member.
-///
-/// Rows come from `/Profile/MyNotifications`, which IS scoped to the caller. Tapping one
-/// expands it and marks it read; the read state is also tracked locally so a row does not
-/// jump back to unread when the server list is refetched before it catches up.
+/// RN `fmtWhen`: "just now" / "5m ago" / "3h ago" / "02 Sep 2026".
+String _fmtWhen(dynamic iso) {
+  final s = '${iso ?? ''}';
+  if (s.isEmpty) return '';
+  final d = DateTime.tryParse(s);
+  if (d == null) return s;
+  final mins = (DateTime.now().difference(d).inSeconds / 60).round();
+  if (mins < 1) return 'just now';
+  if (mins < 60) return '${mins}m ago';
+  if (mins < 1440) return '${mins ~/ 60}h ago';
+  return fmtDateGB(s);
+}
+
+/// Port of `frontend/app/notifications.tsx` (Expo v2.11.1).
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
-
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  bool _loading = true;
+  final Set<String> _readIds = {};
+  String? _expanded;
   bool _busy = false;
-  String? _error;
-  List<Map<String, dynamic>> _rows = const [];
-  final Set<int> _readLocally = {};
-  int? _expanded;
+  bool _refreshing = false;
 
   @override
   void initState() {
     super.initState();
-    UserSession.instance.addListener(_feedChanged);
-    _load();
+    // Opening this screen IS reading them, so drop the app-icon badge the alerts set.
+    NotificationService.cancelAll();
+    _refresh();
   }
 
-  @override
-  void dispose() {
-    UserSession.instance.removeListener(_feedChanged);
-    super.dispose();
-  }
-
-  void _feedChanged() {
-    if (!mounted) return;
-    final session = UserSession.instance;
+  Future<void> _refresh() async {
     setState(() {
-      _rows = (session.notifications ?? const [])
-          .whereType<Map>()
-          .map((m) => Map<String, dynamic>.from(m))
-          .toList();
-      _error = session.notificationsError;
-      _loading = false;
+      _refreshing = true;
+      _readIds.clear();
+      _expanded = null;
     });
-  }
-
-  Future<void> _load() async {
     await UserSession.instance.refreshNotifications();
-    if (mounted) _feedChanged();
+    if (mounted) setState(() => _refreshing = false);
   }
 
-  int _idOf(Map<String, dynamic> m) {
-    final v = m['id'] ?? m['Id'] ?? m['notificationId'];
-    if (v is int) return v;
-    return int.tryParse('${v ?? ''}') ?? 0;
-  }
+  bool _isRead(Map n) => n['isRead'] == true || _readIds.contains('${n['id']}');
 
-  bool _isRead(Map<String, dynamic> m) =>
-      m['isRead'] == true || _readLocally.contains(_idOf(m));
-
-  Future<void> _markRead(int id) async {
-    if (id <= 0) return;
+  Future<void> _markOne(Map n) async {
     try {
-      await Api.profileUpdateNotification2Read({'id': id});
-      if (!mounted) return;
-      UserSession.instance.acknowledgeNotificationRead(id);
-      setState(() => _readLocally.add(id));
+      await Api.profileUpdateNotification2Read({'id': n['id']});
+      UserSession.instance.acknowledgeNotificationRead(n['id']);
+      if (mounted) setState(() => _readIds.add('${n['id']}'));
     } catch (_) {
-      // Leave it showing as unread: claiming it was read when the server never recorded
-      // it means the badge comes back on the next poll and the row looks flaky.
+      /* keep showing as unread on failure */
     }
   }
 
-  Future<void> _markAll() async {
-    final unread =
-        _rows.where((m) => !_isRead(m)).map(_idOf).where((i) => i > 0).toList();
+  Future<void> _onTap(Map n) async {
+    setState(() => _expanded = _expanded == '${n['id']}' ? null : '${n['id']}');
+    if (!_isRead(n)) await _markOne(n);
+  }
+
+  Future<void> _markAll(List<Map> items) async {
+    final unread = items.where((n) => !_isRead(n)).toList();
     if (unread.isEmpty) return;
     setState(() => _busy = true);
-    // Sequentially, not in parallel: this backend is a shared shoestring host and a burst
-    // of writes has it drop some silently.
-    for (final id in unread) {
-      try {
-        await Api.profileUpdateNotification2Read({'id': id});
-        UserSession.instance.acknowledgeNotificationRead(id);
-        _readLocally.add(id);
-      } catch (_) {/* keep the rest going */}
+    try {
+      await Future.wait(unread.map(_markOne));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
-    if (!mounted) return;
-    setState(() => _busy = false);
-  }
-
-  String _fmtWhen(String raw) {
-    final d = DateTime.tryParse(raw.trim());
-    if (d == null) return raw.trim();
-    final mins = DateTime.now().difference(d).inMinutes;
-    if (mins < 1) return 'just now';
-    if (mins < 60) return '${mins}m ago';
-    if (mins < 1440) return '${mins ~/ 60}h ago';
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${d.day.toString().padLeft(2, '0')} ${months[d.month - 1]} ${d.year}';
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    final unread = _rows.where((m) => !_isRead(m)).length;
+    final session = context.watch<UserSession>();
+    final items = (session.notifications ?? const []).whereType<Map>().toList();
+    final loading = session.notifications == null || _refreshing;
+    final unreadCount = items.where((n) => !_isRead(n)).length;
 
     return Scaffold(
       backgroundColor: c.background,
-      body: Column(children: [
-        AppHeader(
-          title: 'Notifications',
-          subtitle: unread == 0 ? 'All caught up' : '$unread unread',
-          showBack: true,
-          trailing: AppIconButton(
-            icon: AppIcons.refresh,
-            onPressed: _loading || _busy ? null : _load,
-            backgroundColor: c.surfaceAlt,
-            foregroundColor: c.primary,
-          ),
-        ),
-        if (unread > 0)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Gaps.lg),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: _busy ? null : _markAll,
-                icon: const Icon(Icons.done_all, size: 18),
-                label: Text(_busy ? 'Marking...' : 'Mark all read'),
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(
+          color: c.background,
+          padding: EdgeInsets.fromLTRB(Gaps.lg, MediaQuery.paddingOf(context).top + 10, Gaps.lg, 10),
+          child: Row(children: [
+            RnCircleButton(icon: Ion.chevronBack, onPress: () => safeBack(context)),
+            // balances the two-button action group on the right so the title stays centred
+            const SizedBox(width: 48),
+            Expanded(
+              child: Column(children: [
+                Text('Notifications',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                if (unreadCount > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Text('$unreadCount unread',
+                        style: TextStyle(fontSize: 11, color: c.primary, fontWeight: FontWeight.w700)),
+                  ),
+              ]),
+            ),
+            Touchable(
+              onPress: _busy || unreadCount == 0 ? null : () => _markAll(items),
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+                child: _busy
+                    ? Center(
+                        child: SizedBox(
+                            width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)))
+                    : Icon(Ion.checkmarkDone, size: 20, color: unreadCount == 0 ? c.textMuted : c.primary),
               ),
             ),
-          ),
+            const SizedBox(width: 6),
+            RnCircleButton(icon: Ion.optionsOutline, iconSize: 20, onPress: () => context.push('/notification-settings')),
+          ]),
+        ),
         Expanded(
           child: RefreshIndicator(
-            onRefresh: _load,
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(
-                        Gaps.lg, Gaps.sm, Gaps.lg, Gaps.xxxl),
-                    children: [
-                      if (_error != null)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 30),
-                          child: Column(children: [
-                            Icon(Icons.error_outline,
-                                size: 36, color: c.danger),
-                            const SizedBox(height: Gaps.sm),
-                            Text(_error!,
-                                textAlign: TextAlign.center,
-                                style:
-                                    TextStyle(color: c.danger, fontSize: 13)),
-                            TextButton(
-                                onPressed: _load,
-                                child: const Text('Try again')),
-                          ]),
-                        ),
-                      if (_error == null && _rows.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 70),
-                          child: Column(children: [
-                            Icon(Icons.notifications_none,
-                                size: 48, color: c.textMuted),
-                            const SizedBox(height: Gaps.sm),
-                            Text('No notifications yet.',
-                                style: TextStyle(
-                                    color: c.textSecondary, fontSize: 14)),
-                          ]),
-                        ),
-                      for (final m in _rows) _row(c, m),
-                    ],
+            color: c.primary,
+            onRefresh: _refresh,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(Gaps.xl, Gaps.xl, Gaps.xl, 60),
+              children: [
+                if (loading && items.isEmpty) const SkeletonList(rows: 6, lines: 2, padding: EdgeInsets.only(top: 4)),
+                if (session.notificationsError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(session.notificationsError!, style: TextStyle(color: c.danger, fontSize: 13)),
                   ),
+                if (!loading && items.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 70),
+                    child: Column(children: [
+                      Icon(Ion.notificationsOffOutline, size: 48, color: c.textMuted),
+                      const SizedBox(height: 16),
+                      Text('No notifications',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textPrimary)),
+                      const SizedBox(height: 6),
+                      Text("You're all caught up", style: TextStyle(fontSize: 13, color: c.textSecondary)),
+                    ]),
+                  ),
+                for (final n in items)
+                  Builder(builder: (context) {
+                    final read = _isRead(n);
+                    final open = _expanded == '${n['id']}';
+                    final title = '${n['text'] ?? ''}'.trim();
+                    final type = '${n['notificationType'] ?? ''}';
+                    return Touchable(
+                      activeOpacity: 0.85,
+                      onPress: () => _onTap(n),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: read
+                            ? rnCard(c)
+                            : BoxDecoration(
+                                color: c.isDark ? c.surfaceAlt : const Color(0xFFFFF7ED),
+                                borderRadius: BorderRadius.circular(Radii.lg),
+                                boxShadow: Shadows.soft(c),
+                                border: Border.all(color: c.primary.hexA('55')),
+                              ),
+                        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(color: read ? c.surfaceAlt : c.primary, shape: BoxShape.circle),
+                            child: Icon(Ion.notifications, size: 18, color: read ? c.primary : Colors.white),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Row(children: [
+                                Expanded(
+                                  child: Text(title.isEmpty ? 'Notification' : title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: read ? FontWeight.w700 : FontWeight.w800,
+                                          color: c.textPrimary)),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(_fmtWhen(n['notifyDate']),
+                                    style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w600)),
+                              ]),
+                              const SizedBox(height: 4),
+                              Text('${n['value'] ?? ''}'.trim(),
+                                  maxLines: open ? null : 2,
+                                  overflow: open ? null : TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 13, color: c.textSecondary, height: 18 / 13)),
+                              if (type.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Text(type,
+                                      style: TextStyle(fontSize: 11, color: c.primary, fontWeight: FontWeight.w700)),
+                                ),
+                            ]),
+                          ),
+                          if (!read) ...[
+                            const SizedBox(width: 12),
+                            Container(
+                              width: 9,
+                              height: 9,
+                              margin: const EdgeInsets.only(top: 4),
+                              decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle),
+                            ),
+                          ],
+                        ]),
+                      ),
+                    );
+                  }),
+              ],
+            ),
           ),
         ),
       ]),
     );
   }
-
-  Widget _row(AppColors c, Map<String, dynamic> m) {
-    final id = _idOf(m);
-    final read = _isRead(m);
-    final title = titleOf(m);
-    final body = bodyOf(m);
-    final when = _fmtWhen(
-        '${m['createdDate'] ?? m['date'] ?? m['notificationDate'] ?? ''}');
-    final open = _expanded == id;
-    final category = categoryOf(m);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Gaps.sm),
-      child: GestureDetector(
-        onTap: () {
-          setState(() => _expanded = open ? null : id);
-          if (!read) _markRead(id);
-        },
-        child: Container(
-          padding: const EdgeInsets.all(Gaps.md),
-          decoration: BoxDecoration(
-            color: c.surface,
-            borderRadius: BorderRadius.circular(Radii.lg),
-            border: Border.all(
-                color: read ? c.border : c.primary.withValues(alpha: 0.5)),
-            boxShadow: Shadows.card(c),
-          ),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration:
-                  BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
-              child: Icon(_iconFor(category), size: 18, color: c.primary),
-            ),
-            const SizedBox(width: Gaps.md),
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Expanded(
-                        child: Text(title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: c.textPrimary,
-                                fontSize: 14,
-                                fontWeight:
-                                    read ? FontWeight.w600 : FontWeight.w800)),
-                      ),
-                      if (!read)
-                        Container(
-                          width: 8,
-                          height: 8,
-                          margin: const EdgeInsets.only(left: 6),
-                          decoration: BoxDecoration(
-                              color: c.primary, shape: BoxShape.circle),
-                        ),
-                    ]),
-                    if (body.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 3),
-                        child: Text(body,
-                            maxLines: open ? null : 2,
-                            overflow: open ? null : TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: c.textSecondary,
-                                fontSize: 12.5,
-                                height: 1.4)),
-                      ),
-                    if (when.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 5),
-                        child: Text(when,
-                            style: TextStyle(color: c.textMuted, fontSize: 11)),
-                      ),
-                  ]),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  IconData _iconFor(NotifCategory c) => switch (c) {
-        NotifCategory.payments => AppIcons.account_balance_wallet_outlined,
-        NotifCategory.classes => AppIcons.fitness_center,
-        NotifCategory.general => AppIcons.campaign_outlined,
-      };
 }

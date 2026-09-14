@@ -62,6 +62,34 @@ const _booking = {
 };
 
 final Map<String, dynamic> _routes = {
+  '/Listing/DropdownListByType': _env([
+    {'id': 1, 'text': 'Sample Training Centre', 'value': '1'},
+  ]),
+  '/Listing/StudentListByTcId': _env([
+    {'id': 1, 'text': 'Alex Tan', 'value': '000000-00-0000'},
+  ]),
+  '/Reports/StudentCenters': _env([
+    {
+      'centername': 'Sample Student Centre',
+      'centertype': 'Club',
+      'shortid': 'SAMPLE',
+      'activeStudents': 12,
+      'inactveStudents': 2
+    },
+  ]),
+  '/Reports/TrainingCenters': _env([
+    {
+      'name': 'Sample Training Centre',
+      'code': 'SAMPLE',
+      'address': '1 Sample Street',
+      'totalClasses': 4,
+      'totalStudents': 12,
+      'studentAssigned': 10,
+      'studentNotAssigned': 2,
+      'examCentersAssignedStudents': 8,
+      'advanceTrainingStudents': 3
+    },
+  ]),
   '/Profile/MyInfo': _env(_member),
   '/Profile/StudentAddtnlInfo': _env({
     'schoolname': 'Sample Secondary School',

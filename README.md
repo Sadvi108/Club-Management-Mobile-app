@@ -12,12 +12,12 @@ The app is a **client only**. All data comes from the third-party **Club.Api** b
 
 ## Download
 
-[Download D-CLIX Flutter 2.12.2 (build 20)](https://github.com/Sadvi108/Club-Management-Mobile-app/releases/download/flutter-v2.12.2/dclix-flutter-2.12.2-build20.apk)
+[Download D-CLIX Flutter 2.13.1 (build 22)](https://github.com/Sadvi108/Club-Management-Mobile-app/releases/download/flutter-v2.13.1/dclix-flutter-2.13.1-build22.apk)
 
 Open **D-CLIX Flutter** after installing. This package installs alongside older Expo/Flutter
 apps, starts at sign-in, and displays its version on the login screen. Local settings and
 outgoing chat history from the old package are not migrated. Club data loads after sign-in.
-See [release notes](docs/releases/flutter-v2.12.2.md) for verification and backend limits.
+See [release notes](docs/releases/flutter-v2.13.1.md) for verification and backend limits.
 
 ## Stack
 
@@ -77,7 +77,7 @@ without it they use a debug key for testing. Never commit the key or passwords. 
 the release keystore securely: future updates to this Flutter package require the same key.
 Pushing a `flutter-v*` tag builds and publishes a versioned APK and SHA-256 checksum.
 
-The in-app guide has **56 illustrated feature pages**, searchable contents, student/instructor
+The in-app guide has **57 illustrated feature pages**, searchable contents, student/instructor
 sections, and zoomable screen previews. It works offline from Login → How to use this app
 or More → User Guide. All guide records and QR payloads are fictional examples.
 

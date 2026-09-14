@@ -81,6 +81,7 @@ jobs:
               for shot in Path('assets/guide').glob('*.png'):
                   assert 'assets/flutter_assets/' + str(shot) in names, f'Missing guide image: {shot}'
               assert any(name.endswith('.wav') for name in names), 'Notification sound missing'
+              assert any(name.endswith('.pem') for name in names), 'Bundled trust certificate missing'
           out = Path('build/release-download')
           out.mkdir(exist_ok=True)
           target = out / ('dclix-flutter-' + version.replace('+', '-build') + '.apk')

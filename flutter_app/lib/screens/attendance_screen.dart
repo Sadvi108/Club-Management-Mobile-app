@@ -1,755 +1,275 @@
-import '../services/live_refresh.dart';
-import '../theme/app_icons.dart';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../models/models.dart';
-import '../services/api.dart';
+
+import '../services/rn_api.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_header.dart';
-import '../widgets/app_icon_button.dart';
+import '../theme/ion.dart';
+import '../widgets/rn_kit.dart';
+import '../widgets/use_api.dart';
 
+/// `toLocaleDateString("en-GB", {weekday: "short", day: "2-digit", month: "short", year: "numeric"})`.
+String _fmtDate(dynamic iso) {
+  final s = '${iso ?? ''}';
+  if (s.isEmpty) return '';
+  final d = DateTime.tryParse(s);
+  if (d == null) return s;
+  const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return '${wd[d.weekday - 1]}, ${fmtDateGB(s)}';
+}
+
+/// Presence is decided by the attendanceType STRING only.
+bool _isPresent(dynamic t) => RegExp('present', caseSensitive: false).hasMatch('${t ?? ''}');
+
+/// Port of `frontend/app/attendance.tsx` (Expo v2.11.1).
 class AttendanceScreen extends StatefulWidget {
   const AttendanceScreen({super.key});
-
   @override
   State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
 
-class _AttendanceScreenState extends State<AttendanceScreen>
-    with LiveRefreshMixin<AttendanceScreen> {
-  @override
-  bool get canLiveRefresh => !_loading;
-  @override
-  Future<void> refreshLiveData() => _loadAttendance();
-
-  List<dynamic>? _liveAttendance;
-  bool _loading = false;
-
-  /// Attendance rows narrowed to the active student (guardian accounts).
-  /// Returns the full list when no sibling filter is set.
-  List<dynamic> get _scopedAttendance =>
-      UserSession.instance.filterByActiveStudent(_liveAttendance);
+class _AttendanceScreenState extends State<AttendanceScreen> with UseApi<AttendanceScreen> {
+  final _range = RnApi.defaultRange();
+  late final _att =
+      useApi(() => RnApi.attendanceReport({'fromDate': _range.fromDate, 'toDate': _range.toDate}));
 
   @override
   void initState() {
     super.initState();
-    _loadAttendance();
-  }
-
-  Future<void> _loadAttendance() async {
-    setState(() => _loading = true);
-    try {
-      // Server expects a ReportRequestViewModel body. Empty {} sometimes
-      // yields an empty list; try a full body first with a wide date
-      // window, then fall back to empty if that's also empty.
-      final now = DateTime.now();
-      final fromDate = DateTime(now.year - 1, 1, 1).toIso8601String();
-      final toDate = DateTime(now.year, now.month + 1, 0).toIso8601String();
-      final candidates = <Map<String, dynamic>>[
-        {
-          'sCenterId': 0,
-          'tCenterId': 0,
-          'eCenterId': 0,
-          'tTimeId': 0,
-          'fromDate': fromDate,
-          'toDate': toDate,
-          'reportType': '',
-          'sourceKeyId': 0,
-        },
-        const <String, dynamic>{},
-      ];
-      for (final body in candidates) {
-        try {
-          final r = await Api.reportsAttendance(body);
-          List? list;
-          if (r is List) list = r;
-          if (r is Map && r['data'] is List) list = r['data'] as List;
-          if (list != null) {
-            _liveAttendance = list;
-            if (list.isNotEmpty) break;
-          }
-        } catch (e) {
-          debugPrint('reportsAttendance body=$body failed: $e');
-        }
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  /// Opens the QR scanner and refreshes the history when a check-in
-  /// actually happened (the scanner pops with `true`).
-  Future<void> _scanToCheckIn() async {
-    final ok = await context.push('/qr-scan');
-    if (ok == true && mounted) _loadAttendance();
-  }
-
-  /// Live attendance summary computed from /Reports/Attendance rows.
-  /// Returns zeros when no records exist for the account.
-  Map<String, int> _liveStats() {
-    final list = _scopedAttendance;
-    if (list.isEmpty) {
-      return const {'present': 0, 'total': 0, 'missed': 0, 'percent': 0};
-    }
-    int present = 0;
-    int total = 0;
-    for (final row in list) {
-      if (row is! Map) continue;
-      total++;
-      final s = (row['attendanceType'] ??
-              row['status'] ??
-              row['value'] ??
-              row['attendanceStatus'] ??
-              '')
-          .toString()
-          .toLowerCase();
-      if (s.contains('present') ||
-          s == '1' ||
-          s == 'true' ||
-          s == 'yes' ||
-          s == 'p') {
-        present++;
-      }
-    }
-    final pct = total == 0 ? 0 : ((present / total) * 100).round();
-    return {
-      'present': present,
-      'total': total,
-      'missed': total - present,
-      'percent': pct,
-    };
-  }
-
-  /// Builds a 28-cell calendar grid for the current month using live
-  /// `/Reports/Attendance` rows. Days the API didn't return are rendered
-  /// as `AttendanceStatus.off`. If no live data is available we fall back
-  /// to the mock `kAttendance.thisMonth` array so the calendar isn't empty
-  /// before the first request resolves.
-  List<AttendanceDay> _liveCalendar() {
-    final list = _scopedAttendance;
-    // Empty live list → render an empty grid (no fake mock days).
-    if (list.isEmpty) {
-      final today = DateTime.now();
-      return List.generate(28, (i) {
-        final dayNum = i + 1;
-        return AttendanceDay(
-          day: dayNum,
-          status: dayNum > today.day
-              ? AttendanceStatus.future
-              : AttendanceStatus.off,
-        );
-      });
-    }
-
-    // Map day-of-month → status from the live rows.
-    final byDay = <int, AttendanceStatus>{};
-    // API row shape: {id, attendanceTypeId, attendanceType, icNo, name,
-    //   recordedTime, sCenterName, trainingCenter}.
-    for (final row in list) {
-      if (row is! Map) continue;
-      final raw = (row['recordedTime'] ??
-              row['date'] ??
-              row['attendanceDate'] ??
-              row['day'] ??
-              '')
-          .toString();
-      if (raw.isEmpty) continue;
-      final d = DateTime.tryParse(raw);
-      if (d == null) continue;
-      final now = DateTime.now();
-      if (d.year != now.year || d.month != now.month) continue;
-      final s = (row['attendanceType'] ??
-              row['status'] ??
-              row['value'] ??
-              row['attendanceStatus'] ??
-              '')
-          .toString()
-          .toLowerCase();
-      AttendanceStatus status;
-      if (s.contains('present') ||
-          s == '1' ||
-          s == 'true' ||
-          s == 'yes' ||
-          s == 'p') {
-        status = AttendanceStatus.present;
-      } else if (s.contains('absent') ||
-          s.contains('missed') ||
-          s == '0' ||
-          s == 'a') {
-        status = AttendanceStatus.missed;
-      } else {
-        status = AttendanceStatus.off;
-      }
-      byDay[d.day] = status;
-    }
-
-    final today = DateTime.now();
-    return List.generate(28, (i) {
-      final dayNum = i + 1;
-      final status = byDay[dayNum] ??
-          (dayNum > today.day ? AttendanceStatus.future : AttendanceStatus.off);
-      return AttendanceDay(day: dayNum, status: status);
-    });
-  }
-
-  /// Live "missed class history" — filters _liveAttendance for absent
-  /// rows. Falls back to mock list when API hasn't returned yet.
-  List<MissedClass> _liveMissed() {
-    final list = _scopedAttendance;
-    if (list.isEmpty) return const [];
-    final out = <MissedClass>[];
-    for (final row in list) {
-      if (row is! Map) continue;
-      final s = (row['attendanceType'] ??
-              row['status'] ??
-              row['value'] ??
-              row['attendanceStatus'] ??
-              '')
-          .toString()
-          .toLowerCase();
-      if (!(s.contains('absent') ||
-          s.contains('missed') ||
-          s == '0' ||
-          s == 'a')) continue;
-      final rawDate =
-          (row['recordedTime'] ?? row['date'] ?? row['attendanceDate'] ?? '')
-              .toString();
-      out.add(MissedClass(
-        date: rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate,
-        className: (row['trainingCenter'] ??
-                row['sCenterName'] ??
-                row['className'] ??
-                row['classTitle'] ??
-                row['title'] ??
-                'Class')
-            .toString(),
-        reason: (row['reason'] ?? row['note'] ?? 'Absent').toString(),
-      ));
-      if (out.length >= 8) break;
-    }
-    return out;
-  }
-
-  String _currentMonthLabel() {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
-    final now = DateTime.now();
-    return '${months[now.month - 1]} ${now.year}';
+    _att;
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
     final session = context.watch<UserSession>();
-    final weeks = [0, 1, 2, 3];
-    final liveNotifs = (session.notifications ?? const [])
-        .where((n) => n is Map)
-        .cast<Map>()
-        .toList();
-    final stats = _liveStats();
-    return Scaffold(
-      backgroundColor: c.background,
-      body: CustomScrollView(slivers: [
-        SliverToBoxAdapter(
-          child: AppHeader(
-            title: 'Attendance',
-            showBack: true,
-            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-              AppIconButton(
-                icon: Icons.qr_code_2,
-                onPressed: _scanToCheckIn,
-                backgroundColor: c.surfaceAlt,
-                foregroundColor: c.primary,
-              ),
+    final records = session.scopedRows(_att.data).whereType<Map>().toList();
+    final total = records.length;
+    final present = records.where((r) => _isPresent(r['attendanceType'])).length;
+    final missed = total - present;
+    final percentage = total > 0 ? (present / total * 100).round() : 0;
+    final absent = records.where((r) => !_isPresent(r['attendanceType'])).toList();
+
+    Widget miniStat(String n, String l) => Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(color: const Color(0x33FFFFFF), borderRadius: BorderRadius.circular(Radii.sm)),
+            child: Column(children: [
+              Text(n, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+              const SizedBox(height: 2),
+              Text(l, style: const TextStyle(color: Color(0xE6FFFFFF), fontSize: 9)),
             ]),
           ),
+        );
+
+    Widget section(String t) => Padding(
+          padding: const EdgeInsets.only(top: 20, bottom: 10),
+          child: Text(t, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textPrimary)),
+        );
+
+    String center(Map r) {
+      final t = '${r['trainingCenter'] ?? ''}';
+      final s = '${r['sCenterName'] ?? ''}';
+      return t.isNotEmpty ? t : (s.isNotEmpty ? s : 'Class');
+    }
+
+    return Scaffold(
+      backgroundColor: c.background,
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        RnHeader(
+          title: 'Attendance',
+          trailing: RnCircleButton(
+            icon: Ion.qrCodeOutline,
+            iconSize: 20,
+            iconColor: c.primary,
+            onPress: () => context.push('/qr-scan'),
+          ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(Gaps.xl, 0, Gaps.xl, 40),
-          sliver: SliverList.list(children: [
-            // Hero card
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                    colors: c.gradient,
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight),
-                borderRadius: BorderRadius.circular(Radii.xxl),
-                boxShadow: Shadows.strong(c),
-              ),
-              child: Row(children: [
-                SizedBox(
-                  width: 120,
-                  height: 120,
-                  child: Stack(alignment: Alignment.center, children: [
-                    Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color: Colors.white.withOpacity(0.22),
-                                width: 6))),
-                    SizedBox(
-                      width: 108,
-                      height: 108,
-                      child: CircularProgressIndicator(
-                        value: (stats['percent']!) / 100,
-                        strokeWidth: 6,
-                        backgroundColor: Colors.transparent,
-                        valueColor:
-                            const AlwaysStoppedAnimation(Color(0xFFFFF7ED)),
-                      ),
-                    ),
-                    Column(mainAxisSize: MainAxisSize.min, children: [
-                      Text('${stats['percent']}%',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800)),
-                      const Text('Attended',
-                          style: TextStyle(
-                              color: Color(0xD9FFFFFF),
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700)),
-                    ]),
-                  ]),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                            (stats['percent'] ?? 0) >= 80
-                                ? 'Great Discipline!'
-                                : 'Keep it up!',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 4),
-                        const Text('Keep it above 80% to qualify for events',
-                            style: TextStyle(
-                                color: Color(0xE6FFFFFF), fontSize: 11)),
-                        const SizedBox(height: 12),
-                        Row(children: [
-                          _mStat('${stats['present']}', 'Present'),
-                          const SizedBox(width: 8),
-                          _mStat('${stats['missed']}', 'Missed'),
-                          const SizedBox(width: 8),
-                          _mStat('${stats['total']}', 'Total'),
-                        ]),
-                      ]),
-                ),
-              ]),
-            ),
-            const SizedBox(height: 16),
-            // Monthly calendar
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.circular(Radii.xl),
-                border: c.isDark ? Border.all(color: c.border) : null,
-                boxShadow: Shadows.card(c),
-              ),
-              child: Column(children: [
-                Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(_currentMonthLabel(),
-                          style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600)),
-                      Row(children: [
-                        _legend(c.success, 'Present', c),
-                        const SizedBox(width: 10),
-                        _legend(c.danger, 'Missed', c),
-                      ]),
-                    ]),
-                const SizedBox(height: 12),
-                Row(
-                    children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
-                        .map((d) => Expanded(
-                            child: Text(d,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    color: c.textMuted,
-                                    fontWeight: FontWeight.w700))))
-                        .toList()),
-                const SizedBox(height: 4),
-                ...() {
-                  final calendar = _liveCalendar();
-                  return weeks.map((w) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          children: calendar
-                              .sublist(
-                                  w * 7, (w * 7 + 7).clamp(0, calendar.length))
-                              .map((d) {
-                            Color bg = Colors.transparent;
-                            Color txt = c.textPrimary;
-                            Border? border;
-                            if (d.status == AttendanceStatus.present) {
-                              bg = c.success;
-                              txt = Colors.white;
-                            } else if (d.status == AttendanceStatus.missed) {
-                              bg = c.danger;
-                              txt = Colors.white;
-                            } else if (d.status == AttendanceStatus.off) {
-                              bg = c.surfaceAlt;
-                            } else {
-                              border = Border.all(color: c.border);
-                              txt = c.textMuted;
-                            }
-                            return Expanded(
-                              child: Center(
-                                child: Container(
-                                  width: 34,
-                                  height: 34,
-                                  decoration: BoxDecoration(
-                                      color: bg,
-                                      shape: BoxShape.circle,
-                                      border: border),
-                                  alignment: Alignment.center,
-                                  child: Text('${d.day}',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: txt,
-                                          fontWeight: FontWeight.w700)),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ));
-                }(),
-              ]),
-            ),
-            const SizedBox(height: 16),
-            InkWell(
-              onTap: _scanToCheckIn,
-              borderRadius: BorderRadius.circular(Radii.xl),
-              child: Container(
-                padding: const EdgeInsets.all(16),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(Gaps.xl, Gaps.xl, Gaps.xl, 120),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: c.gradient),
-                  borderRadius: BorderRadius.circular(Radii.xl),
+                  gradient: LinearGradient(colors: c.gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  borderRadius: BorderRadius.circular(Radii.xxl),
                   boxShadow: Shadows.strong(c),
                 ),
-                child: Row(children: const [
-                  Icon(Icons.qr_code_2, size: 22, color: Colors.white),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Scan QR to Check In',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800)),
-                          SizedBox(height: 2),
-                          Text("Mark attendance for today's class",
-                              style: TextStyle(
-                                  color: Color(0xE6FFFFFF), fontSize: 11)),
+                child: Row(children: [
+                  SizedBox(
+                    width: 120,
+                    height: 120,
+                    child: CustomPaint(
+                      painter: _RingPainter(),
+                      child: Center(
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Text('$percentage%',
+                              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+                          const Text('Attended',
+                              style: TextStyle(color: Color(0xD9FFFFFF), fontSize: 9, fontWeight: FontWeight.w700)),
                         ]),
+                      ),
+                    ),
                   ),
-                  Icon(AppIcons.arrow_forward, color: Colors.white, size: 18),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(percentage >= 80 ? 'Great Discipline!' : 'Keep Going!',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      const Text('Keep it above 80% to qualify for events',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 11)),
+                      const SizedBox(height: 12),
+                      Row(children: [
+                        miniStat('$present', 'Present'),
+                        const SizedBox(width: 8),
+                        miniStat('$missed', 'Absent'),
+                        const SizedBox(width: 8),
+                        miniStat('$total', 'Total'),
+                      ]),
+                    ]),
+                  ),
                 ]),
               ),
-            ),
-            const SizedBox(height: 20),
-            if ((_loading && !liveRefreshing))
-              Row(children: [
-                SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: c.primary)),
-                const SizedBox(width: 8),
-                Text('Loading attendance…',
-                    style: TextStyle(fontSize: 12, color: c.textSecondary)),
-              ]),
-            if (_liveAttendance != null && _liveAttendance!.isNotEmpty) ...[
-              _liveAttendanceCard(c, _liveAttendance!),
-              const SizedBox(height: 20),
-            ],
-            if (session.clubStats != null && session.clubStats!.isNotEmpty) ...[
-              _liveStatsCard(c, session),
-              const SizedBox(height: 20),
-            ],
-            if (liveNotifs.isNotEmpty) ...[
-              _liveNotificationsCard(c, liveNotifs),
-              const SizedBox(height: 20),
-            ],
-            Text('Missed Class History',
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            if (_liveMissed().isEmpty)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: c.surface,
-                  borderRadius: BorderRadius.circular(Radii.md),
-                  border: c.isDark ? Border.all(color: c.border) : null,
-                  boxShadow: Shadows.card(c),
-                ),
-                child: Row(children: [
-                  Icon(AppIcons.check_circle_outline,
-                      color: c.success, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'No missed classes — perfect attendance.',
-                      style: TextStyle(
-                          color: c.textSecondary,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600),
-                    ),
+              const SizedBox(height: 16),
+              Touchable(
+                onPress: () => context.push('/qr-scan'),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: c.gradient),
+                    borderRadius: BorderRadius.circular(Radii.xl),
+                    boxShadow: Shadows.strong(c),
                   ),
-                ]),
-              )
-            else
-              ..._liveMissed().map((m) => Container(
+                  child: const Row(children: [
+                    Icon(Ion.qrCode, size: 22, color: Colors.white),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Scan QR to Check In',
+                            maxLines: 1,
+                            style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                        SizedBox(height: 2),
+                        Text("Mark attendance for today's class",
+                            maxLines: 1,
+                            style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 11)),
+                      ]),
+                    ),
+                    Icon(Ion.arrowForward, size: 18, color: Colors.white),
+                  ]),
+                ),
+              ),
+              section('Recent Attendance'),
+              if (_att.loading) const RnSpinner(vertical: 20),
+              if (_att.error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(_att.error!, style: TextStyle(color: c.danger, fontSize: 13)),
+                ),
+              if (!_att.loading && total == 0)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text('No attendance records found.', style: TextStyle(color: c.textSecondary, fontSize: 13)),
+                ),
+              for (final r in records.take(60))
+                Builder(builder: (context) {
+                  final ok = _isPresent(r['attendanceType']);
+                  final tone = ok ? c.success : c.danger;
+                  final type = '${r['attendanceType'] ?? ''}';
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 9),
+                    padding: const EdgeInsets.all(13),
+                    decoration: rnCard(c, radius: Radii.md),
+                    child: Row(children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: tone.hexA(c.isDark ? '33' : '1A')),
+                        child: Icon(ok ? Ion.checkmarkCircle : Ion.closeCircle, size: 20, color: tone),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(center(r),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                          const SizedBox(height: 2),
+                          Text(_fmtDate(r['recordedTime']),
+                              maxLines: 1, style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                        ]),
+                      ),
+                      const SizedBox(width: Gaps.sm),
+                      Text(type.isNotEmpty ? type : (ok ? 'Present' : 'Absent'),
+                          maxLines: 1, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: tone)),
+                    ]),
+                  );
+                }),
+              if (absent.isNotEmpty) ...[
+                section('Missed Class History'),
+                for (final m in absent.take(20))
+                  Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: c.surface,
-                      borderRadius: BorderRadius.circular(Radii.md),
-                      border: c.isDark ? Border.all(color: c.border) : null,
-                      boxShadow: Shadows.card(c),
-                    ),
+                    decoration: rnCard(c, radius: Radii.md),
                     child: Row(children: [
                       Container(
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                            color: c.isDark
-                                ? const Color(0xFF3F1212)
-                                : const Color(0xFFFEE2E2),
-                            shape: BoxShape.circle),
-                        child: Icon(Icons.cancel, color: c.danger, size: 20),
+                            shape: BoxShape.circle, color: c.isDark ? const Color(0xFF3F1212) : const Color(0xFFFEE2E2)),
+                        child: Icon(Ion.closeCircle, size: 20, color: c.danger),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(m.className,
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: c.textPrimary)),
-                              const SizedBox(height: 2),
-                              Text('${m.date} · ${m.reason}',
-                                  style: TextStyle(
-                                      fontSize: 11, color: c.textSecondary)),
-                            ]),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(center(m),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                          const SizedBox(height: 2),
+                          Text('${_fmtDate(m['recordedTime'])} · ${m['attendanceType'] ?? ''}',
+                              maxLines: 1, style: TextStyle(fontSize: 11, color: c.textSecondary)),
+                        ]),
                       ),
                     ]),
-                  )),
-          ]),
+                  ),
+              ],
+            ],
+          ),
         ),
       ]),
     );
   }
+}
 
-  Widget _liveAttendanceCard(AppColors c, List<dynamic> rows) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.primary.withOpacity(0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Icon(Icons.fact_check_outlined, size: 16, color: c.primary),
-            const SizedBox(width: 6),
-            Text('Recent Attendance (${rows.length})',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: c.primary,
-                    letterSpacing: 1)),
-          ]),
-          const SizedBox(height: 8),
-          ...rows.take(15).map((r) {
-            final m = r is Map ? r : <dynamic, dynamic>{};
-            final date = (m['date'] ?? m['attendanceDate'] ?? m['text'] ?? '')
-                .toString();
-            final status = (m['status'] ?? m['value'] ?? '').toString();
-            final present = status.toLowerCase().contains('present') ||
-                status == '1' ||
-                status.toLowerCase() == 'true';
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(children: [
-                Icon(present ? AppIcons.check_circle : Icons.cancel,
-                    size: 14, color: present ? c.success : c.danger),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: Text(date,
-                        style: TextStyle(fontSize: 12, color: c.textPrimary))),
-                Text(status,
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: c.textSecondary,
-                        fontWeight: FontWeight.w700)),
-              ]),
-            );
-          }),
-        ],
-      ),
-    );
+/// The RN hero ring: a 6px translucent outer ring, and an inner ring whose top half is bright
+/// and bottom half dim (a border-coloured circle rotated -45°).
+class _RingPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final outer = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6
+      ..color = const Color(0x38FFFFFF);
+    canvas.drawCircle(center, 60 - 3, outer);
+    final rect = Rect.fromCircle(center: center, radius: 50 - 3);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6;
+    canvas.drawArc(rect, math.pi, math.pi, false, paint..color = const Color(0xFFFFF7ED));
+    canvas.drawArc(rect, 0, math.pi, false, paint..color = const Color(0x66FFFFFF));
   }
 
-  Widget _liveStatsCard(AppColors c, UserSession session) {
-    final stats = session.clubStats!;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.primary.withOpacity(0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Icon(Icons.insights, size: 16, color: c.primary),
-            const SizedBox(width: 6),
-            Text('Club Stats',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: c.primary,
-                    letterSpacing: 1)),
-          ]),
-          const SizedBox(height: 8),
-          ...stats.take(6).map((s) {
-            if (s is! Map) return const SizedBox.shrink();
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              child: Row(children: [
-                Expanded(
-                    child: Text('${s['text'] ?? ''}',
-                        style:
-                            TextStyle(fontSize: 12, color: c.textSecondary))),
-                Text('${s['value'] ?? ''}',
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: c.textPrimary)),
-              ]),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _liveNotificationsCard(AppColors c, List<Map> notifs) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: Border.all(color: c.primary.withOpacity(0.4)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Icon(Icons.notifications_active, size: 16, color: c.primary),
-            const SizedBox(width: 6),
-            Text('Recent Notifications',
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: c.primary,
-                    letterSpacing: 1)),
-          ]),
-          const SizedBox(height: 8),
-          ...notifs.take(4).map((n) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${n['text'] ?? ''}',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: c.textPrimary)),
-                    Text(_stripHtml('${n['value'] ?? ''}'),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11, color: c.textSecondary)),
-                  ],
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-
-  String _stripHtml(String s) =>
-      s.replaceAll(RegExp(r'<[^>]+>'), '').replaceAll('&nbsp;', ' ').trim();
-
-  Widget _mStat(String n, String l) => Expanded(
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(Radii.sm)),
-          child: Column(children: [
-            Text(n,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16)),
-            const SizedBox(height: 2),
-            Text(l,
-                style: const TextStyle(color: Color(0xE6FFFFFF), fontSize: 9)),
-          ]),
-        ),
-      );
-
-  Widget _legend(Color dot, String l, AppColors c) => Row(children: [
-        Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-                color: dot, borderRadius: BorderRadius.circular(4))),
-        const SizedBox(width: 4),
-        Text(l,
-            style: TextStyle(
-                fontSize: 10,
-                color: c.textSecondary,
-                fontWeight: FontWeight.w600)),
-      ]);
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

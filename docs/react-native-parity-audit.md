@@ -131,3 +131,54 @@ Reproduce from `flutter_app/`. Capture commands are
 - Android release configuration currently signs with the debug key. A production update
   needs the original app's signing key as well as versionCode 18; matching package ID and
   a higher version alone do not make an installed Expo app upgradeable.
+
+## 2026-09-14 — every React Native screen re-ported 1:1
+
+Branch `feat/flutter-rn-parity`, Flutter **2.13.0+21**. The reference is unchanged (Expo v2.11.1,
+`5223e60`). This pass replaced the *approximated* Flutter screens with direct ports of each
+`frontend/app/*.tsx` file: same layout tokens (`radius`, `spacing`, `font`, shadows), same
+Ionicons glyphs, same copy, same API calls and the same edge-case handling.
+
+### Shared primitives added
+
+| File | React Native source | Notes |
+|---|---|---|
+| `lib/theme/ion.dart` | `@expo/vector-icons` Ionicons glyph map | All 1,357 glyphs, camelCase (`Ion.arrowForward`). Generated from the exact glyphmap JSON; the bundled TTF is byte-identical to Expo's. |
+| `lib/widgets/rn_kit.dart` | `src/ui/{skeleton,errorstate,glass,dialogs,avatar}.tsx` | `Touchable` (TouchableOpacity), `Skeleton*`, `ErrorState`, `Glass`, `notify`/`confirmDialog`, `safeBack`, `RnHeader`, `rnCard`, JS number formatting (`localeNum`, `money2`, `jsNum`). |
+| `lib/widgets/report_kit.dart` | `src/ui/reportkit.tsx` | `ScreenHeader`, `SelectField` (bottom-sheet picker), `DateField` (month calendar sheet), `ReportScaffold`, `KV`, `toISODate`. |
+| `lib/widgets/use_api.dart` | `src/api/useApi.ts` | `ApiResource` + `UseApi` mixin: a failed fetch keeps the data already on screen; `reload` supersedes in-flight runs; account switches refetch. |
+| `lib/services/rn_api.dart` | `src/api/endpoints.ts` | Typed mirror of the RN endpoint table; unwraps the envelope exactly as RN `http` does. |
+
+### Screens
+
+Student: login, home, schedule, training, payments (Pay / Advance Payment / History + the Make
+Payment sheet with Boost and bank-in slip), profile (with the RN switchers), more, events &
+offers, offer detail, competition, help desk, attendance, student details, progress, edit profile,
+purchases, purchase request, book a class, chat, chat thread, notifications, notification
+settings, QR check-in, user guide.
+
+Instructor: home, collections + collection list, reports menu, class check-in
+(`update-attendance`), new student + student particulars, pay your dues, and all fourteen `r-*`
+reports (`lib/screens/instructor_reports/rn_reports.dart`). The Settings tab is the role-aware
+Profile screen, as in Expo. Switch Branch stays available there as an action row.
+
+### Kept from the earlier Flutter work, on purpose
+
+- **Auto Pay** — Expo's screen is a placeholder shell (fixed sample data, every action a no-op).
+  The Flutter reminder-based Auto Pay is real and stays.
+- **Activities / Fee Master / Missing Invoice / Tournament Schedule** — "coming soon" in Expo;
+  the working generic report screens are kept behind those tiles.
+- **Payment lock, live refresh, secure token storage, OS notifications, background poll** —
+  services that have no RN counterpart to regress to.
+
+### Web preview
+
+`ApiService.webApiProxy` (`--dart-define=WEB_API_PROXY=http://localhost:8082`) routes browser
+calls through the same CORS proxy the Expo web preview used (`/@prod`, `/@uat` prefixes), so the
+Flutter web build can be compared against the Expo web build side by side on live data.
+
+### Verification
+
+`flutter analyze lib test tool` — 0 errors, 0 warnings. `flutter test` — **298 passed**, 3
+opt-in live tests skipped. Tests that asserted the older Flutter wording/controls were updated to
+the RN wording (e.g. `Try again`, `STEP 1 OF 12`, `Offer not found`, bottom-sheet pickers).

@@ -93,7 +93,7 @@ void main() {
       };
       await tester.pumpWidget(_wrap(const OfferDetailScreen(code: 'GONE')));
       await tester.pump();
-      expect(find.text('This offer is no longer available.'), findsOneWidget);
+      expect(find.text('Offer not found'), findsOneWidget);
       expect(find.text('Members Only 30%'), findsNothing);
       expect(tester.takeException(), isNull);
     });
@@ -117,7 +117,7 @@ void main() {
       await tester.pump();
       expect(find.text('Members Only 30%'), findsOneWidget);
       expect(find.text('REAL'), findsOneWidget);
-      expect(find.text('D-123'), findsOneWidget);
+      expect(find.text('Show this screen to redeem'), findsOneWidget);
       expect(find.text('01 Jun 2099'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

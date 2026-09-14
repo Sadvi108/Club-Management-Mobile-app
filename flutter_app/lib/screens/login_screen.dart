@@ -1,596 +1,706 @@
 import '../config/app_version.dart';
-import '../theme/app_icons.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+
 import '../services/api.dart';
 import '../services/response_utils.dart';
 import '../services/user_session.dart';
 import '../theme/app_theme.dart';
+import '../theme/ion.dart';
 import '../theme/theme_provider.dart';
-import '../widgets/gradient_button.dart';
+import '../widgets/rn_kit.dart';
 
+/// Port of `frontend/app/login.tsx` (Expo v2.11.1).
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+enum _Focus { id, pwd, club }
+
 class _LoginScreenState extends State<LoginScreen> {
   final _idCtrl = TextEditingController();
   final _pwdCtrl = TextEditingController();
   final _clubCtrl = TextEditingController();
-  bool _showPwd = false;
-  bool _isInstructor = false;
-  bool _busy = false;
+  final _idNode = FocusNode();
+  final _pwdNode = FocusNode();
+  final _clubNode = FocusNode();
 
-  // Instructor mode: branch dropdown state.
-  List<Map<String, dynamic>> _branches = const [];
-  int? _branchId;
-  bool _branchesLoading = false;
-  String? _branchesLoadedForCode;
+  bool _showPwd = false;
+  bool _instructor = false;
+  _Focus? _focus;
+
+  // Instructor-only
+  Map<String, dynamic>? _branch;
+  final _branchState = ValueNotifier<_BranchLoad>((loading: false, branches: const []));
   int _branchRequest = 0;
+
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    void track(FocusNode n, _Focus f) => n.addListener(() {
+          if (!mounted) return;
+          setState(() => _focus = n.hasFocus ? f : (_focus == f ? null : _focus));
+        });
+    track(_idNode, _Focus.id);
+    track(_pwdNode, _Focus.pwd);
+    track(_clubNode, _Focus.club);
+  }
 
   @override
   void dispose() {
     _idCtrl.dispose();
     _pwdCtrl.dispose();
     _clubCtrl.dispose();
+    _idNode.dispose();
+    _pwdNode.dispose();
+    _clubNode.dispose();
+    _branchState.dispose();
     super.dispose();
   }
 
-  Future<void> _loadBranches() async {
+  void _switchMode(bool instructor) => setState(() {
+        _instructor = instructor;
+        _error = null;
+      });
+
+  Future<void> _openBranchPicker() async {
     final code = _clubCtrl.text.trim();
-    if (code.isEmpty) return;
+    if (code.isEmpty) {
+      setState(() => _error = 'Enter your club code first.');
+      return;
+    }
+    FocusScope.of(context).unfocus();
     final request = ++_branchRequest;
-    setState(() => _branchesLoading = true);
+    setState(() => _error = null);
+    _branchState.value = (loading: true, branches: const []);
+    final sheet = _showBranchSheet();
     try {
       final response = await Api.accountGetBranchesByClubCode(code);
       final error = apiEnvelopeError(response);
       if (error != null) throw Exception(error);
-      if (!mounted ||
-          request != _branchRequest ||
-          code != _clubCtrl.text.trim()) return;
-      setState(() {
-        _branches = findRecordList(response)
+      if (!mounted || request != _branchRequest) return;
+      _branchState.value = (
+        loading: false,
+        branches: findRecordList(response)
             .whereType<Map>()
             .map((m) => Map<String, dynamic>.from(m))
-            .toList();
-        _branchesLoadedForCode = code;
-        _branchId = null;
-      });
+            .toList(),
+      );
     } catch (e) {
-      if (mounted && request == _branchRequest)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      if (!mounted || request != _branchRequest) return;
+      setState(() => _error = friendlyError(e).isEmpty
+          ? 'Could not load branches.'
+          : friendlyError(e));
+      Navigator.of(context).maybePop();
     } finally {
-      if (mounted && request == _branchRequest)
-        setState(() => _branchesLoading = false);
+      if (mounted && request == _branchRequest && _branchState.value.loading) {
+        _branchState.value = (loading: false, branches: _branchState.value.branches);
+      }
     }
+    await sheet;
   }
 
-  Future<void> _openForgotPassword() => showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-            title: const Text('Forgot password'),
-            content: const Text(
-                "Password resets are handled by your academy — please contact them and they'll reset it for you."),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('OK'))
-            ],
-          ));
-
-  Future<void> _signIn() async {
+  Future<void> _onLogin() async {
     if (_busy) return;
+    setState(() => _error = null);
+    FocusScope.of(context).unfocus();
     final id = _idCtrl.text.trim();
     final pwd = _pwdCtrl.text;
-
     if (id.isEmpty || pwd.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your ID and password.')),
-      );
+      setState(() => _error = 'Please enter your ID and password.');
       return;
     }
-
-    String? clubCode;
-    int? branchId;
-    if (_isInstructor) {
-      clubCode = _clubCtrl.text.trim();
-      if (clubCode.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter your club code.')),
-        );
-        return;
-      }
-      branchId = _branchId;
-      if (branchId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Select a branch.')),
-        );
-        return;
-      }
+    if (_instructor && (_clubCtrl.text.trim().isEmpty || _branch == null)) {
+      setState(() => _error = 'Club code and branch are required for instructors.');
+      return;
     }
-
     setState(() => _busy = true);
     final ok = await UserSession.instance.login(
       username: id,
       password: pwd,
-      userType: _isInstructor ? 0 : 3,
-      clubCode: clubCode,
-      branchId: branchId,
+      userType: _instructor ? 0 : 3,
+      clubCode: _instructor ? _clubCtrl.text.trim() : null,
+      branchId: _instructor ? (_branch!['id'] as num?)?.toInt() : null,
     );
     if (!mounted) return;
     setState(() => _busy = false);
-
     if (ok) {
-      final session = UserSession.instance;
-      context.go(session.isInstructor ? '/instructor/home' : '/home');
+      context.go(UserSession.instance.isInstructor ? '/instructor/home' : '/home');
     } else {
-      final raw = UserSession.instance.error ?? 'Unknown error';
-      // Strip the Dart "Exception: " prefix and our error glyphs so the
-      // dialog shows the clean, user-facing message.
-      final msg =
-          raw.replaceFirst('Exception: ', '').replaceAll('❌', '').trim();
-      await _showLoginError(msg.isEmpty ? 'Unknown error' : msg);
+      final raw = UserSession.instance.error ?? '';
+      final msg = raw.replaceFirst('Exception: ', '').replaceAll('❌', '').trim();
+      setState(() => _error = msg.isEmpty ? 'Login failed. Check your credentials.' : msg);
     }
-  }
-
-  Future<void> _showLoginError(String message) async {
-    final c = context.appColors;
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: c.surface,
-        icon: Icon(AppIcons.lock_outline, color: c.danger, size: 32),
-        title: const Text('Sign in failed'),
-        content: Text(message, textAlign: TextAlign.center),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
     final theme = context.watch<ThemeProvider>();
-    return Scaffold(
-        body: Stack(children: [
-      Positioned(
-          top: -130,
-          right: -80,
-          child: Container(
-              width: 280,
-              height: 280,
-              decoration: BoxDecoration(
-                  color: c.primary.withValues(alpha: c.isDark ? .22 : .18),
-                  shape: BoxShape.circle))),
-      Positioned(
-          bottom: -80,
-          left: -60,
-          child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                  color: c.primaryLight.withValues(alpha: c.isDark ? .18 : .16),
-                  shape: BoxShape.circle))),
-      SafeArea(
-          child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.asset(kLogoAssetPath,
-                              width: 42, height: 42)),
-                      const SizedBox(width: 10),
-                      Text('D-CLIX',
-                          style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 18,
-                              letterSpacing: 2,
-                              fontWeight: FontWeight.w900)),
-                      const Spacer(),
-                      IconButton(
-                          onPressed: theme.toggle,
-                          icon: Icon(theme.isDark
-                              ? AppIcons.light_mode_outlined
-                              : AppIcons.dark_mode_outlined)),
-                      TextButton(
-                          onPressed: () => context.push('/user-guide'),
-                          child: const Text('Help')),
-                    ]),
-                    const SizedBox(height: 28),
-                    Text('WELCOME BACK',
-                        style: TextStyle(
-                            color: c.primary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 2.5)),
-                    const SizedBox(height: 10),
-                    Text("Let's get you\nback on the mat.",
-                        style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            color: c.textPrimary,
-                            letterSpacing: -.8,
-                            height: 1.2)),
-                    const SizedBox(height: 10),
-                    Text('D-CLIX Flutter · $kAppVersion (build $kAppBuild)',
-                        style: TextStyle(color: c.textSecondary, fontSize: 14)),
-                    const SizedBox(height: 28),
-                    Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: BoxDecoration(
-                            color: c.surfaceAlt,
-                            borderRadius: BorderRadius.circular(14)),
-                        child: Row(children: [
-                          Expanded(
-                              child: _segment(
-                                  c,
-                                  'Student',
-                                  AppIcons.school,
-                                  !_isInstructor,
-                                  () => setState(() => _isInstructor = false))),
-                          Expanded(
-                              child: _segment(
-                                  c,
-                                  'Instructor',
-                                  AppIcons.military_tech,
-                                  _isInstructor,
-                                  () => setState(() => _isInstructor = true)))
-                        ])),
-                    const SizedBox(height: 24),
-                    if (_isInstructor) ...[
-                      _fieldLabel(c, 'Club code'),
-                      TextField(
-                          controller: _clubCtrl,
-                          textCapitalization: TextCapitalization.characters,
-                          onChanged: (_) => setState(() {
-                                _branchRequest++;
-                                _branchId = null;
-                                _branches = [];
-                                _branchesLoadedForCode = null;
-                                _branchesLoading = false;
-                              }),
-                          decoration: InputDecoration(
-                              hintText: 'e.g. RTT',
-                              prefixIcon:
-                                  Icon(AppIcons.business, color: c.textMuted))),
-                      const SizedBox(height: 18),
-                      _fieldLabel(c, 'Branch'),
-                      _branchDropdown(c),
-                      const SizedBox(height: 18),
-                    ],
-                    _fieldLabel(
-                        c,
-                        _isInstructor
-                            ? 'Instructor ID'
-                            : 'Student ID, phone or email'),
-                    _inputLine(c, _idCtrl, icon: AppIcons.alternate_email),
-                    const SizedBox(height: 18),
-                    Row(children: [
-                      Expanded(child: _fieldLabel(c, 'Password')),
-                      TextButton(
-                          onPressed: _openForgotPassword,
-                          child: const Text('Forgot password?'))
-                    ]),
-                    _inputLine(c, _pwdCtrl,
-                        icon: AppIcons.lock_outline,
-                        obscure: !_showPwd,
-                        trailing: IconButton(
-                            tooltip:
-                                _showPwd ? 'Hide password' : 'Show password',
-                            onPressed: () =>
-                                setState(() => _showPwd = !_showPwd),
-                            icon: Icon(_showPwd
-                                ? AppIcons.visibility_off_outlined
-                                : AppIcons.visibility_outlined))),
-                    const SizedBox(height: 18),
-                    Text("ⓘ  You'll stay signed in on this device",
-                        style: TextStyle(color: c.textSecondary, fontSize: 12)),
-                    const SizedBox(height: 24),
-                    GradientButton(
-                        label: _busy ? 'Signing In…' : 'Sign In',
-                        trailingIcon: AppIcons.arrow_forward,
-                        onPressed: _busy ? null : _signIn),
-                    const SizedBox(height: 18),
-                    Center(
-                        child: TextButton.icon(
-                            onPressed: () => context.push('/user-guide'),
-                            icon: const Icon(AppIcons.menu_book_outlined,
-                                size: 18),
-                            label: const Text('How to use this app'))),
-                    const SizedBox(height: 18),
-                    Center(
-                        child: Text('New to D-Clix? Contact your academy',
-                            style: TextStyle(
-                                color: c.textSecondary, fontSize: 13))),
-                  ]))),
-    ]));
-  }
+    final insets = MediaQuery.paddingOf(context);
 
-  Widget _segment(AppColors c, String label, IconData icon, bool active,
-      VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(Radii.sm),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
-        decoration: BoxDecoration(
-          gradient: active ? LinearGradient(colors: c.gradient) : null,
-          color: active ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(Radii.sm),
-          boxShadow: active ? Shadows.strong(c) : null,
-        ),
-        child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon,
-                  size: 14, color: active ? Colors.white : c.textSecondary),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+    Widget chip(String label, IconData icon, bool active, VoidCallback onTap) => Expanded(
+          child: Touchable(
+            onPress: onTap,
+            activeOpacity: 0.85,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                gradient: active ? LinearGradient(colors: c.gradient) : null,
+                color: active ? null : c.surfaceAlt,
+                borderRadius: BorderRadius.circular(Radii.md),
+                border: active ? null : Border.all(color: c.border),
+                boxShadow: active ? Shadows.strong(c) : null,
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(icon, size: 15, color: active ? Colors.white : c.textSecondary),
+                const SizedBox(width: 6),
+                Text(label,
                     style: TextStyle(
                         color: active ? Colors.white : c.textSecondary,
                         fontWeight: FontWeight.w700,
-                        fontSize: 12)),
-              ),
-            ]),
-      ),
-    );
-  }
-
-  Future<void> _openBranchSheet() async {
-    FocusScope.of(context).unfocus();
-    final code = _clubCtrl.text.trim();
-    if (code.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your club code first.')),
-      );
-      return;
-    }
-    if (_branches.isEmpty || _branchesLoadedForCode != code) {
-      await _loadBranches();
-    }
-    if (!mounted) return;
-    if (_branches.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No branches found for that club code.')),
-      );
-      return;
-    }
-    String filter = '';
-    final picked = await showModalBottomSheet<int>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final c2 = ctx.appColors;
-        final screenH = MediaQuery.of(ctx).size.height;
-        return StatefulBuilder(builder: (ctx, setSheetState) {
-          final filtered = _branches.where((b) {
-            if (filter.isEmpty) return true;
-            final text = (b['text'] ?? '').toString().toLowerCase();
-            return text.contains(filter.toLowerCase());
-          }).toList();
-          return Container(
-            constraints: BoxConstraints(maxHeight: screenH * 0.75),
-            decoration: BoxDecoration(
-              color: c2.surface,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(28)),
+                        fontSize: 13)),
+              ]),
             ),
-            padding: EdgeInsets.fromLTRB(
-                12, 12, 12, MediaQuery.of(ctx).viewInsets.bottom + 18),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                    color: c2.border, borderRadius: BorderRadius.circular(2)),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(children: [
-                  Icon(Icons.store_mall_directory_outlined,
-                      color: c2.primary, size: 18),
-                  const SizedBox(width: 8),
-                  Text('Select Branch',
-                      style: TextStyle(
-                          color: c2.textPrimary,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16)),
-                  const Spacer(),
-                  Text('${filtered.length}/${_branches.length}',
-                      style: TextStyle(
-                          color: c2.textMuted,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12)),
-                ]),
-              ),
-              const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: TextField(
-                  autofocus: false,
-                  onChanged: (v) => setSheetState(() => filter = v),
-                  decoration: InputDecoration(
-                    prefixIcon:
-                        Icon(AppIcons.search, size: 18, color: c2.textMuted),
-                    hintText: 'Search branch (e.g. KCP)',
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Flexible(
-                child: Scrollbar(
-                  thumbVisibility: true,
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) =>
-                        Divider(height: 1, color: c2.border),
-                    itemBuilder: (_, i) {
-                      final b = filtered[i];
-                      final id = (b['id'] as num?)?.toInt() ?? 0;
-                      final text = (b['text'] ?? '').toString();
-                      final selected = id == _branchId;
-                      return Material(
-                          color: Colors.transparent,
-                          child: ListTile(
-                            title: Text(text,
-                                style: TextStyle(
-                                    color: c2.textPrimary,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14)),
-                            subtitle: Text('Branch #$id',
-                                style: TextStyle(
-                                    color: c2.textMuted,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 11)),
-                            trailing: selected
-                                ? Icon(AppIcons.check_circle,
-                                    color: c2.primary, size: 20)
-                                : Icon(AppIcons.chevron_right,
-                                    color: c2.textMuted, size: 18),
-                            onTap: () => Navigator.pop(ctx, id),
-                          ));
-                    },
-                  ),
-                ),
-              ),
-            ]),
-          );
-        });
-      },
-    );
-    if (picked != null && mounted) {
-      setState(() => _branchId = picked);
-    }
-  }
-
-  Widget _branchDropdown(AppColors c) {
-    final code = _clubCtrl.text.trim();
-    final canTap = code.isNotEmpty && !_branchesLoading;
-    final hasBranches = _branches.isNotEmpty;
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(Radii.md),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(Radii.md),
-        onTap: !canTap
-            ? () {
-                // Always give feedback even when disabled.
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(_branchesLoading
-                        ? 'Loading branches…'
-                        : 'Enter your club code first.'),
-                  ),
-                );
-              }
-            : _openBranchSheet,
-        child: AbsorbPointer(
-          // Container below is decorative only — let InkWell handle taps.
-          child: _branchDropdownBody(c, canTap, hasBranches, code),
-        ),
-      ),
-    );
-  }
-
-  Widget _branchDropdownBody(
-      AppColors c, bool canTap, bool hasBranches, String code) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: c.surfaceAlt,
-        borderRadius: BorderRadius.circular(Radii.md),
-        border: Border.all(color: c.border),
-      ),
-      child: Row(children: [
-        Icon(Icons.store_mall_directory_outlined,
-            size: 18, color: canTap ? c.primary : c.textMuted),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            _branchesLoading
-                ? 'Loading branches…'
-                : _branchId != null
-                    ? (_branches.firstWhere(
-                                (b) => (b['id'] as num?)?.toInt() == _branchId,
-                                orElse: () =>
-                                    const <String, dynamic>{})['text'] ??
-                            '')
-                        .toString()
-                    : (code.isEmpty
-                        ? 'Enter club code first'
-                        : (hasBranches
-                            ? 'Select a branch'
-                            : 'Tap to load branches')),
-            style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w600),
           ),
+        );
+
+    return Scaffold(
+      backgroundColor: c.background,
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Stack(fit: StackFit.expand, children: [
+          Positioned(
+            top: -130,
+            right: -80,
+            child: _blob(280, c.primary.withValues(alpha: c.isDark ? .22 : .18)),
+          ),
+          Positioned(
+            bottom: -80,
+            left: -60,
+            child: _blob(220, c.primaryLight.withValues(alpha: c.isDark ? .18 : .16)),
+          ),
+          SafeArea(
+            bottom: false,
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(Gaps.xl, Gaps.xl, Gaps.xl, 24 + insets.bottom),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                // Top row: logo + theme toggle
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.asset(kLogoAssetPath, width: 38, height: 38),
+                    ),
+                    const SizedBox(width: 10),
+                    Text('D-CLIX',
+                        style: TextStyle(
+                            color: c.textPrimary,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 3,
+                            fontSize: 14)),
+                    const Spacer(),
+                    Touchable(
+                      onPress: theme.toggle,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                            color: c.surfaceAlt, borderRadius: BorderRadius.circular(10)),
+                        child: Icon(theme.isDark ? Ion.sunny : Ion.moon,
+                            size: 16, color: c.primary),
+                      ),
+                    ),
+                    Touchable(
+                      onPress: () => context.push('/user-guide'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                            color: c.surfaceAlt, borderRadius: BorderRadius.circular(14)),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Ion.helpCircleOutline, size: 14, color: c.textSecondary),
+                          const SizedBox(width: 4),
+                          Text('Help',
+                              style: TextStyle(
+                                  color: c.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600)),
+                        ]),
+                      ),
+                    ),
+                  ]),
+                ),
+
+                const SizedBox(height: 28),
+                Text('WELCOME BACK',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: c.primary,
+                        letterSpacing: 2.5)),
+                const SizedBox(height: 10),
+                Text("Let's get you\nback on the mat.",
+                    style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        color: c.textPrimary,
+                        letterSpacing: -0.8,
+                        height: 38 / 32)),
+                const SizedBox(height: 10),
+                Text('D-CLIX Flutter · $kAppVersion (build $kAppBuild)',
+                    style: TextStyle(
+                        color: c.textSecondary, fontSize: 14, fontWeight: FontWeight.w500)),
+
+                const SizedBox(height: 28),
+                Row(children: [
+                  chip('Student', Ion.school, !_instructor, () => _switchMode(false)),
+                  const SizedBox(width: 10),
+                  chip('Instructor', Ion.ribbon, _instructor, () => _switchMode(true)),
+                ]),
+
+                // Instructor: club code + branch
+                if (_instructor) ...[
+                  _fieldGroup(
+                    c,
+                    label: 'Club code',
+                    child: _inputLine(
+                      c,
+                      focused: _focus == _Focus.club,
+                      icon: Ion.business,
+                      field: _textInput(
+                        c,
+                        controller: _clubCtrl,
+                        node: _clubNode,
+                        hint: 'e.g. RTT',
+                        caps: TextCapitalization.characters,
+                        onChanged: (_) => setState(() {
+                          _branch = null;
+                          _branchRequest++;
+                        }),
+                      ),
+                    ),
+                  ),
+                  _fieldGroup(
+                    c,
+                    label: 'Branch',
+                    child: Touchable(
+                      onPress: _openBranchPicker,
+                      activeOpacity: 0.7,
+                      child: _inputLine(
+                        c,
+                        focused: false,
+                        icon: Ion.gitBranch,
+                        iconColor: _branch != null ? c.primary : c.textMuted,
+                        field: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            _branch != null ? '${_branch!['text'] ?? ''}' : 'Select branch',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: _branch != null ? c.textPrimary : c.textMuted),
+                          ),
+                        ),
+                        trailing: Icon(Ion.chevronDown, size: 18, color: c.textSecondary),
+                      ),
+                    ),
+                  ),
+                ],
+
+                _fieldGroup(
+                  c,
+                  label: _instructor ? 'Instructor ID' : 'Student ID, phone or email',
+                  child: _inputLine(
+                    c,
+                    focused: _focus == _Focus.id,
+                    icon: Ion.at,
+                    field: _textInput(
+                      c,
+                      controller: _idCtrl,
+                      node: _idNode,
+                      hint: _instructor ? 'Instructor ID' : 'Student ID, phone or email',
+                      action: TextInputAction.next,
+                      onSubmitted: (_) => _pwdNode.requestFocus(),
+                    ),
+                  ),
+                ),
+
+                _fieldGroup(
+                  c,
+                  label: 'Password',
+                  labelTrailing: Touchable(
+                    onPress: () => notify(context, 'Forgot password',
+                        "Password resets are handled by your academy — please contact them and they'll reset it for you."),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text('Forgot?',
+                          style: TextStyle(
+                              color: c.primary, fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                  child: _inputLine(
+                    c,
+                    focused: _focus == _Focus.pwd,
+                    icon: Ion.lockClosed,
+                    field: _textInput(
+                      c,
+                      controller: _pwdCtrl,
+                      node: _pwdNode,
+                      hint: 'Enter password',
+                      obscure: !_showPwd,
+                      action: TextInputAction.go,
+                      onSubmitted: (_) => _onLogin(),
+                    ),
+                    trailing: Touchable(
+                      onPress: () => setState(() => _showPwd = !_showPwd),
+                      child: Semantics(
+                        button: true,
+                        label: _showPwd ? 'Hide password' : 'Show password',
+                        child: Icon(_showPwd ? Ion.eyeOffOutline : Ion.eyeOutline,
+                            size: 18, color: c.textSecondary),
+                      ),
+                    ),
+                  ),
+                ),
+
+                if (_error != null)
+                  Container(
+                    margin: const EdgeInsets.only(top: 18),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                    decoration: BoxDecoration(
+                        color: c.danger.hexA('1A'),
+                        borderRadius: BorderRadius.circular(Radii.md)),
+                    child: Row(children: [
+                      Icon(Ion.alertCircle, size: 16, color: c.danger),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(_error!,
+                            style: TextStyle(
+                                color: c.danger, fontSize: 13, fontWeight: FontWeight.w600)),
+                      ),
+                    ]),
+                  ),
+
+                // The session is always persisted, so this is stated as fact, not a checkbox.
+                Padding(
+                  padding: const EdgeInsets.only(top: 18),
+                  child: Row(children: [
+                    Icon(Ion.informationCircleOutline, size: 14, color: c.textSecondary),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text("You'll stay signed in on this device",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: c.textSecondary, fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ]),
+                ),
+
+                const SizedBox(height: 24),
+                Touchable(
+                  onPress: _busy ? null : _onLogin,
+                  activeOpacity: 0.92,
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 56),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                          colors: c.gradient,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight),
+                      borderRadius: BorderRadius.circular(Radii.lg),
+                      boxShadow: Shadows.strong(c),
+                    ),
+                    child: _busy
+                        ? const Center(
+                            child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2.4, color: Colors.white)))
+                        : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                            const Text('Sign In',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 15,
+                                    letterSpacing: 0.5)),
+                            const SizedBox(width: 10),
+                            Container(
+                              width: 26,
+                              height: 26,
+                              decoration: const BoxDecoration(
+                                  color: Colors.white, shape: BoxShape.circle),
+                              child: Icon(Ion.arrowForward, size: 14, color: c.primary),
+                            ),
+                          ]),
+                  ),
+                ),
+
+                // Step-by-step app walkthrough — reachable before signing in
+                const SizedBox(height: 24),
+                Touchable(
+                  onPress: () => context.push('/user-guide'),
+                  activeOpacity: 0.8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(Radii.md),
+                      border: Border.all(color: c.primary.hexA('55'), width: 1.5),
+                      color: c.primary.hexA('12'),
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Ion.bookOutline, size: 18, color: c.primary),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text('User Guide — how the app works',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: c.primary, fontWeight: FontWeight.w800, fontSize: 13.5)),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Ion.chevronForward, size: 16, color: c.primary),
+                    ]),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+                Text.rich(
+                  TextSpan(
+                    text: 'New to D-Clix? ',
+                    style: TextStyle(color: c.textSecondary, fontSize: 13),
+                    children: [
+                      TextSpan(
+                          text: 'Contact your academy',
+                          style: TextStyle(color: c.primary, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _blob(double size, Color color) => IgnorePointer(
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        if (_branchesLoading)
-          SizedBox(
-              width: 16,
-              height: 16,
-              child:
-                  CircularProgressIndicator(strokeWidth: 2, color: c.primary))
-        else
-          Icon(Icons.keyboard_arrow_down_rounded,
-              color: canTap ? c.primary : c.textMuted, size: 22),
+      );
+
+  Widget _fieldGroup(AppColors c,
+      {required String label, Widget? labelTrailing, required Widget child}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 22),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: c.textSecondary,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3)),
+            ),
+          ),
+          if (labelTrailing != null) labelTrailing,
+        ]),
+        child,
       ]),
     );
   }
 
-  Widget _fieldLabel(AppColors c, String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(text,
-            style: TextStyle(
-                fontSize: 12,
-                color: c.textSecondary,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3)),
-      );
+  Widget _inputLine(AppColors c,
+      {required bool focused,
+      required IconData icon,
+      Color? iconColor,
+      required Widget field,
+      Widget? trailing}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        border: Border(
+            bottom: BorderSide(color: focused ? c.primary : c.border, width: 1.5)),
+      ),
+      child: Row(children: [
+        Icon(icon, size: 18, color: iconColor ?? (focused ? c.primary : c.textMuted)),
+        const SizedBox(width: 12),
+        Expanded(child: field),
+        if (trailing != null) ...[const SizedBox(width: 12), trailing],
+      ]),
+    );
+  }
 
-  Widget _inputLine(AppColors c, TextEditingController ctrl,
-      {required IconData icon, bool obscure = false, Widget? trailing}) {
+  Widget _textInput(AppColors c,
+      {required TextEditingController controller,
+      required FocusNode node,
+      required String hint,
+      bool obscure = false,
+      TextCapitalization caps = TextCapitalization.none,
+      TextInputAction? action,
+      ValueChanged<String>? onChanged,
+      ValueChanged<String>? onSubmitted}) {
     return TextField(
-      controller: ctrl,
+      controller: controller,
+      focusNode: node,
       obscureText: obscure,
-      style: TextStyle(
-        color: c.textPrimary,
-        fontSize: 15,
-        fontWeight: FontWeight.w600,
-      ),
+      autocorrect: false,
+      enableSuggestions: !obscure,
+      textCapitalization: caps,
+      textInputAction: action,
+      onChanged: onChanged,
+      onSubmitted: onSubmitted,
+      cursorColor: c.primary,
+      style: TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
       decoration: InputDecoration(
+        isDense: true,
         filled: false,
-        border: UnderlineInputBorder(
-            borderSide: BorderSide(color: c.border, width: 1.5)),
-        enabledBorder: UnderlineInputBorder(
-            borderSide: BorderSide(color: c.border, width: 1.5)),
-        focusedBorder: UnderlineInputBorder(
-            borderSide: BorderSide(color: c.primary, width: 1.5)),
-        prefixIcon: Icon(icon, size: 18, color: c.textMuted),
-        suffixIcon: trailing,
+        contentPadding: const EdgeInsets.symmetric(vertical: 4),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        hintText: hint,
+        hintStyle: TextStyle(color: c.textMuted, fontSize: 15, fontWeight: FontWeight.w600),
       ),
+    );
+  }
+
+  Future<void> _showBranchSheet() {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: context.appColors.overlay,
+      builder: (ctx) => _BranchSheet(
+        state: _branchState,
+        selectedId: (_branch?['id'] as num?)?.toInt(),
+        onPick: (b) {
+          setState(() => _branch = b);
+          Navigator.pop(ctx);
+        },
+      ),
+    );
+  }
+}
+
+/// What the branch sheet renders: still loading, or the branches for the club code.
+typedef _BranchLoad = ({bool loading, List<Map<String, dynamic>> branches});
+
+class _BranchSheet extends StatelessWidget {
+  final ValueListenable<_BranchLoad> state;
+  final int? selectedId;
+  final ValueChanged<Map<String, dynamic>> onPick;
+  const _BranchSheet({required this.state, required this.selectedId, required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    final insets = MediaQuery.paddingOf(context);
+    return ValueListenableBuilder<_BranchLoad>(
+      valueListenable: state,
+      builder: (context, load, _) {
+        final branches = load.branches;
+        return Container(
+          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .7),
+          padding: EdgeInsets.fromLTRB(Gaps.xl, 12, Gaps.xl, 16 + insets.bottom),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.xxl)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                      color: c.border, borderRadius: BorderRadius.circular(3)),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text('Select branch',
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w800, color: c.textPrimary)),
+              ),
+              if (load.loading)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 30),
+                  child: Center(
+                      child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.4, color: c.primary))),
+                )
+              else if (branches.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Text('No branches found for this club code.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: c.textSecondary, fontSize: 14)),
+                )
+              else
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: branches.length,
+                    itemBuilder: (_, i) {
+                      final b = branches[i];
+                      final selected = (b['id'] as num?)?.toInt() == selectedId;
+                      return Touchable(
+                        onPress: () => onPick(b),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                              border: Border(bottom: BorderSide(color: c.border))),
+                          child: Row(children: [
+                            Icon(selected ? Ion.radioButtonOn : Ion.radioButtonOff,
+                                size: 20, color: selected ? c.primary : c.textMuted),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text('${b['text'] ?? ''}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      color: c.textPrimary,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600)),
+                            ),
+                          ]),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

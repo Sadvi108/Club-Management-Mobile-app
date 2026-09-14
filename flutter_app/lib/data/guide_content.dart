@@ -1141,4 +1141,22 @@ const kGuideSteps = <GuideStep>[
     ],
     note: "",
   ),
+  GuideStep(
+    key: 'collection-list',
+    category: 'Instructor',
+    routes: ['/instructor/collections/:typeId'],
+    shot: 'assets/guide/collection-list.png',
+    icon: Icons.receipt_long,
+    title: 'Collection records',
+    intro:
+        'Open a payment category from Instructor Collections to review its records.',
+    details: [
+      GuideDetail(1, 'Choose a category',
+          'Open Cash Payments, Online Payments or Payment Slips from Collections.'),
+      GuideDetail(2, 'Review the records',
+          'Check each member, reference, amount and status. Use the available search or date controls to narrow the list.'),
+      GuideDetail(3, 'Confirm the result',
+          'Refresh after the club confirms a payment. An uploaded slip can remain pending until the academy approves it.'),
+    ],
+  ),
 ];

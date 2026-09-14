@@ -1,54 +1,56 @@
-import '../theme/app_icons.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/notification_prefs.dart';
 import '../services/notification_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_header.dart';
+import '../theme/ion.dart';
+import '../widgets/rn_kit.dart';
 
-/// How this device behaves when the club sends something.
-///
-/// Every option is per-device, so a member's phone and tablet can differ.
+String _fmtHour(int h) => '${h.toString().padLeft(2, '0')}:00';
+
+/// Port of `frontend/app/notification-settings.tsx` (Expo v2.11.1).
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
-
   @override
-  State<NotificationSettingsScreen> createState() =>
-      _NotificationSettingsScreenState();
+  State<NotificationSettingsScreen> createState() => _NotificationSettingsScreenState();
 }
 
-class _NotificationSettingsScreenState
-    extends State<NotificationSettingsScreen> {
-  NotifPrefs _p = NotifPrefs.defaults;
-  bool _loading = true;
+class _NotificationSettingsScreenState extends State<NotificationSettingsScreen> {
+  NotifPrefs _p = NotifPrefsStore.peek() ?? NotifPrefs.defaults;
   bool _permitted = true;
   bool _testing = false;
   String? _picking; // 'start' | 'end'
+  void Function()? _unsub;
 
   @override
   void initState() {
     super.initState();
+    _unsub = NotifPrefsStore.subscribe((p) {
+      if (mounted) setState(() => _p = p);
+    });
     _load();
   }
 
+  @override
+  void dispose() {
+    _unsub?.call();
+    super.dispose();
+  }
+
   Future<void> _load() async {
-    // See the note in AutoPayScreen: the loading state must have an exit on every path,
-    // not only the happy one.
-    var p = NotifPrefs.defaults;
-    var ok = false;
     try {
-      p = await NotifPrefsStore.load();
-      ok = await NotificationService.hasPermission();
-    } catch (e) {
-      debugPrint('notification settings load failed: $e');
-    } finally {
+      final p = await NotifPrefsStore.load();
+      final ok = await NotificationService.hasPermission();
       if (mounted) {
         setState(() {
           _p = p;
           _permitted = ok;
-          _loading = false;
         });
       }
+    } catch (e) {
+      debugPrint('notification settings load failed: $e');
     }
   }
 
@@ -59,359 +61,298 @@ class _NotificationSettingsScreenState
 
   Future<void> _test() async {
     setState(() => _testing = true);
-    if (!_permitted) {
-      final granted = await NotificationService.requestPermission();
-      if (!mounted) return;
-      setState(() => _permitted = granted);
-      if (!granted) {
-        setState(() => _testing = false);
-        _say(
-            'Notifications are blocked for D-CLIX. Allow them in your device settings.');
-        return;
+    try {
+      if (!_permitted) {
+        final granted = await NotificationService.requestPermission();
+        if (mounted) setState(() => _permitted = granted);
+        if (!granted) {
+          if (mounted) {
+            await notify(
+                context,
+                'Notifications are off',
+                kIsWeb
+                    ? 'Allow notifications for this site in your browser, then try again.'
+                    : 'Enable notifications for D-CLIX in your device settings, then try again.');
+          }
+          return;
+        }
       }
-    }
-    final shown = await NotificationService.sendTestAlert();
-    if (!mounted) return;
-    setState(() => _testing = false);
-    if (!shown) {
-      // The test bypasses categories and quiet hours, so the master switch is the only
-      // preference that can block it — anything else is the platform refusing.
-      _say(_p.enabled
-          ? "This device wouldn't show the notification. Check that alerts are allowed for D-CLIX."
-          : 'Push notifications are turned off above.');
+      final shown = await NotificationService.sendTestAlert();
+      if (!shown && mounted) {
+        // The test alert ignores quiet hours and category mutes; only the master switch blocks it.
+        await notify(
+            context,
+            'Nothing was sent',
+            !_p.enabled
+                ? 'Push notifications are turned off above.'
+                : 'This device would not show the notification. Check that alerts are allowed for D-CLIX.');
+      }
+    } finally {
+      if (mounted) setState(() => _testing = false);
     }
   }
 
-  void _say(String m) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
-
-  String _hh(int h) => '${h.toString().padLeft(2, '0')}:00';
+  Future<void> _openSystemSettings() async {
+    try {
+      final ok = await launchUrl(Uri.parse('app-settings:'));
+      if (!ok) throw Exception('unsupported');
+    } catch (_) {
+      if (mounted) await notify(context, 'Open your device settings', 'Find D-CLIX in the app list and allow notifications.');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    // Scaffold, not a bare Container: these are STANDALONE routes, so nothing above them
-    // provides Material, and AppHeader's back button is an InkWell — which asserts
-    // "No Material widget found". The tab screens get away with a Container only because
-    // TabsShell wraps them in its own Scaffold.
-    return Scaffold(
-      backgroundColor: c.background,
-      body: Column(children: [
-        const AppHeader(title: 'Notification settings', showBack: true),
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                      Gaps.xl, Gaps.md, Gaps.xl, Gaps.xxxl),
-                  children: [
-                    if (!_permitted) _blockedBanner(c),
-                    _card(c, [
-                      _toggle(c,
-                          icon: Icons.notifications_active,
-                          title: 'Push notifications',
-                          sub:
-                              'Alerts on your lock screen and notification tray',
-                          value: _p.enabled,
-                          onChanged: (v) => _update(_p.copyWith(enabled: v))),
-                      _divider(c),
-                      _toggle(c,
-                          icon: Icons.volume_up,
-                          title: 'Sound',
-                          sub: 'Play the D-CLIX chime',
-                          value: _p.sound,
-                          enabled: _p.enabled,
-                          onChanged: (v) => _update(_p.copyWith(sound: v))),
-                      _divider(c),
-                      _toggle(c,
-                          icon: Icons.vibration,
-                          title: 'Vibration',
-                          sub: 'Buzz when an alert arrives',
-                          value: _p.vibrate,
-                          enabled: _p.enabled,
-                          onChanged: (v) => _update(_p.copyWith(vibrate: v))),
-                    ]),
-                    const SizedBox(height: Gaps.md),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _testing ? null : _test,
-                        icon: const Icon(Icons.play_circle_outline, size: 19),
-                        label: Text(
-                            _testing ? 'Sending…' : 'Send a test notification'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: c.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: Gaps.xl),
-                    _sectionTitle(c, 'What to alert me about'),
-                    _card(c, [
-                      for (var i = 0; i < NotifCategory.values.length; i++) ...[
-                        if (i > 0) _divider(c),
-                        _toggle(c,
-                            icon: switch (NotifCategory.values[i]) {
-                              NotifCategory.payments =>
-                                AppIcons.account_balance_wallet,
-                              NotifCategory.classes => AppIcons.fitness_center,
-                              NotifCategory.general => Icons.campaign,
-                            },
-                            title: NotifCategory.values[i].label,
-                            sub: NotifCategory.values[i].hint,
-                            value:
-                                _p.categories[NotifCategory.values[i]] ?? true,
-                            enabled: _p.enabled,
-                            onChanged: (v) => _update(_p.copyWith(categories: {
-                                  ..._p.categories,
-                                  NotifCategory.values[i]: v,
-                                }))),
-                      ],
-                    ]),
-                    const SizedBox(height: Gaps.xl),
-                    _sectionTitle(c, 'Quiet hours'),
-                    _card(c, [
-                      _toggle(c,
-                          icon: Icons.nightlight_round,
-                          title: 'Silence overnight',
-                          sub: _p.quietEnabled
-                              ? 'No alerts from ${_hh(_p.quietStartHour)} to ${_hh(_p.quietEndHour)}'
-                              : 'Alerts arrive at any hour',
-                          value: _p.quietEnabled,
-                          enabled: _p.enabled,
-                          onChanged: (v) =>
-                              _update(_p.copyWith(quietEnabled: v))),
-                      if (_p.quietEnabled) ...[
-                        _divider(c),
-                        _range(c),
-                      ],
-                    ]),
-                    const SizedBox(height: Gaps.md),
-                    Text(
-                      'Nothing is lost during quiet hours — anything that arrives inside the '
-                      'window alerts you once it ends.',
-                      style: TextStyle(
-                          color: c.textMuted, fontSize: 11.5, height: 1.4),
-                    ),
-                    const SizedBox(height: Gaps.xl),
-                    _sectionTitle(c, 'How delivery works'),
-                    _card(c, [
-                      _info(c, Icons.android,
-                          'Android: alerts arrive with the app open or closed. Long-press an alert to fine-tune its channel in system settings.'),
-                      _divider(c),
-                      _info(c, Icons.phone_iphone,
-                          'iOS: alerts arrive with the app open or closed, using the bundled chime and your ringer switch.'),
-                    ]),
-                    const SizedBox(height: Gaps.md),
-                    Text(
-                      'The club server delivers notifications to the app, which checks for new '
-                      'ones about every minute while open.',
-                      style: TextStyle(
-                          color: c.textMuted, fontSize: 11, height: 1.4),
-                    ),
-                  ],
-                ),
-        ),
-      ]),
-    );
-  }
+    final p = _p;
 
-  Widget _blockedBanner(AppColors c) => Container(
-        margin: const EdgeInsets.only(bottom: Gaps.md),
-        padding: const EdgeInsets.all(Gaps.md),
-        decoration: BoxDecoration(
-          color: c.danger.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: c.danger.withValues(alpha: 0.45)),
-        ),
-        child: Row(children: [
-          Icon(Icons.warning_amber_rounded, size: 20, color: c.danger),
-          const SizedBox(width: Gaps.md),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Alerts are blocked',
-                  style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w800)),
-              const SizedBox(height: 2),
-              Text('Allow notifications for D-CLIX in your device settings.',
-                  style: TextStyle(
-                      color: c.textSecondary, fontSize: 12, height: 1.35)),
-            ]),
-          ),
-        ]),
-      );
-
-  Widget _sectionTitle(AppColors c, String t) => Padding(
-        padding: const EdgeInsets.only(bottom: Gaps.sm),
-        child: Text(t,
-            style: TextStyle(
-                color: c.textPrimary,
-                fontSize: 15,
-                fontWeight: FontWeight.w800)),
-      );
-
-  Widget _card(AppColors c, List<Widget> children) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: Gaps.md),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: c.border),
-        ),
-        child: Column(children: children),
-      );
-
-  Widget _divider(AppColors c) => Container(height: 1, color: c.border);
-
-  Widget _toggle(
-    AppColors c, {
-    required IconData icon,
-    required String title,
-    required String sub,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    bool enabled = true,
-  }) =>
-      Opacity(
-        opacity: enabled ? 1 : 0.45,
+    Widget row({required IconData icon, required String title, required String sub, required bool value,
+        required ValueChanged<bool> onChange, bool disabled = false}) {
+      return Opacity(
+        opacity: disabled ? 0.45 : 1,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: Gaps.md),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           child: Row(children: [
             Container(
               width: 36,
               height: 36,
-              decoration:
-                  BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
               child: Icon(icon, size: 18, color: c.primary),
             ),
-            const SizedBox(width: Gaps.md),
+            const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title,
-                        style: TextStyle(
-                            color: c.textPrimary,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text(sub,
-                        style: TextStyle(
-                            color: c.textSecondary,
-                            fontSize: 11.5,
-                            height: 1.35)),
-                  ]),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary)),
+                const SizedBox(height: 2),
+                Text(sub, style: TextStyle(fontSize: 12, color: c.textSecondary, height: 17 / 12)),
+              ]),
             ),
-            Switch(
+            const SizedBox(width: 12),
+            Switch.adaptive(
               value: value,
-              onChanged: enabled ? onChanged : null,
-              activeThumbColor: Colors.white,
+              onChanged: disabled ? null : onChange,
               activeTrackColor: c.primary,
+              inactiveTrackColor: c.border,
+              thumbColor: const WidgetStatePropertyAll(Colors.white),
+              trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
             ),
           ]),
         ),
       );
+    }
 
-  Widget _info(AppColors c, IconData icon, String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: Gaps.md),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration:
-                BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
-            child: Icon(icon, size: 18, color: c.textSecondary),
-          ),
-          const SizedBox(width: Gaps.md),
-          Expanded(
-            child: Text(text,
-                style: TextStyle(
-                    color: c.textSecondary, fontSize: 12, height: 1.4)),
-          ),
-        ]),
-      );
-
-  Widget _range(AppColors c) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: Gaps.md),
-        child: Column(children: [
-          Row(children: [
-            Expanded(child: _hourChip(c, 'From', _p.quietStartHour, 'start')),
-            const SizedBox(width: Gaps.md),
-            Icon(AppIcons.arrow_forward, size: 16, color: c.textMuted),
-            const SizedBox(width: Gaps.md),
-            Expanded(child: _hourChip(c, 'To', _p.quietEndHour, 'end')),
+    Widget infoRow(IconData icon, String text) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+              child: Icon(icon, size: 18, color: c.textSecondary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(text, style: TextStyle(fontSize: 12, color: c.textSecondary, height: 17 / 12))),
           ]),
-          if (_picking != null) ...[
-            const SizedBox(height: Gaps.md),
-            SizedBox(
-              height: 40,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: 24,
-                separatorBuilder: (_, __) => const SizedBox(width: Gaps.sm),
-                itemBuilder: (_, h) {
-                  final on = _picking == 'start'
-                      ? h == _p.quietStartHour
-                      : h == _p.quietEndHour;
-                  return GestureDetector(
-                    onTap: () {
-                      _update(_picking == 'start'
-                          ? _p.copyWith(quietStartHour: h)
-                          : _p.copyWith(quietEndHour: h));
-                      setState(() => _picking = null);
-                    },
-                    child: Container(
-                      alignment: Alignment.center,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: on ? c.primary : c.surfaceAlt,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(_hh(h),
-                          style: TextStyle(
-                              color: on ? Colors.white : c.textPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                  );
-                },
+        );
+
+    Widget divider() => Container(height: 1, color: c.border);
+    Widget sectionTitle(String t) => Padding(
+          padding: const EdgeInsets.only(top: 18, bottom: 10),
+          child: Text(t, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: c.textPrimary)),
+        );
+    BoxDecoration card() => rnCard(c);
+
+    Widget hourChip(String label, int hour, String key) => Expanded(
+          child: Touchable(
+            onPress: () => setState(() => _picking = _picking == key ? null : key),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: c.surfaceAlt,
+                borderRadius: BorderRadius.circular(Radii.md),
+                border: Border.all(color: _picking == key ? c.primary : Colors.transparent),
               ),
+              child: Column(children: [
+                Text(label, style: TextStyle(fontSize: 11, color: c.textSecondary, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(_fmtHour(hour), style: TextStyle(fontSize: 16, color: c.textPrimary, fontWeight: FontWeight.w800)),
+              ]),
             ),
-          ],
-        ]),
-      );
-
-  Widget _hourChip(AppColors c, String label, int hour, String which) =>
-      GestureDetector(
-        onTap: () =>
-            setState(() => _picking = _picking == which ? null : which),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: c.surfaceAlt,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: _picking == which ? c.primary : Colors.transparent),
           ),
-          child: Column(children: [
-            Text(label,
-                style: TextStyle(
-                    color: c.textSecondary,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700)),
-            const SizedBox(height: 2),
-            Text(_hh(hour),
-                style: TextStyle(
-                    color: c.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800)),
-          ]),
+        );
+
+    return Scaffold(
+      backgroundColor: c.background,
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const RnHeader(title: 'Notification settings', horizontal: Gaps.lg),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(Gaps.xl, Gaps.xl, Gaps.xl, 60),
+            children: [
+              // Permission banner — nothing below matters while the OS is blocking us.
+              if (!_permitted)
+                Touchable(
+                  activeOpacity: 0.85,
+                  onPress: kIsWeb ? null : _openSystemSettings,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(Radii.lg),
+                      border: Border.all(color: c.danger.hexA('66')),
+                    ),
+                    child: Row(children: [
+                      Icon(Ion.warning, size: 20, color: c.danger),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('Alerts are blocked', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: c.textPrimary)),
+                          const SizedBox(height: 2),
+                          Text(
+                              kIsWeb
+                                  ? 'This browser is blocking notifications for the site. Allow them in the address-bar site settings.'
+                                  : 'Tap to open system settings and allow notifications for D-CLIX.',
+                              style: TextStyle(fontSize: 12, color: c.textSecondary, height: 17 / 12)),
+                        ]),
+                      ),
+                      if (!kIsWeb) ...[const SizedBox(width: 12), Icon(Ion.chevronForward, size: 18, color: c.textMuted)],
+                    ]),
+                  ),
+                ),
+
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: card(),
+                child: Column(children: [
+                  row(icon: Ion.notifications, title: 'Push notifications', sub: 'Alerts on your lock screen and notification tray',
+                      value: p.enabled, onChange: (v) => _update(p.copyWith(enabled: v))),
+                  divider(),
+                  row(icon: Ion.volumeHigh, title: 'Sound', sub: 'Play the D-CLIX chime', value: p.sound, disabled: !p.enabled,
+                      onChange: (v) => _update(p.copyWith(sound: v))),
+                  divider(),
+                  row(icon: Ion.phonePortrait, title: 'Vibration', sub: 'Buzz when an alert arrives', value: p.vibrate,
+                      disabled: !p.enabled, onChange: (v) => _update(p.copyWith(vibrate: v))),
+                ]),
+              ),
+
+              Opacity(
+                opacity: _testing ? 0.6 : 1,
+                child: Touchable(
+                  activeOpacity: 0.85,
+                  onPress: _testing ? null : _test,
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(Radii.lg)),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      const Icon(Ion.playCircle, size: 20, color: Colors.white),
+                      const SizedBox(width: 8),
+                      Text(_testing ? 'Sending…' : 'Send a test notification',
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+                    ]),
+                  ),
+                ),
+              ),
+
+              sectionTitle('What to alert me about'),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: card(),
+                child: Column(children: [
+                  for (final (i, cat) in NotifCategory.values.indexed) ...[
+                    if (i > 0) divider(),
+                    row(
+                      icon: switch (cat) { NotifCategory.payments => Ion.wallet, NotifCategory.classes => Ion.barbell, NotifCategory.general => Ion.megaphone },
+                      title: cat.label,
+                      sub: cat.hint,
+                      value: p.categories[cat] ?? true,
+                      disabled: !p.enabled,
+                      onChange: (v) => _update(p.copyWith(categories: {...p.categories, cat: v})),
+                    ),
+                  ],
+                ]),
+              ),
+
+              sectionTitle('Quiet hours'),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: card(),
+                child: Column(children: [
+                  row(
+                    icon: Ion.moon,
+                    title: 'Silence overnight',
+                    sub: p.quietEnabled
+                        ? 'No alerts from ${_fmtHour(p.quietStartHour)} to ${_fmtHour(p.quietEndHour)}'
+                        : 'Alerts arrive at any hour',
+                    value: p.quietEnabled,
+                    disabled: !p.enabled,
+                    onChange: (v) => _update(p.copyWith(quietEnabled: v)),
+                  ),
+                  if (p.quietEnabled) ...[
+                    divider(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Row(children: [
+                        hourChip('From', p.quietStartHour, 'start'),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: Icon(Ion.arrowForward, size: 16, color: c.textMuted),
+                        ),
+                        hourChip('To', p.quietEndHour, 'end'),
+                      ]),
+                    ),
+                    if (_picking != null)
+                      SizedBox(
+                        height: 48,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.only(bottom: 14),
+                          itemCount: 24,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (_, h) {
+                            final active = _picking == 'start' ? h == p.quietStartHour : h == p.quietEndHour;
+                            return Touchable(
+                              onPress: () {
+                                _update(_picking == 'start' ? p.copyWith(quietStartHour: h) : p.copyWith(quietEndHour: h));
+                                setState(() => _picking = null);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(color: active ? c.primary : c.surfaceAlt, borderRadius: BorderRadius.circular(999)),
+                                child: Text(_fmtHour(h),
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: active ? Colors.white : c.textPrimary)),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ]),
+              ),
+
+              sectionTitle('How delivery works'),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: card(),
+                child: Column(children: [
+                  infoRow(Ion.logoAndroid, 'Android: alerts arrive with the app open or closed. Long-press an alert to fine-tune its channel in system settings.'),
+                  divider(),
+                  infoRow(Ion.logoApple, 'iOS: alerts arrive with the app open or closed, using the bundled chime and your ringer switch.'),
+                  divider(),
+                  infoRow(Ion.globeOutline, 'Web: alerts arrive while a D-CLIX tab is open, even in the background. Sound needs one click on the page first, which browsers require before any audio can play.'),
+                ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Text(
+                    'The club server delivers notifications to the app, which checks for new ones every minute while open and about every 15 minutes in the background.',
+                    style: TextStyle(fontSize: 11, color: c.textMuted, height: 16 / 11)),
+              ),
+            ],
+          ),
         ),
-      );
+      ]),
+    );
+  }
 }

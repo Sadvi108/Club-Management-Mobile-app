@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dclix_app/services/api_service.dart';
 import 'package:dclix_app/services/user_session.dart';
 import 'package:dclix_app/screens/chat_thread_screen.dart';
+import 'package:dclix_app/theme/ion.dart';
 
 Map<String, dynamic> row(int id, String body) => {
       'id': id,
@@ -132,7 +133,7 @@ void main() {
         const MaterialApp(home: ChatThreadScreen(threadKey: 'test-group')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'First outgoing');
-    await tester.tap(find.byIcon(Icons.send));
+    await tester.tap(find.byIcon(Ion.send));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'Next draft');
     accepted.complete(http.Response('{"status":200,"data":true}', 200));

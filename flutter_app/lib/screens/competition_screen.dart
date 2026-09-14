@@ -1,11 +1,11 @@
-import '../services/live_refresh.dart';
-import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api.dart';
 import '../services/response_utils.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_header.dart';
+import '../theme/ion.dart';
+import '../widgets/rn_kit.dart';
+import '../widgets/use_api.dart';
 
 /// One row of `/Reports/TournamentSummary`.
 ///
@@ -80,12 +80,10 @@ List<String> tournamentNames(List<TournamentRow> rows) {
   return out;
 }
 
-/// Competition — tournament results and medal tallies.
+/// Port of `frontend/app/competition.tsx` (Expo v2.11.1).
 ///
-/// The Expo screen carries "Upcoming"/"Past" tabs, but TournamentSummary has no date
-/// column and the tabs there filter nothing — they only change the empty-state wording.
-/// A control that appears to filter and does not is a bug report waiting to happen, so
-/// this ports the filter that DOES work (by tournament name) and leaves the tabs out.
+/// TournamentSummary has no date column, so the Upcoming/Past tabs change the wording and the
+/// status badge only — exactly as in the RN app. The tournament-name filter is the real one.
 class CompetitionScreen extends StatefulWidget {
   final String title;
   const CompetitionScreen({super.key, this.title = 'Competition'});
@@ -94,258 +92,261 @@ class CompetitionScreen extends StatefulWidget {
   State<CompetitionScreen> createState() => _CompetitionScreenState();
 }
 
-class _CompetitionScreenState extends State<CompetitionScreen>
-    with LiveRefreshMixin<CompetitionScreen> {
-  @override
-  bool get canLiveRefresh => !_loading;
-  @override
-  Future<void> refreshLiveData() => _load();
-
-  bool _loading = true;
-  String? _error;
-  List<TournamentRow> _rows = const [];
+class _CompetitionScreenState extends State<CompetitionScreen> with UseApi<CompetitionScreen> {
+  late final _data = useApi(() async => parseTournaments(
+      await Api.reportsTournamentSummary({'fromDate': null, 'toDate': null, 'reportType': null})));
+  late int _tab = widget.title.toLowerCase().contains('past') ? 1 : 0;
   String _selectedName = '';
 
   @override
   void initState() {
     super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final res = await Api.reportsTournamentSummary(
-          {'fromDate': null, 'toDate': null});
-      if (!mounted) return;
-      setState(() {
-        _rows = parseTournaments(res);
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = friendlyError(e);
-        _loading = false;
-      });
-    }
+    _data;
   }
 
   @override
   Widget build(BuildContext context) {
     final c = context.appColors;
-    final names = tournamentNames(_rows);
-    final visible = _selectedName.isEmpty
-        ? _rows
-        : _rows.where((r) => r.name == _selectedName).toList();
+    final all = _data.data ?? const <TournamentRow>[];
+    final names = tournamentNames(all);
+    final rows = _selectedName.isEmpty ? all : all.where((r) => r.name == _selectedName).toList();
+    final loading = _data.loading;
+    final error = _data.error;
 
-    return Scaffold(
-      backgroundColor: c.background,
-      body: Column(children: [
-        AppHeader(
-          title: widget.title,
-          subtitle: 'Tournament results and medals',
-          showBack: true,
-        ),
-        if (names.length > 1) _filterPills(c, names),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: _load,
-            child: (_loading && !liveRefreshing)
-                ? const Center(child: CircularProgressIndicator())
-                : ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(
-                        Gaps.lg, Gaps.md, Gaps.lg, Gaps.xxxl),
-                    children: [
-                      if (_error != null) _errorBlock(c),
-                      if (_error == null && visible.isEmpty) _emptyBlock(c),
-                      if (visible.isNotEmpty) _totals(c, visible),
-                      for (final r in visible) _card(c, r),
-                    ],
-                  ),
-          ),
-        ),
-      ]),
-    );
-  }
-
-  Widget _filterPills(AppColors c, List<String> names) => SizedBox(
-        height: 44,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: Gaps.lg, vertical: 4),
-          children: [
-            _pill(c, 'All', _selectedName.isEmpty,
-                () => setState(() => _selectedName = '')),
-            for (final n in names)
-              _pill(
-                  c,
-                  n,
-                  _selectedName == n,
-                  () => setState(
-                      () => _selectedName = _selectedName == n ? '' : n)),
-          ],
-        ),
-      );
-
-  Widget _pill(AppColors c, String label, bool active, VoidCallback onTap) =>
-      Padding(
-        padding: const EdgeInsets.only(right: Gaps.sm),
-        child: GestureDetector(
-          onTap: onTap,
+    Widget pill(String label, bool active, VoidCallback onTap) => Touchable(
+          onPress: onTap,
           child: Container(
-            alignment: Alignment.center,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            constraints: const BoxConstraints(maxWidth: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: active ? c.primary : c.surface,
-              borderRadius: BorderRadius.circular(Radii.xxl),
+              color: active ? c.primary.hexA('18') : c.surfaceAlt,
+              borderRadius: BorderRadius.circular(Radii.xl),
               border: Border.all(color: active ? c.primary : c.border),
             ),
             child: Text(label,
                 maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    color: active ? Colors.white : c.textSecondary,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700)),
+                    fontSize: 12,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    color: active ? c.primary : c.textSecondary)),
           ),
-        ),
-      );
+        );
 
-  Widget _totals(AppColors c, List<TournamentRow> rows) {
-    var g = 0, s = 0, b = 0, p = 0;
-    for (final r in rows) {
-      g += r.gold;
-      s += r.silver;
-      b += r.bronze;
-      p += r.players;
-    }
-    return Container(
-      margin: const EdgeInsets.only(bottom: Gaps.md),
-      padding: const EdgeInsets.all(Gaps.md),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: c.isDark ? Border.all(color: c.border) : null,
-        boxShadow: Shadows.card(c),
-      ),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-        _tally(c, 'Gold', g, const Color(0xFFEAB308)),
-        _tally(c, 'Silver', s, const Color(0xFF94A3B8)),
-        _tally(c, 'Bronze', b, const Color(0xFFB45309)),
-        _tally(c, 'Entries', p, c.primary),
-      ]),
-    );
-  }
-
-  Widget _tally(AppColors c, String label, int value, Color color) =>
-      Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('$value',
-            style: TextStyle(
-                color: color, fontSize: 20, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 2),
-        Text(label, style: TextStyle(color: c.textSecondary, fontSize: 11)),
-      ]);
-
-  Widget _card(AppColors c, TournamentRow r) {
-    final meta = [r.ageGroup, r.gender, r.category]
-        .where((s) => s.isNotEmpty)
-        .join(' - ');
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: Gaps.sm),
-      padding: const EdgeInsets.all(Gaps.md),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(Radii.lg),
-        border: c.isDark ? Border.all(color: c.border) : null,
-        boxShadow: Shadows.card(c),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration:
-                BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
-            child: Icon(Icons.emoji_events, size: 18, color: c.primary),
-          ),
-          const SizedBox(width: Gaps.md),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(r.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      color: c.textPrimary,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w800)),
-              if (meta.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(meta,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: c.textSecondary, fontSize: 11.5)),
-                ),
-            ]),
-          ),
-        ]),
-        if (r.medals > 0 || r.players > 0) ...[
-          const SizedBox(height: Gaps.sm),
-          Wrap(spacing: Gaps.sm, runSpacing: 6, children: [
-            if (r.gold > 0) _chip(c, '${r.gold} gold', const Color(0xFFEAB308)),
-            if (r.silver > 0)
-              _chip(c, '${r.silver} silver', const Color(0xFF94A3B8)),
-            if (r.bronze > 0)
-              _chip(c, '${r.bronze} bronze', const Color(0xFFB45309)),
-            if (r.players > 0) _chip(c, '${r.players} entered', c.primary),
+    Widget medal(Color color, String label, int value) => Expanded(
+          child: Column(children: [
+            Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: color.hexA('20')),
+              child: Text('$value', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+            ),
+            const SizedBox(height: 4),
+            Text(label,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: c.textSecondary)),
           ]),
-        ],
-      ]),
-    );
-  }
+        );
 
-  Widget _chip(AppColors c, String label, Color color) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(Radii.xxl),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                color: color, fontSize: 11.5, fontWeight: FontWeight.w800)),
-      );
+    Widget tag(IconData icon, String text) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: BorderRadius.circular(Radii.sm)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 12, color: c.textSecondary),
+            const SizedBox(width: 4),
+            Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c.textSecondary)),
+          ]),
+        );
 
-  Widget _errorBlock(AppColors c) => Padding(
+    final children = <Widget>[];
+    if (loading && _data.data == null) {
+      children.add(Padding(
         padding: const EdgeInsets.symmetric(vertical: 40),
         child: Column(children: [
-          Icon(Icons.error_outline, size: 40, color: c.danger),
-          const SizedBox(height: Gaps.sm),
-          Text(_error!,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: c.danger, fontSize: 13)),
-          TextButton(onPressed: _load, child: const Text('Tap to retry')),
+          SizedBox(width: 32, height: 32, child: CircularProgressIndicator(strokeWidth: 3, color: c.primary)),
+          const SizedBox(height: 12),
+          Text('Loading competitions...', style: TextStyle(color: c.textSecondary, fontSize: 13)),
         ]),
-      );
-
-  Widget _emptyBlock(AppColors c) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 60),
+      ));
+    }
+    if (error != null && !loading) {
+      children.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
         child: Column(children: [
-          Icon(AppIcons.military_tech_outlined, size: 48, color: c.textMuted),
-          const SizedBox(height: Gaps.sm),
-          Text(
-              _selectedName.isEmpty
-                  ? 'No competition records found.'
-                  : 'No records for $_selectedName.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: c.textSecondary, fontSize: 14)),
+          Icon(Ion.alertCircleOutline, size: 40, color: c.danger),
+          const SizedBox(height: 8),
+          Text('Failed to load competition data.', style: TextStyle(color: c.danger, fontSize: 13)),
+          const SizedBox(height: 12),
+          Touchable(
+            onPress: _data.reload,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(Radii.sm)),
+              child: const Text('Tap to retry',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+            ),
+          ),
         ]),
-      );
+      ));
+    }
+    if (!loading && error == null && rows.isEmpty) {
+      children.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        child: Column(children: [
+          Icon(Ion.medalOutline, size: 48, color: c.textMuted),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+                _tab == 0 ? 'No upcoming competitions scheduled right now.' : 'No past competition records found.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.textSecondary, fontSize: 14)),
+          ),
+        ]),
+      ));
+    }
+    if (!loading && error == null) {
+      for (final t in rows) {
+        children.add(Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: rnCard(c, radius: Radii.xl, shadow: Shadows.card(c)),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0x18DB2777)),
+                  child: const Icon(Ion.medal, size: 22, color: Color(0xFFDB2777)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(t.name.isNotEmpty
+                            ? t.name
+                            : t.category.isNotEmpty
+                                ? t.category
+                                : t.gender.isNotEmpty
+                                    ? t.gender
+                                    : 'Club Competition',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: c.textPrimary)),
+                    if (t.ageGroup.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text('Age Group: ${t.ageGroup}', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+                    ],
+                  ]),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: c.surfaceAlt, borderRadius: BorderRadius.circular(8)),
+                  child: Text(_tab == 0 ? 'UPCOMING' : 'COMPLETED',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 0.5)),
+                ),
+              ]),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Wrap(spacing: 8, runSpacing: 8, children: [
+                if (t.gender.isNotEmpty) tag(Ion.personOutline, t.gender),
+                tag(Ion.peopleOutline, '${t.players} Players'),
+              ]),
+            ),
+            Container(
+              margin: const EdgeInsets.only(top: 4),
+              padding: const EdgeInsets.only(top: 12),
+              decoration: BoxDecoration(border: Border(top: BorderSide(color: c.border))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text('MEDAL STANDINGS',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1, color: c.textMuted)),
+                ),
+                Row(children: [
+                  medal(const Color(0xFFF59E0B), 'Gold', t.gold),
+                  const SizedBox(width: 8),
+                  medal(const Color(0xFF9CA3AF), 'Silver', t.silver),
+                  const SizedBox(width: 8),
+                  medal(const Color(0xFFB45309), 'Bronze', t.bronze),
+                  const SizedBox(width: 8),
+                  medal(c.primary, 'Total Players', t.players),
+                ]),
+              ]),
+            ),
+          ]),
+        ));
+      }
+    }
+
+    return Scaffold(
+      backgroundColor: c.background,
+      body: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        RnHeader(title: widget.title, horizontal: Gaps.lg),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Gaps.xl, vertical: 10),
+          child: Row(children: [
+            for (final (i, t) in const ['Upcoming', 'Past'].indexed) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(
+                child: Touchable(
+                  activeOpacity: 0.8,
+                  onPress: () => setState(() => _tab = i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    decoration: BoxDecoration(
+                      color: _tab == i ? c.primary : c.surfaceAlt,
+                      borderRadius: BorderRadius.circular(Radii.md),
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(i == 0 ? Ion.timeOutline : Ion.trophyOutline,
+                          size: 16, color: _tab == i ? Colors.white : c.textSecondary),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text('$t Competition',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: _tab == i ? Colors.white : c.textSecondary)),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+            ],
+          ]),
+        ),
+        if (names.isNotEmpty)
+          SizedBox(
+            height: 42,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: Gaps.xl, vertical: 6),
+              children: [
+                pill('All', _selectedName.isEmpty, () => setState(() => _selectedName = '')),
+                for (final n in names) ...[
+                  const SizedBox(width: 8),
+                  pill(n, _selectedName == n, () => setState(() => _selectedName = _selectedName == n ? '' : n)),
+                ],
+              ],
+            ),
+          ),
+        Expanded(
+          child: RefreshIndicator(
+            color: c.primary,
+            onRefresh: _data.reload,
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(Gaps.xl, Gaps.xl, Gaps.xl, 120),
+              children: children,
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
 }

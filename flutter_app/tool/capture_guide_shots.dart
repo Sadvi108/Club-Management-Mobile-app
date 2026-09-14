@@ -65,7 +65,7 @@ import 'package:dclix_app/screens/edit_profile_screen.dart';
 import 'package:dclix_app/screens/chat_thread_screen.dart';
 import 'package:dclix_app/screens/outstanding_invoices_screen.dart';
 import 'package:dclix_app/screens/instructor_attendance_screen.dart';
-import 'package:dclix_app/screens/instructor_settings_screen.dart';
+import 'package:dclix_app/screens/instructor_reports/rn_reports.dart';
 import 'package:dclix_app/screens/instructor_report_list_screen.dart';
 import 'package:dclix_app/screens/instructor_reports/report_spec.dart';
 import 'package:dclix_app/screens/instructor_reports/student_detail_screen.dart';
@@ -528,8 +528,7 @@ void main() {
           t,
           'instructor-settings',
           const InstructorTabsShell(
-              location: '/instructor/settings',
-              child: InstructorSettingsScreen())),
+              location: '/instructor/settings', child: ProfileScreen())),
       skip: skipShots);
   testWidgets(
       'instructor-student-detail',
@@ -554,135 +553,54 @@ void main() {
   testWidgets(
       'report-tournament-past',
       (t) => _shot(t, 'report-tournament-past',
-          const CompetitionScreen(title: 'Tournament (Past)')),
+          const RTournamentScreen(title: 'Tournament (Past)')),
       skip: skipShots);
   testWidgets(
       'report-tournament-upcoming',
       (t) => _shot(t, 'report-tournament-upcoming',
-          const CompetitionScreen(title: 'Upcoming Tournament')),
+          const RTournamentScreen(title: 'Upcoming Tournament')),
       skip: skipShots);
   testWidgets(
       'user-guide', (t) => _shot(t, 'user-guide', const UserGuideScreen()),
       skip: skipShots);
-  testWidgets(
-      'report-student-centers',
-      (t) => _shot(
-          t,
-          'report-student-centers',
-          InstructorReportListScreen(
-              spec: kReportSpecs['student-centers'] ??
-                  ReportSpec(
-                      title: 'Student Centers',
-                      fetch: (_) => Api.reportsStudentCenters()))),
+  testWidgets('report-student-centers',
+      (t) => _shot(t, 'report-student-centers', const RStudentCentersScreen()),
       skip: skipShots);
   testWidgets(
       'report-training-centers',
-      (t) => _shot(
-          t,
-          'report-training-centers',
-          InstructorReportListScreen(
-              spec: kReportSpecs['training-centers'] ??
-                  ReportSpec(
-                      title: 'Training Centers',
-                      fetch: (_) => Api.reportsTrainingCenters()))),
+      (t) =>
+          _shot(t, 'report-training-centers', const RTrainingCentersScreen()),
       skip: skipShots);
-  testWidgets(
-      'report-exam-centers',
-      (t) => _shot(
-          t,
-          'report-exam-centers',
-          InstructorReportListScreen(
-              spec: kReportSpecs['exam-centers'] ??
-                  ReportSpec(
-                      title: 'Exam Centers',
-                      fetch: (_) => Api.reportsExamCenters()))),
+  testWidgets('report-exam-centers',
+      (t) => _shot(t, 'report-exam-centers', const RExamCentersScreen()),
       skip: skipShots);
-  testWidgets(
-      'report-student-list',
-      (t) => _shot(
-          t,
-          'report-student-list',
-          InstructorReportListScreen(
-              spec: kReportSpecs['student-list'] ??
-                  ReportSpec(
-                      title: 'Student List',
-                      fetch: (_) => Api.reportsStudentDetails()))),
+  testWidgets('report-student-list',
+      (t) => _shot(t, 'report-student-list', const RStudentListScreen()),
       skip: skipShots);
-  testWidgets(
-      'report-training-time',
-      (t) => _shot(
-          t,
-          'report-training-time',
-          InstructorReportListScreen(
-              spec: kReportSpecs['training-time'] ??
-                  ReportSpec(
-                      title: 'Training Time',
-                      fetch: (_) => Api.listingTrainingCenters()))),
+  testWidgets('report-training-time',
+      (t) => _shot(t, 'report-training-time', const RTrainingScheduleScreen()),
       skip: skipShots);
-  testWidgets(
-      'report-grading-schedule',
-      (t) => _shot(
-          t,
-          'report-grading-schedule',
-          InstructorReportListScreen(
-              spec: kReportSpecs['grading-schedule'] ??
-                  ReportSpec(
-                      title: 'Grading Schedule',
-                      fetch: (_) => Api.reportsGradingSchedule()))),
+  testWidgets('report-grading-schedule',
+      (t) => _shot(t, 'report-grading-schedule', const RGradingScreen()),
       skip: skipShots);
-  testWidgets(
-      'report-outstanding',
-      (t) => _shot(
-          t,
-          'report-outstanding',
-          InstructorReportListScreen(
-              spec: kReportSpecs['outstanding'] ??
-                  ReportSpec(
-                      title: 'Outstanding Report',
-                      fetch: (_) => Api.outstandingFetch()))),
+  testWidgets('report-outstanding',
+      (t) => _shot(t, 'report-outstanding', const ROutstandingScreen()),
       skip: skipShots);
-  testWidgets(
-      'report-attendance',
-      (t) => _shot(
-          t,
-          'report-attendance',
-          InstructorReportListScreen(
-              spec: kReportSpecs['attendance'] ??
-                  ReportSpec(
-                      title: 'Attendance Report',
-                      fetch: (_) => Api.reportsAttendance()))),
+  testWidgets('report-attendance',
+      (t) => _shot(t, 'report-attendance', const RAttendanceScreen()),
       skip: skipShots);
-  testWidgets(
-      'report-receipt',
-      (t) => _shot(
-          t,
-          'report-receipt',
-          InstructorReportListScreen(
-              spec: kReportSpecs['receipt'] ??
-                  ReportSpec(
-                      title: 'Receipt', fetch: (_) => Api.reportsReceipts()))),
+  testWidgets('report-receipt',
+      (t) => _shot(t, 'report-receipt', const RReceiptsScreen()),
       skip: skipShots);
   testWidgets(
       'report-grading-past',
-      (t) => _shot(
-          t,
-          'report-grading-past',
-          InstructorReportListScreen(
-              spec: kReportSpecs['grading-past'] ??
-                  ReportSpec(
-                      title: 'Grading Past',
-                      fetch: (_) => Api.reportsGradingSchedule()))),
+      (t) => _shot(t, 'report-grading-past',
+          const RGradingScreen(title: 'Grade Completed')),
       skip: skipShots);
   testWidgets(
       'report-purchase-request',
-      (t) => _shot(
-          t,
-          'report-purchase-request',
-          InstructorReportListScreen(
-              spec: kReportSpecs['purchase-request'] ??
-                  ReportSpec(
-                      title: 'Purchase Request',
-                      fetch: (_) => Api.reportsPurchaseRequests()))),
+      (t) =>
+          _shot(t, 'report-purchase-request', const RPurchaseRequestsScreen()),
       skip: skipShots);
   testWidgets(
       'report-tournament',
@@ -717,38 +635,14 @@ void main() {
                       title: 'Invoice Types',
                       fetch: (_) => Api.listingInvoceTypes()))),
       skip: skipShots);
-  testWidgets(
-      'report-payment-slip',
-      (t) => _shot(
-          t,
-          'report-payment-slip',
-          InstructorReportListScreen(
-              spec: kReportSpecs['payment-slip'] ??
-                  ReportSpec(
-                      title: 'Payment Slip',
-                      fetch: (_) => Api.reportsPaymentSlips()))),
+  testWidgets('report-payment-slip',
+      (t) => _shot(t, 'report-payment-slip', const RPaymentSlipsScreen()),
       skip: skipShots);
-  testWidgets(
-      'report-reimbursement',
-      (t) => _shot(
-          t,
-          'report-reimbursement',
-          InstructorReportListScreen(
-              spec: kReportSpecs['reimbursement'] ??
-                  ReportSpec(
-                      title: 'Reimbursement',
-                      fetch: (_) => Api.reportsReimbursement()))),
+  testWidgets('report-reimbursement',
+      (t) => _shot(t, 'report-reimbursement', const RReimbursementScreen()),
       skip: skipShots);
-  testWidgets(
-      'report-contribution',
-      (t) => _shot(
-          t,
-          'report-contribution',
-          InstructorReportListScreen(
-              spec: kReportSpecs['contribution'] ??
-                  ReportSpec(
-                      title: 'Contribution',
-                      fetch: (_) => Api.reportsContribution()))),
+  testWidgets('report-contribution',
+      (t) => _shot(t, 'report-contribution', const RContributionScreen()),
       skip: skipShots);
   testWidgets(
       'report-activity',
@@ -760,5 +654,10 @@ void main() {
                   ReportSpec(
                       title: 'Activities',
                       fetch: (_) => Api.reportsActivity()))),
+      skip: skipShots);
+  testWidgets(
+      'collection-list',
+      (t) => _shot(t, 'collection-list',
+          const CollectionListScreen(typeId: 1, label: 'Cash Payments')),
       skip: skipShots);
 }

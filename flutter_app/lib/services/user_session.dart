@@ -943,6 +943,14 @@ class UserSession extends ChangeNotifier {
   /// is protected on [ChangeNotifier], so we expose this thin wrapper.)
   void touch() => notifyListeners();
 
+  /// RN `updateUser(patch)`: merge edited profile fields into the signed-in user and persist.
+  Future<void> updateUser(Map<String, dynamic> patch) async {
+    if (authData == null) return;
+    authData = {...authData!, ...patch};
+    await _persistAuth();
+    notifyListeners();
+  }
+
   /// True when the authenticated user is an instructor.
   ///
   /// Verified against the live API: student/parent accounts authenticate as

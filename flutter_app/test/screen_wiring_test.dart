@@ -15,8 +15,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// `Api.foo(...)` AND `Api.foo` passed as a tear-off.
-final _apiRe = RegExp(r'\bApi\.([a-zA-Z0-9_]+)');
+/// `Api.foo(...)` AND `Api.foo` passed as a tear-off — plus `RnApi.foo`, the typed mirror of
+/// the React Native endpoint table that the ported screens call.
+final _apiRe = RegExp(r'\b(?:Rn)?Api\.([a-zA-Z0-9_]+)');
 final _serviceRe = RegExp(
     r'\b(BoostPayment|OnlineSubmissions|PurchaseService|NotificationService|AutoPayStore|ChatStore)\.([a-zA-Z0-9_]+)');
 final _sessionRe = RegExp(r'\bUserSession\b');
@@ -73,9 +74,9 @@ const _noDataNeeded = {
 /// This is not busywork: every entry here is a call that, if quietly dropped in a
 /// refactor, leaves a screen that renders perfectly and shows nothing.
 const _expected = <String, List<String>>{
-  'attendance_screen': ['reportsAttendance'],
+  'attendance_screen': ['attendanceReport'],
   'competition_screen': ['reportsTournamentSummary'],
-  'student_details_screen': ['profileMyInfo', 'profileStudentAddtnlInfo'],
+  'student_details_screen': ['myInfo', 'studentAddtnlInfo'],
   'edit_profile_screen': ['profileUpdateProfile'],
   'helpdesk_screen': ['profileSend2ClubHelpDesk'],
   'notifications_screen': [
@@ -86,23 +87,25 @@ const _expected = <String, List<String>>{
     'profileSend2ClubHelpDesk'
   ],
   'outstanding_invoices_screen': ['outstandingFetch'],
-  'progress_screen': ['reportsAttendance', 'reportsGradingSchedule'],
-  'training_screen': ['listingTrainingTimeByTcId'],
+  'progress_screen': ['attendanceReport', 'gradingSchedule'],
+  'training_screen': ['myInfo', 'attendanceReport'],
+  'purchases_screen': ['purchaseRequests'],
+  'rn_reports': ['reportStudentCenters', 'attendanceReport', 'tournamentSummary'],
   'qr_scan_screen': ['attendanceAdd'],
   'term_payment_screen': ['listingMySiblings'],
   'instructor_attendance_screen': [
-    'listingDropdownListByType',
-    'listingTrainingTimeByTcId',
-    'listingStudentListByTcId',
+    'dropdownListByType',
+    'trainingTimeByTcId',
+    'studentListByTcId',
     'utilitiesQRCodeBytes'
   ],
-  'instructor_collections_screen': ['outstandingCollectionCount'],
-  // Tear-offs, not calls — the reason this test matches `Api.name` and not `Api.name(`.
-  'schedule_screen': [
-    'reportsStudentDetails',
-    'classBookingNextBookings',
-    'classBookingGetBookings'
+  'instructor_collections_screen': [
+    'collectionCount',
+    'collectionCountList',
+    'outstandingUpdateCollectionCount'
   ],
+  // The weekly timetable comes from StudentDetails, as in Expo v2.11.1.
+  'schedule_screen': ['studentDetails'],
   'book_class_screen': [
     'classBookingBookNow',
     'classBookingTrainingTimeWithDateAndInstructor'
@@ -112,7 +115,6 @@ const _expected = <String, List<String>>{
 /// Screens whose data comes from a service rather than Api.* directly.
 const _expectedServices = <String, List<String>>{
   'new_student_screen': ['OnlineSubmissions.fetch', 'OnlineSubmissions.detail'],
-  'purchases_screen': ['PurchaseService.fetchRequests'],
   'purchase_request_screen': [
     'PurchaseService.fetchProducts',
     'BoostPayment.start',
@@ -141,10 +143,9 @@ void main() {
   });
 
   test('the scan sees tear-offs, not just calls', () {
-    // schedule_screen passes Api.classBookingNextBookings by reference. An `Api.x(` scan
+    // home_screen passes RnApi.homePageStats by reference to useApi. An `Api.x(` scan
     // reports that screen as completely unwired, which is how this test was wrong first.
-    expect(
-        screens['schedule_screen']!.api, contains('classBookingNextBookings'));
+    expect(screens['home_screen']!.api, contains('homePageStats'));
   });
 
   test('every screen has a data source, or is on the no-data list', () {
