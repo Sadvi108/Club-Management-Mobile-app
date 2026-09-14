@@ -491,7 +491,7 @@ class _QRScanScreenState extends State<QRScanScreen>
                     Icon(AppIcons.verified_user,
                         size: 14, color: Color(0x99FFFFFF)),
                     SizedBox(width: 6),
-                    Text('Secure · End-to-end encrypted',
+                    Text('Scan your club’s attendance QR',
                         style: TextStyle(
                             color: Color(0x99FFFFFF),
                             fontSize: 11,
@@ -508,7 +508,7 @@ class _QRScanScreenState extends State<QRScanScreen>
     return MobileScanner(
       controller: _controller,
       onDetect: _onDetect,
-      errorBuilder: (_, __, ___) {
+      errorBuilder: (_, __) {
         // Camera init failed (common on web without HTTPS / permission
         // denied). No simulated scan: a check-in must come from a real code.
         WidgetsBinding.instance.addPostFrameCallback((_) {

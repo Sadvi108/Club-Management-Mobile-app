@@ -37,30 +37,65 @@ jobs:
         run: flutter analyze --no-fatal-infos
       - name: Test
         run: flutter test
-      - name: Build release-mode test APK
-        # No production signing key is configured. This APK is debug-signed and
-        # cannot be assumed to update a previous Expo/Flutter installation.
-        run: flutter build apk --release
-      - name: Verify packaged resources and calculate checksum
+      - name: Restore persistent signing key
+        if: github.event_name != 'pull_request'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          APK=build/app/outputs/flutter-apk/app-release.apk
-          unzip -l "$APK" > /tmp/apk-files.txt
-          unzip -p "$APK" resources.arsc | strings > /tmp/apk-resources.txt
-          grep -qE '\.wav$' /tmp/apk-files.txt
-          grep -q dclix_alert /tmp/apk-resources.txt
-          # The public trust certificate must ship, but does not fix the server's
-          # missing hostname SAN. UAT checkout still needs a valid server certificate.
-          grep -q uat_apimacuat /tmp/apk-resources.txt
-          grep -qE '\.pem$' /tmp/apk-files.txt
-          cd build/app/outputs/flutter-apk
-          sha256sum app-release.apk > app-release.apk.sha256
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          names = ['ANDROID_KEYSTORE_BASE64', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']
+          if not all(os.environ.get(name) for name in names):
+              raise SystemExit('Persistent Android signing secrets are required for main/tag builds.')
+          folder = Path('android/release-signing')
+          folder.mkdir(mode=0o700, exist_ok=True)
+          key = folder / 'club-flutter-release.jks'
+          key.write_bytes(base64.b64decode(os.environ['ANDROID_KEYSTORE_BASE64'], validate=True))
+          key.chmod(0o600)
+          config = Path('android/key.properties')
+          config.write_text('storeFile=release-signing/club-flutter-release.jks\n' +
+              '\n'.join(f'{key}={os.environ[value]}' for key, value in [
+                  ('storePassword', 'ANDROID_KEYSTORE_PASSWORD'), ('keyAlias', 'ANDROID_KEY_ALIAS'), ('keyPassword', 'ANDROID_KEY_PASSWORD')]) + '\n')
+          config.chmod(0o600)
+          PY
+      - name: Build APK
+        # Pull requests use an isolated debug key and never publish an APK release.
+        run: flutter build apk --release
+      - name: Verify packaged guide and version the download
+        run: |
+          python3 - <<'PY'
+          import hashlib, re, shutil, zipfile
+          from pathlib import Path
+          version = re.search(r'^version: (\S+)', Path('pubspec.yaml').read_text(), re.M)[1]
+          import os
+          tag = os.environ.get('GITHUB_REF_NAME', '')
+          if tag.startswith('flutter-v') and tag != 'flutter-v' + version.split('+')[0]:
+              raise SystemExit('Release tag and APK version differ')
+          apk = Path('build/app/outputs/flutter-apk/app-release.apk')
+          with zipfile.ZipFile(apk) as archive:
+              names = set(archive.namelist())
+              for shot in Path('assets/guide').glob('*.png'):
+                  assert 'assets/flutter_assets/' + str(shot) in names, f'Missing guide image: {shot}'
+              assert any(name.endswith('.wav') for name in names), 'Notification sound missing'
+          out = Path('build/release-download')
+          out.mkdir(exist_ok=True)
+          target = out / ('dclix-flutter-' + version.replace('+', '-build') + '.apk')
+          shutil.copy2(apk, target)
+          digest = hashlib.sha256(target.read_bytes()).hexdigest()
+          target.with_suffix('.apk.sha256').write_text(f'{digest}  {target.name}\n')
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: dclix-flutter-apk
-          path: |
-            flutter_app/build/app/outputs/flutter-apk/app-release.apk
-            flutter_app/build/app/outputs/flutter-apk/app-release.apk.sha256
+          path: flutter_app/build/release-download/*
           if-no-files-found: error
+      - name: Remove signing material from runner
+        if: always()
+        run: rm -f android/key.properties android/release-signing/club-flutter-release.jks
 
   release:
     if: startsWith(github.ref, 'refs/tags/flutter-v')
@@ -74,11 +109,12 @@ jobs:
         with:
           name: dclix-flutter-apk
           path: release-apk
-      - name: Publish test APK with verification limits
+      - name: Publish versioned APK as Latest
         uses: softprops/action-gh-release@v2
         with:
           files: release-apk/*
           tag_name: ${{ github.ref_name }}
-          name: D-CLIX Flutter ${{ github.ref_name }} (test APK)
+          name: D-CLIX Flutter ${{ github.ref_name }}
           body_path: docs/releases/${{ github.ref_name }}.md
-          prerelease: true
+          prerelease: false
+          make_latest: true

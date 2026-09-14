@@ -997,6 +997,7 @@ class UserSession extends ChangeNotifier {
   /// hand (no providers exist there), and a duplicated string literal that drifted would
   /// silently stop every closed-app alert with nothing to show for it.
   static const sessionKey = 'cm_auth_data_v1';
+  static const sessionBuildKey = 'cm_authenticated_build_v1';
   static const tokenKey = 'cm_auth_token_v1';
 
   static const _kAuthKey = sessionKey;
@@ -1023,11 +1024,13 @@ class UserSession extends ChangeNotifier {
       if (authData == null) {
         await prefs.remove(_kAuthKey);
         await SecureStore.delete(_kTokenKey);
+        await SecureStore.delete(sessionBuildKey);
         return;
       }
       final (token, safe) = splitAuthForStorage(authData!);
       if (token.isNotEmpty) await SecureStore.write(_kTokenKey, token);
       await prefs.setString(_kAuthKey, jsonEncode(safe));
+      await SecureStore.write(sessionBuildKey, '$kAppBuild');
     } catch (e) {
       debugPrint('persistAuth failed: $e');
     }
@@ -1035,12 +1038,19 @@ class UserSession extends ChangeNotifier {
 
   /// Attempt to restore a saved session on app startup.
   ///
-  /// Returns true when a stored token was found and the session was
-  /// rehydrated (token re-applied + [_loadAll] run). The token may still
-  /// be server-side expired — callers should treat a subsequent 401 as a
-  /// signal to route back to /login.
+  /// Restores only sessions authenticated on this build and accepted by the
+  /// profile endpoint. Updates require explicit sign-in before any stored data
+  /// can route the member home.
   Future<bool> restoreSession() async {
     try {
+      // A fresh installation or updated APK must start with an explicit sign-in.
+      // The stamp is stored with the token, not in the backup-restorable profile blob.
+      if (await SecureStore.read(sessionBuildKey) != '$kAppBuild') {
+        await _clearPersistedAuth();
+        authData = null;
+        ApiService.clearToken();
+        return false;
+      }
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_kAuthKey);
       if (raw == null || raw.isEmpty) return false;
@@ -1065,19 +1075,15 @@ class UserSession extends ChangeNotifier {
       // Callers read authData['accessToken'] (isLoggedIn, branch switching), so put it back
       // on the in-memory copy only.
       authData = Map<String, dynamic>.from(data)..['accessToken'] = token;
+      // Validate before routing home. _loadAll intentionally catches individual
+      // report errors, so it cannot be used as an authentication check.
+      final infoResponse = unwrapData(await Api.profileMyInfo());
+      if (infoResponse is! Map)
+        throw const ApiException(401, 'Please sign in again.');
+      myInfo = Map<String, dynamic>.from(infoResponse);
       loading = true;
       notifyListeners();
       await _loadAll();
-      // If the token was rejected, _loadAll surfaces errors but authData
-      // stays set — guard with a lightweight validity check.
-      if (myInfo == null &&
-          homeStatsError != null &&
-          homeStatsError!.contains('401')) {
-        await _clearPersistedAuth();
-        authData = null;
-        ApiService.clearToken();
-        return false;
-      }
       startNotificationPolling();
       // Closed-app alerts. Registered here rather than at app start so it only runs for a
       // signed-in member, and so a fresh sign-in re-arms it.
@@ -1086,7 +1092,10 @@ class UserSession extends ChangeNotifier {
       _checkStoreVersion();
       return true;
     } catch (e) {
-      debugPrint('restoreSession failed: $e');
+      debugPrint('restoreSession failed: ${e.runtimeType}');
+      if (e is ApiException && e.statusCode == 401) await _clearPersistedAuth();
+      authData = null;
+      ApiService.clearToken();
       return false;
     } finally {
       loading = false;
@@ -1101,6 +1110,7 @@ class UserSession extends ChangeNotifier {
     } catch (_) {}
     // The token lives in the keystore now — clearing prefs alone would leave it behind.
     await SecureStore.delete(_kTokenKey);
+    await SecureStore.delete(sessionBuildKey);
   }
 
   Future<bool> login({

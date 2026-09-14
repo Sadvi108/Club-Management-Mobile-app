@@ -1,3 +1,4 @@
+import '../config/app_version.dart';
 import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -223,7 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             letterSpacing: -.8,
                             height: 1.2)),
                     const SizedBox(height: 10),
-                    Text('Sign in to continue your training journey',
+                    Text('D-CLIX Flutter · $kAppVersion (build $kAppBuild)',
                         style: TextStyle(color: c.textSecondary, fontSize: 14)),
                     const SizedBox(height: 28),
                     Container(

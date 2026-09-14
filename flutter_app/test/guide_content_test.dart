@@ -6,10 +6,21 @@ import 'package:dclix_app/data/guide_content.dart';
 
 void main() {
   test('all pages are present and distinct', () {
-    // 11 ported from Expo + the Auto Pay page this app added.
-    expect(kGuideSteps, hasLength(12));
-    expect(kGuideSteps.map((s) => s.key).toSet(), hasLength(12),
+    expect(kGuideSteps.length, greaterThan(50));
+    expect(kGuideSteps.map((s) => s.key).toSet(), hasLength(kGuideSteps.length),
         reason: 'duplicate keys would mean a page was overwritten');
+  });
+
+  test('every user-facing route has guide instructions', () {
+    final router = File('lib/router/app_router.dart').readAsStringSync();
+    final routes = RegExp(r"(?:path:\s*|_reportRoute\(\s*)'([^']+)'")
+        .allMatches(router)
+        .map((m) => m.group(1)!)
+        .toSet()
+      ..removeAll({'/', '/debug', '/user-guide'});
+    final covered = kGuideSteps.expand((step) => step.routes).toSet();
+    expect(routes.difference(covered), isEmpty,
+        reason: 'add instructions and a screenshot for uncovered screens');
   });
 
   test('every page has a title, an intro and numbered steps', () {
@@ -18,8 +29,10 @@ void main() {
       expect(s.intro.trim(), isNotEmpty, reason: '${s.key} has no intro');
       expect(s.details, isNotEmpty, reason: '${s.key} has no steps');
       for (final d in s.details) {
-        expect(d.title.trim(), isNotEmpty, reason: '${s.key} step ${d.n} has no title');
-        expect(d.text.trim(), isNotEmpty, reason: '${s.key} step ${d.n} has no text');
+        expect(d.title.trim(), isNotEmpty,
+            reason: '${s.key} step ${d.n} has no title');
+        expect(d.text.trim(), isNotEmpty,
+            reason: '${s.key} step ${d.n} has no text');
       }
     }
   });
@@ -70,7 +83,8 @@ void main() {
     expect(blob, contains('tap pay'),
         reason: 'the member must be told they still confirm each payment');
     expect(page.note.trim(), isNotEmpty,
-        reason: 'this belongs in the highlighted callout, not buried in a step');
+        reason:
+            'this belongs in the highlighted callout, not buried in a step');
   });
 
   test('the sign-in page comes first', () {
@@ -79,7 +93,8 @@ void main() {
   });
 
   test('the pages that carry a warning still carry it', () {
-    final withNotes = kGuideSteps.where((s) => s.note.trim().isNotEmpty).map((s) => s.key);
+    final withNotes =
+        kGuideSteps.where((s) => s.note.trim().isNotEmpty).map((s) => s.key);
     expect(withNotes, containsAll(['checkin', 'payments', 'profile']));
   });
 
@@ -89,8 +104,10 @@ void main() {
       // blanking the page), so a typo would silently cost a picture.
       final missing = <String>[];
       for (final step in kGuideSteps) {
-        if (step.shot.isEmpty) continue;
-        if (!File(step.shot).existsSync()) missing.add('${step.key} -> ${step.shot}');
+        expect(step.shot, isNotEmpty,
+            reason: '${step.key} needs its feature screenshot');
+        if (!File(step.shot).existsSync())
+          missing.add('${step.key} -> ${step.shot}');
       }
       expect(missing, isEmpty, reason: 'declared but not on disk: $missing');
     });

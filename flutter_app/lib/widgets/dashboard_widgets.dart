@@ -83,28 +83,40 @@ class DashboardHeader extends StatelessWidget {
                     decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: .22),
                         borderRadius: BorderRadius.circular(10)),
-                    child: Text(
-                        session.clubDisplayName.isEmpty
-                            ? 'Member'
-                            : session.clubDisplayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Color(0xFFFFF7ED),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700))),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(AppIcons.verified_user,
+                          size: 12, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Flexible(
+                          child: Text(
+                              session.clubDisplayName.isEmpty
+                                  ? 'Member'
+                                  : session.clubDisplayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Color(0xFFFFF7ED),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700)))
+                    ])),
                 if (!instructor && status.isNotEmpty)
                   Padding(
                       padding: const EdgeInsets.only(top: 5),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.circle, color: ringColor, size: 6),
-                        const SizedBox(width: 5),
-                        Text(active ? 'Active' : 'Inactive',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w800)),
-                      ])),
+                      child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: ringColor.withValues(alpha: .25),
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.circle, color: ringColor, size: 6),
+                            const SizedBox(width: 5),
+                            Text(active ? 'Active' : 'Inactive',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800)),
+                          ]))),
               ])),
           const SizedBox(width: 10),
           if (instructor)

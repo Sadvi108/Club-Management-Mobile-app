@@ -31,6 +31,8 @@ class _HomeScreenState extends State<HomeScreen>
     final statsFailed =
         session.homeStats == null && session.homeStatsError != null;
     final waiting = session.loading && session.homeStats == null;
+    final due = session.dueAmount;
+    final dueLabel = due.toStringAsFixed(due == due.roundToDouble() ? 0 : 2);
     final grade = session.currentGrade
         .replaceFirst(RegExp(r'Grade\s*', caseSensitive: false), '')
         .split(' ')
@@ -70,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen>
                     stat(grade, 'Current Grade'),
                     Container(
                         width: 1, height: 34, color: const Color(0x40FFFFFF)),
-                    stat(session.dueAmount.toStringAsFixed(2), 'Due (RM)')
+                    stat(dueLabel, 'Due (RM)')
                   ]));
     final trainingTime = (session.myInfo?['trainingTme'] ?? '')
         .toString()
@@ -199,7 +201,7 @@ class _HomeScreenState extends State<HomeScreen>
                                         Text(
                                             statsFailed
                                                 ? 'Unavailable'
-                                                : 'RM ${session.dueAmount.toStringAsFixed(2)}',
+                                                : 'RM ${dueLabel}',
                                             style: TextStyle(
                                                 color: c.isDark
                                                     ? const Color(0xFFFED7AA)
@@ -209,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen>
                                       Text(
                                           statsFailed
                                               ? 'Open payments to retry'
-                                              : '${session.invoiceCount} invoices pending',
+                                              : '${session.invoiceCount} invoice${session.invoiceCount == 1 ? '' : 's'} pending',
                                           style: TextStyle(
                                               color: c.isDark
                                                   ? const Color(0xFFFDBA74)

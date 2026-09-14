@@ -43,7 +43,7 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
       body: Column(children: [
         AppHeader(
           title: 'User Guide',
-          subtitle: 'Step ${_page + 1} of ${kGuideSteps.length}',
+          subtitle: 'Feature ${_page + 1} of ${kGuideSteps.length}',
           showBack: true,
         ),
         _progress(c),
@@ -60,24 +60,114 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
     );
   }
 
-  Widget _progress(AppColors c) => Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: Gaps.lg, vertical: Gaps.sm),
-        child: Row(children: [
-          for (var i = 0; i < kGuideSteps.length; i++)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => _go(i),
-                child: Container(
-                  height: 4,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: i <= _page ? c.primary : c.border,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+  Future<void> _contents() async {
+    var query = '';
+    var category = 'All';
+    final selected = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => StatefulBuilder(
+          builder: (context, update) => Padding(
+                padding: EdgeInsets.only(
+                    bottom: MediaQuery.viewInsetsOf(context).bottom),
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(context).height * .82,
+                  child: Column(children: [
+                    Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(children: [
+                          const Expanded(
+                              child: Text('All features',
+                                  style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold))),
+                          IconButton(
+                              tooltip: 'Close contents',
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.close)),
+                        ])),
+                    Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: TextField(
+                          decoration: const InputDecoration(
+                              labelText: 'Search features or instructions',
+                              prefixIcon: Icon(Icons.search)),
+                          onChanged: (value) =>
+                              update(() => query = value.toLowerCase().trim()),
+                        )),
+                    SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(children: [
+                            for (final label in [
+                              'All',
+                              ...kGuideSteps.map((s) => s.category).toSet()
+                            ])
+                              Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 4),
+                                  child: ChoiceChip(
+                                    label: Text(label),
+                                    selected: category == label,
+                                    onSelected: (_) =>
+                                        update(() => category = label),
+                                  )),
+                          ]),
+                        )),
+                    Expanded(child: Builder(builder: (context) {
+                      final matches = kGuideSteps
+                          .asMap()
+                          .entries
+                          .where((e) =>
+                              (category == 'All' ||
+                                  e.value.category == category) &&
+                              ('${e.value.title} ${e.value.intro} ${e.value.details.map((d) => '${d.title} ${d.text}').join(' ')}')
+                                  .toLowerCase()
+                                  .contains(query))
+                          .toList();
+                      if (matches.isEmpty)
+                        return const Center(
+                            child: Text(
+                                'No matching features. Try another search.'));
+                      return ListView.builder(
+                          itemCount: matches.length,
+                          itemBuilder: (_, i) {
+                            final entry = matches[i];
+                            return ListTile(
+                                leading: Icon(entry.value.icon),
+                                title: Text(entry.value.title),
+                                subtitle: Text(entry.value.category),
+                                selected: _page == entry.key,
+                                onTap: () => Navigator.pop(context, entry.key));
+                          });
+                    })),
+                  ]),
                 ),
-              ),
-            ),
+              )),
+    );
+    if (selected != null && mounted) _go(selected);
+  }
+
+  Widget _progress(AppColors c) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Column(children: [
+          Row(children: [
+            Expanded(
+                child: Text(kGuideSteps[_page].category,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: c.textSecondary))),
+            TextButton.icon(
+                onPressed: _contents,
+                icon: const Icon(Icons.search),
+                label: const Text('All features')),
+          ]),
+          LinearProgressIndicator(
+              value: (_page + 1) / kGuideSteps.length,
+              color: c.primary,
+              backgroundColor: c.border),
         ]),
       );
 
@@ -115,27 +205,59 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
         ],
       );
 
-  /// A capture of the real screen.
-  ///
-  /// Height-capped and top-aligned: these are full-length screens, and letting one run to
-  /// its natural height would push every numbered step below the fold.
+  void _openShot(String asset) => showDialog<void>(
+        context: context,
+        builder: (context) => Dialog.fullscreen(
+            child: Scaffold(
+          appBar: AppBar(
+              title: const Text('Screen preview'),
+              leading: IconButton(
+                  tooltip: 'Close screen preview',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context))),
+          body: Column(children: [
+            const Padding(
+                padding: EdgeInsets.all(12),
+                child:
+                    Text('Example data • Pinch to zoom and drag to explore')),
+            Expanded(
+                child: InteractiveViewer(
+                    minScale: 1,
+                    maxScale: 5,
+                    child: Center(
+                        child: Image.asset(asset, fit: BoxFit.contain)))),
+          ]),
+        )),
+      );
+
   Widget _shot(AppColors c, String asset) => Padding(
-        padding: const EdgeInsets.only(top: Gaps.md),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(Radii.lg),
-          child: Container(
-            constraints: const BoxConstraints(maxHeight: 320),
-            width: double.infinity,
-            decoration: BoxDecoration(border: Border.all(color: c.border)),
-            child: Image.asset(
-              asset,
-              fit: BoxFit.fitWidth,
-              alignment: Alignment.topCenter,
-              // A missing asset must not blank the page the member is reading.
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        padding: const EdgeInsets.only(top: 16),
+        child: Column(children: [
+          InkWell(
+            onTap: () => _openShot(asset),
+            borderRadius: BorderRadius.circular(Radii.lg),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                  color: c.surfaceAlt,
+                  borderRadius: BorderRadius.circular(Radii.lg),
+                  border: Border.all(color: c.border)),
+              child: Image.asset(asset,
+                  height: 280,
+                  fit: BoxFit.contain,
+                  semanticLabel: 'Example screen. Tap to enlarge',
+                  errorBuilder: (_, __, ___) => const SizedBox(
+                      height: 120,
+                      child:
+                          Center(child: Text('Screen preview unavailable')))),
             ),
           ),
-        ),
+          TextButton.icon(
+              onPressed: () => _openShot(asset),
+              icon: const Icon(Icons.zoom_in),
+              label: const Text('View full screen • Example data')),
+        ]),
       );
 
   Widget _detail(AppColors c, GuideDetail d) => Padding(
@@ -247,7 +369,8 @@ class _UserGuideScreenState extends State<UserGuideScreen> {
                 : () => _go(_page + 1),
             icon: Icon(last ? AppIcons.check : AppIcons.chevron_right),
             label: Text(last ? 'Done' : 'Next'),
-            style: FilledButton.styleFrom(backgroundColor: c.primary),
+            style: FilledButton.styleFrom(
+                backgroundColor: c.primary, minimumSize: const Size(0, 48)),
           ),
         ]),
       );

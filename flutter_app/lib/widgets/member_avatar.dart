@@ -7,9 +7,11 @@ class MemberAvatar extends StatelessWidget {
   final String name, url, localPhoto;
   final double size, radius;
   final Color foreground, background;
+  final IconData? fallbackIcon;
   const MemberAvatar(
       {super.key,
       required this.name,
+      this.fallbackIcon,
       this.url = '',
       this.localPhoto = '',
       this.size = 52,
@@ -30,11 +32,13 @@ class MemberAvatar extends StatelessWidget {
     final fallback = ColoredBox(
         color: background,
         child: Center(
-            child: Text(initials.isEmpty ? '?' : initials,
-                style: TextStyle(
-                    color: foreground,
-                    fontSize: size * .35,
-                    fontWeight: FontWeight.w800))));
+            child: fallbackIcon != null
+                ? Icon(fallbackIcon, size: size * .5, color: foreground)
+                : Text(initials.isEmpty ? '?' : initials,
+                    style: TextStyle(
+                        color: foreground,
+                        fontSize: size * .35,
+                        fontWeight: FontWeight.w800))));
     Widget photo = fallback;
     if (localPhoto.isNotEmpty) {
       try {

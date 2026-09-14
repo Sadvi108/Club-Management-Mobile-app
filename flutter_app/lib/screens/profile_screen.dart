@@ -161,7 +161,12 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _personalInfoCard(AppColors c, UserSession session) {
     // Build rows from live API data — only show non-empty values.
+    final status =
+        (session.authData?['status'] ?? session.myInfo?['status'] ?? '')
+            .toString();
     final rows = <_InfoRow>[
+      if (status.isNotEmpty)
+        _InfoRow(AppIcons.verified_user, 'Account Status', status),
       if (session.phone.isNotEmpty)
         _InfoRow(AppIcons.phone_outlined, 'Phone', session.phone),
       if (session.email.isNotEmpty)
@@ -447,7 +452,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     final liveMembership = session.clubName.isNotEmpty ? session.clubName : '';
     final liveBelt =
         session.currentGrade.isNotEmpty ? session.currentGrade : '';
-    final liveLevel = session.tCenterName.isNotEmpty ? session.tCenterName : '';
     return Container(
       color: c.background,
       child: SingleChildScrollView(
@@ -457,7 +461,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             // Gradient header
             Container(
               padding: EdgeInsets.fromLTRB(
-                  Gaps.xl, MediaQuery.of(context).padding.top + 6, Gaps.xl, 50),
+                  Gaps.xl, MediaQuery.of(context).padding.top + 6, Gaps.xl, 56),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                     colors: c.gradient,
@@ -471,7 +475,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   const Text('My Profile',
                       style: TextStyle(
                           color: Colors.white,
-                          fontSize: 18,
+                          fontSize: 22,
                           fontWeight: FontWeight.w800)),
                   const Spacer(),
                   AppIconButton(
@@ -482,9 +486,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                     size: 38,
                   ),
                 ]),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.all(5),
                   decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
@@ -493,18 +497,20 @@ class _ProfileScreenState extends State<ProfileScreen>
                       name: liveName,
                       url: livePhoto,
                       localPhoto: session.localPhotoB64,
-                      size: 90,
-                      radius: 45),
+                      size: 104,
+                      radius: 52,
+                      fallbackIcon: Icons.person),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Text(liveName,
                     style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 22,
+                        fontSize: 24,
                         fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
                 Text(liveId,
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.85), fontSize: 12)),
+                        color: Colors.white.withOpacity(0.9), fontSize: 13)),
                 const SizedBox(height: 8),
                 Container(
                   padding:
@@ -528,139 +534,147 @@ class _ProfileScreenState extends State<ProfileScreen>
 
             // Virtual ID card (overlapping)
             Transform.translate(
-              offset: const Offset(0, -36),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: Gaps.xl),
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: c.surface,
-                  borderRadius: BorderRadius.circular(Radii.xl),
-                  border: c.isDark ? Border.all(color: c.border) : null,
-                  boxShadow: Shadows.card(c),
-                ),
-                child: Row(children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: Image.asset(kLogoAssetPath,
-                                  width: 22, height: 22, fit: BoxFit.cover)),
-                          const SizedBox(width: 8),
-                          Text('D-CLIX',
-                              style: TextStyle(
-                                  color: c.primary,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 2)),
-                        ]),
-                        const SizedBox(height: 8),
-                        Text(liveName,
-                            style: TextStyle(
-                                color: c.textPrimary,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 2),
-                        Text('$liveLevel · $liveBelt',
-                            style: TextStyle(
-                                color: c.textSecondary, fontSize: 11)),
-                        const SizedBox(height: 12),
-                        Text(liveId,
-                            style: TextStyle(
-                                color: c.textPrimary,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  _VirtualIdQr(
-                    // Membership ID, not an attendance write for another student.
-                    content:
-                        QrContent.studentFromRaw(session.currentStudentId) ??
-                            session.registrationNo,
-                    size: 90,
-                  ),
-                ]),
-              ),
-            ),
-
-            // Prominent switcher row — Switch Student / Switch Club.
-            // Kept near the top so guardians don't have to scroll.
-            _switcherRow(c, session),
-            const SizedBox(height: 12),
-
-            // Personal info card
-            _personalInfoCard(c, session),
-            const SizedBox(height: 12),
-
-            // Theme toggle
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: Gaps.xl)
-                  .copyWith(top: 0),
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: c.surface,
-                borderRadius: BorderRadius.circular(Radii.xl),
-                border: c.isDark ? Border.all(color: c.border) : null,
-                boxShadow: Shadows.card(c),
-              ),
-              child: Row(children: [
+              offset: const Offset(0, -34),
+              child: Column(children: [
                 Container(
-                  width: 42,
-                  height: 42,
+                  margin: const EdgeInsets.symmetric(horizontal: Gaps.xl),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                      color: c.surfaceAlt, shape: BoxShape.circle),
-                  child: Icon(theme.isDark ? Icons.dark_mode : Icons.light_mode,
-                      color: c.primary, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(theme.isDark ? 'Dark Mode' : 'Light Mode',
-                          style: TextStyle(
-                              color: c.textPrimary,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 2),
-                      Text(theme.isDark ? 'Orange & black' : 'Orange & white',
-                          style:
-                              TextStyle(color: c.textSecondary, fontSize: 11)),
-                    ],
+                    color: c.surface,
+                    borderRadius: BorderRadius.circular(Radii.xl),
+                    border: c.isDark ? Border.all(color: c.border) : null,
+                    boxShadow: Shadows.card(c),
                   ),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: Image.asset(kLogoAssetPath,
+                                    width: 24, height: 24, fit: BoxFit.cover)),
+                            const SizedBox(width: 8),
+                            Text('D-CLIX',
+                                style: TextStyle(
+                                    color: c.primary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 2)),
+                          ]),
+                          const SizedBox(height: 8),
+                          Text(liveName,
+                              style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800)),
+                          const SizedBox(height: 2),
+                          Text(liveBelt,
+                              style: TextStyle(
+                                  color: c.textSecondary, fontSize: 13)),
+                          const SizedBox(height: 12),
+                          Text(liveId,
+                              style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    _VirtualIdQr(
+                      // Membership ID, not an attendance write for another student.
+                      content:
+                          QrContent.studentFromRaw(session.currentStudentId) ??
+                              session.registrationNo,
+                      size: 96,
+                    ),
+                  ]),
                 ),
-                Switch(
-                  value: theme.isDark,
-                  onChanged: (v) => theme.setDark(v),
-                  activeColor: Colors.white,
-                  activeTrackColor: c.primary,
-                  inactiveThumbColor: Colors.white,
-                  inactiveTrackColor: c.border,
+
+                const SizedBox(height: 14),
+                // Prominent switcher row — Switch Student / Switch Club.
+                // Kept near the top so guardians don't have to scroll.
+                _switcherRow(c, session),
+                const SizedBox(height: 12),
+
+                // Personal info card
+                _personalInfoCard(c, session),
+                const SizedBox(height: 12),
+
+                // Theme toggle
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: Gaps.xl)
+                      .copyWith(top: 0),
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: c.surface,
+                    borderRadius: BorderRadius.circular(Radii.xl),
+                    border: c.isDark ? Border.all(color: c.border) : null,
+                    boxShadow: Shadows.card(c),
+                  ),
+                  child: Row(children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                          color: c.surfaceAlt, shape: BoxShape.circle),
+                      child: Icon(
+                          theme.isDark ? Icons.dark_mode : Icons.light_mode,
+                          color: c.primary,
+                          size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(theme.isDark ? 'Dark Mode' : 'Light Mode',
+                              style: TextStyle(
+                                  color: c.textPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 2),
+                          Text(
+                              theme.isDark
+                                  ? 'Orange & black'
+                                  : 'Orange & white',
+                              style: TextStyle(
+                                  color: c.textSecondary, fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: theme.isDark,
+                      onChanged: (v) => theme.setDark(v),
+                      activeColor: Colors.white,
+                      activeTrackColor: c.primary,
+                      inactiveThumbColor: Colors.white,
+                      inactiveTrackColor: c.border,
+                    ),
+                  ]),
                 ),
+
+                const SizedBox(height: 12),
+                _actionTile(c, AppIcons.qr_code_scanner, 'Scan QR to Check In',
+                    () => context.push('/qr-scan')),
+                _actionTile(c, AppIcons.support_agent, 'Help Desk',
+                    () => context.push('/helpdesk')),
+                _actionTile(c, AppIcons.badge_outlined, 'Student Details',
+                    () => context.push('/student-details')),
+                _actionTile(c, AppIcons.shopping_bag_outlined, 'My Purchases',
+                    () => context.push('/purchases')),
+                const SizedBox(height: 12),
+                _notificationsCard(context, c, session),
+                const SizedBox(height: 18),
+                _logoutBtn(context, c),
+                const SizedBox(height: 8),
+                Text('D-CLIX Flutter · v$kAppVersion (build $kAppBuild)',
+                    style: TextStyle(color: c.textMuted, fontSize: 11)),
               ]),
             ),
-
-            const SizedBox(height: 12),
-            _actionTile(c, AppIcons.qr_code_scanner, 'Scan QR to Check In',
-                () => context.push('/qr-scan')),
-            _actionTile(c, AppIcons.support_agent, 'Help Desk',
-                () => context.push('/helpdesk')),
-            _actionTile(c, AppIcons.badge_outlined, 'Student Details',
-                () => context.push('/student-details')),
-            _actionTile(c, AppIcons.shopping_bag_outlined, 'My Purchases',
-                () => context.push('/purchases')),
-            const SizedBox(height: 12),
-            _notificationsCard(context, c, session),
-            const SizedBox(height: 18),
-            _logoutBtn(context, c),
-            const SizedBox(height: 8),
-            Text('D-CLIX · v$kAppVersion ($kAppBuild)',
-                style: TextStyle(color: c.textMuted, fontSize: 11)),
           ],
         ),
       ),

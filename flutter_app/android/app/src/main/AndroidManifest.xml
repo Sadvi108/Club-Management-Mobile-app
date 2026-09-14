@@ -6,7 +6,10 @@
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-feature android:name="android.hardware.nfc" android:required="false"/>
     <application
-        android:label="D-CLIX"
+        android:label="D-CLIX Flutter"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"

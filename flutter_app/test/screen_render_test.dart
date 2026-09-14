@@ -4,6 +4,7 @@
 // Column, a null-deref in a builder or an overflow is, and none of those show up until the
 // widget is actually laid out.
 import 'package:flutter/material.dart';
+import 'package:dclix_app/data/guide_content.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -36,14 +37,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Signing in'), findsOneWidget);
-      expect(find.text('Step 1 of 12'), findsOneWidget);
+      expect(find.text('Feature 1 of ${kGuideSteps.length}'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       // Walk every page: each one lays out its own steps, tips and callout.
-      for (var i = 2; i <= 12; i++) {
+      for (var i = 2; i <= kGuideSteps.length; i++) {
         await tester.tap(find.text('Next'));
         await tester.pumpAndSettle();
-        expect(find.text('Step $i of 12'), findsOneWidget,
+        expect(find.text('Feature $i of ${kGuideSteps.length}'), findsOneWidget,
             reason: 'stuck before page $i');
         expect(tester.takeException(), isNull, reason: 'page $i threw');
       }
@@ -65,7 +66,11 @@ void main() {
       UserSession.instance.homeStats = {
         'myoffers': [
           {'code': 'A1', 'title': 'Raya Special', 'description': '20% off'},
-          {'code': 'B2', 'title': 'Old Deal', 'expiryDate': '2020-01-01T00:00:00'},
+          {
+            'code': 'B2',
+            'title': 'Old Deal',
+            'expiryDate': '2020-01-01T00:00:00'
+          },
         ]
       };
       await tester.pumpWidget(_wrap(const OffersScreen()));
@@ -93,13 +98,21 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the matching offer renders with its voucher strip', (tester) async {
+    testWidgets('the matching offer renders with its voucher strip',
+        (tester) async {
       UserSession.instance.homeStats = {
         'myoffers': [
-          {'code': 'REAL', 'title': 'Members Only 30%', 'expiryDate': '2099-06-01T00:00:00'},
+          {
+            'code': 'REAL',
+            'title': 'Members Only 30%',
+            'expiryDate': '2099-06-01T00:00:00'
+          },
         ]
       };
-      UserSession.instance.myInfo = {'name': 'Test Member', 'registrationNo': 'D-123'};
+      UserSession.instance.myInfo = {
+        'name': 'Test Member',
+        'registrationNo': 'D-123'
+      };
       await tester.pumpWidget(_wrap(const OfferDetailScreen(code: 'REAL')));
       await tester.pump();
       expect(find.text('Members Only 30%'), findsOneWidget);
@@ -113,7 +126,8 @@ void main() {
   group('StudentDetailsScreen', () {
     // Both API calls fail in a test (no network), which is exactly the flaky-connection
     // case this guards.
-    testWidgets('a failed refresh does not put a red error over good cached data',
+    testWidgets(
+        'a failed refresh does not put a red error over good cached data',
         (tester) async {
       UserSession.instance.myInfo = {
         'name': 'Alex Tan',
@@ -127,11 +141,13 @@ void main() {
 
       expect(find.text('Alex Tan'), findsOneWidget);
       expect(find.textContaining('Could not load'), findsNothing,
-          reason: 'the details rendered fine; an error banner reads as "my record is broken"');
+          reason:
+              'the details rendered fine; an error banner reads as "my record is broken"');
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('with nothing cached it DOES report the failure', (tester) async {
+    testWidgets('with nothing cached it DOES report the failure',
+        (tester) async {
       // The opposite case still has to work — silence here would be a blank screen with
       // no explanation.
       UserSession.instance.myInfo = null;

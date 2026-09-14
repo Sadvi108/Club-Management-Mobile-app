@@ -10,6 +10,15 @@ The app is a **client only**. All data comes from the third-party **Club.Api** b
 > **This repository is public.** Do not commit credentials, tokens or member data. The docs
 > record live API contracts and observed backend behaviour — no account details.
 
+## Download
+
+[Download D-CLIX Flutter 2.12.2 (build 20)](https://github.com/Sadvi108/Club-Management-Mobile-app/releases/download/flutter-v2.12.2/dclix-flutter-2.12.2-build20.apk)
+
+Open **D-CLIX Flutter** after installing. This package installs alongside older Expo/Flutter
+apps, starts at sign-in, and displays its version on the login screen. Local settings and
+outgoing chat history from the old package are not migrated. Club data loads after sign-in.
+See [release notes](docs/releases/flutter-v2.12.2.md) for verification and backend limits.
+
 ## Stack
 
 | | |
@@ -17,7 +26,7 @@ The app is a **client only**. All data comes from the third-party **Club.Api** b
 | App | Flutter 3.44.8, Dart 3.12, go_router, provider |
 | Backend | Club.Api (ASP.NET, third-party) — REST + bearer JWT |
 | Auth | Token in the OS secure store (Keychain / Keystore), never in SharedPreferences |
-| Android | `com.dclix.clubapp` |
+| Android | `com.dclix.clubapp.flutter` (D-CLIX Flutter, separate from legacy installs) |
 | Payments | Boost gateway via the backend's `/Bcpg` routes |
 
 ## Getting started
@@ -62,10 +71,15 @@ flutter test tool/capture_guide_shots.dart --dart-define=CAPTURE=true
 flutter build apk --release
 ```
 
-Requires JDK 17 and an Android SDK. The current release configuration signs with the
-local debug key, so this command produces an optimized test APK. Configure the original
-release signing key before distributing an update. Pushing a `flutter-v*` tag builds and
-publishes the APK through GitHub Actions.
+Requires JDK 17 and an Android SDK. Published APKs use the persistent Flutter release key
+configured in GitHub Actions secrets. Local builds read the ignored `android/key.properties`;
+without it they use a debug key for testing. Never commit the key or passwords. Back up
+the release keystore securely: future updates to this Flutter package require the same key.
+Pushing a `flutter-v*` tag builds and publishes a versioned APK and SHA-256 checksum.
+
+The in-app guide has **56 illustrated feature pages**, searchable contents, student/instructor
+sections, and zoomable screen previews. It works offline from Login → How to use this app
+or More → User Guide. All guide records and QR payloads are fictional examples.
 
 ## Layout
 

@@ -48,6 +48,8 @@ const _member = {
 
 const _booking = {
   'id': 9001,
+  'name': 'Saturday · 8:00 PM–9:30 PM',
+  'centerName': 'Sample Training Centre',
   'bookingDate': '2026-09-12T20:00:00',
   'classDate': '2026-09-12T20:00:00',
   'tCenterName': 'Sample Training Centre',
@@ -202,6 +204,8 @@ final Map<String, dynamic> _routes = {
       'tTimeTo': '11:30 AM',
       'tCenterName': 'Sample Training Centre',
       'instructorName': 'Sensei Sample',
+      'name': 'Saturday · 10:00 AM–11:30 AM',
+      'centerName': 'Sample Training Centre',
       'classDates': ['2026-09-12T10:00:00', '2026-09-19T10:00:00'],
     },
   ]),
@@ -320,13 +324,31 @@ dynamic lookupFixture(String path) {
     if (path.startsWith(key) && (best == null || key.length > best.length))
       best = key;
   }
-  // An unknown route returns an empty list rather than an error: a screen showing its
-  // empty state is a truthful picture, an exception is a blank one.
+  if (best == null &&
+      (path.startsWith('/Reports/') ||
+          path.startsWith('/Listing/StudentListByTcId'))) {
+    return _env([
+      {
+        'id': 1,
+        'studentId': 1,
+        'name': 'Alex Tan',
+        'studentName': 'Alex Tan',
+        'registrationNo': 'DCX-0001',
+        'tCenterName': 'Sample Training Centre',
+        'date': '2026-09-01',
+        'status': 'Active',
+        'description': 'Sample club record',
+        'amount': 85.0
+      }
+    ]);
+  }
   return best == null ? _env(const []) : _routes[best];
 }
 
 /// A client that answers every request from the fixture above.
 http.Client fakeApiClient() => MockClient((request) async {
+      if (request.url.path.startsWith('/Reports/OnlineSubmission'))
+        return http.Response('{"status":404}', 404);
       if (request.url.path.startsWith('/Utilities/QRCode/')) {
         // Generate a real QR for an explicitly fictional guide payload. Never use a member ID.
         final qr = QrImage(QrCode.fromData(

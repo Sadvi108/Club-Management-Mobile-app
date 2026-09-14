@@ -1,9 +1,15 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val signingProperties = Properties()
+val signingFile = rootProject.file("key.properties")
+if (signingFile.exists()) signingFile.inputStream().use { signingProperties.load(it) }
 
 android {
     namespace = "com.dclix.clubapp"
@@ -24,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.dclix.clubapp"
+        applicationId = "com.dclix.clubapp.flutter"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -33,11 +39,21 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (signingFile.exists()) {
+            create("release") {
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(signingProperties.getProperty("storeFile"))
+                storePassword = signingProperties.getProperty("storePassword")
+            }
+        }
+    }
     buildTypes {
         release {
-            // Signed with the debug keystore, matching how the Expo APK ships today.
-            // A real upload key is needed before Play Store distribution.
-            signingConfig = signingConfigs.getByName("debug")
+            // Release publishing requires this persistent key in CI. Pull-request
+            // builds without secrets use a debug key and are never published.
+            signingConfig = signingConfigs.getByName(if (signingFile.exists()) "release" else "debug")
         }
     }
 }

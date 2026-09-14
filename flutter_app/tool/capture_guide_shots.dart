@@ -55,6 +55,22 @@ import 'package:dclix_app/services/api_service.dart';
 import 'package:dclix_app/services/user_session.dart';
 import 'package:dclix_app/theme/theme_provider.dart';
 
+import 'package:dclix_app/data/guide_content.dart';
+import 'package:dclix_app/services/api.dart';
+import 'package:dclix_app/screens/training_screen.dart';
+import 'package:dclix_app/screens/qr_scan_screen.dart';
+import 'package:dclix_app/screens/events_screen.dart';
+import 'package:dclix_app/screens/offer_detail_screen.dart';
+import 'package:dclix_app/screens/edit_profile_screen.dart';
+import 'package:dclix_app/screens/chat_thread_screen.dart';
+import 'package:dclix_app/screens/outstanding_invoices_screen.dart';
+import 'package:dclix_app/screens/instructor_attendance_screen.dart';
+import 'package:dclix_app/screens/instructor_settings_screen.dart';
+import 'package:dclix_app/screens/instructor_report_list_screen.dart';
+import 'package:dclix_app/screens/instructor_reports/report_spec.dart';
+import 'package:dclix_app/screens/instructor_reports/student_detail_screen.dart';
+import 'package:dclix_app/screens/new_student_screen.dart';
+import 'package:dclix_app/screens/user_guide_screen.dart';
 import 'fake_api.dart';
 
 /// The same providers main.dart installs. LoginScreen watches ThemeProvider and threw
@@ -196,6 +212,22 @@ void _seedSession() {
 /// own renders Flutter's error widget instead.
 Future<void> _shot(WidgetTester tester, String name, Widget screen,
     {bool inShell = false}) async {
+  _seedSession();
+  if (name.startsWith('instructor-') ||
+      name.startsWith('report-') ||
+      name == 'new-student' ||
+      name == 'student-particulars') {
+    UserSession.instance.authData!['userType'] = 0;
+    UserSession.instance.authData!['name'] = 'Sensei Sample';
+    UserSession.instance.myInfo!['name'] = 'Sensei Sample';
+  }
+  UserSession.instance.homeStats!['mynews'] = [
+    {
+      'title': 'Sample club event',
+      'value':
+          'Training workshop this weekend. Contact the academy for details.'
+    }
+  ];
   final previousShadows = debugDisableShadows;
   debugDisableShadows = false;
   addTearDown(() => debugDisableShadows = previousShadows);
@@ -204,8 +236,15 @@ Future<void> _shot(WidgetTester tester, String name, Widget screen,
   addTearDown(tester.view.reset);
 
   final key = GlobalKey();
-  final content =
-      inShell ? TabsShell(location: '/$name', child: screen) : screen;
+  final content = inShell
+      ? TabsShell(
+          location: '/${{
+                'profile-card': 'profile',
+                'advance-payment': 'payments',
+                'payment-history': 'payments'
+              }[name] ?? name}',
+          child: screen)
+      : screen;
   await tester.pumpWidget(_wrap(RepaintBoundary(key: key, child: content)));
   // runAsync so the client's future actually completes — flutter_test fakes the clock, and
   // under plain pump() the fixture arrived after the capture and every API-driven screen
@@ -230,7 +269,7 @@ Future<void> _shot(WidgetTester tester, String name, Widget screen,
   await tester.runAsync(() async {
     final boundary =
         key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-    final image = await boundary.toImage(pixelRatio: 1.0);
+    final image = await boundary.toImage(pixelRatio: 2.0);
     bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
   });
@@ -253,20 +292,9 @@ Future<void> _shot(WidgetTester tester, String name, Widget screen,
           '$name captured as a Flutter error screen; it threw during build');
 
   const dark = bool.fromEnvironment('DARK_CAPTURE');
-  const guide = {
-    'login',
-    'home',
-    'attendance',
-    'schedule',
-    'book-class',
-    'payments',
-    'autopay',
-    'notifications',
-    'notification-settings',
-    'student-details',
-    'chat',
-    'more'
-  };
+  final guide = kGuideSteps
+      .map((s) => s.shot.split('/').last.replaceAll('.png', ''))
+      .toSet();
   final target = !dark && guide.contains(name)
       ? 'assets/guide'
       : '../docs/parity-captures/${dark ? 'dark' : 'light'}';
@@ -333,6 +361,29 @@ void main() {
       },
     );
 
+    // A camera texture with no frames: render the real scanner controls without
+    // camera hardware or emitting a barcode/attendance request.
+    for (final channel in ['event', 'deviceOrientation']) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+              MethodChannel('dev.steenbakker.mobile_scanner/scanner/$channel'),
+              (_) async => null);
+    }
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+            const MethodChannel(
+                'dev.steenbakker.mobile_scanner/scanner/method'),
+            (call) async => switch (call.method) {
+                  'state' => 1,
+                  'start' => <String, Object?>{
+                      'textureId': 0,
+                      'numberOfCameras': 1,
+                      'cameraDirection': 1,
+                      'currentTorchState': 0,
+                      'size': {'width': 390.0, 'height': 844.0}
+                    },
+                  _ => null,
+                });
     _seedSession();
   });
 
@@ -427,7 +478,287 @@ void main() {
     // matching, and a capture with real data fails rather than shipping.
     final s = UserSession.instance;
     if (s.myInfo == null) return;
-    expect(s.myInfo!['name'], 'Alex Tan');
+    expect(s.myInfo!['name'], isIn(['Alex Tan', 'Sensei Sample']));
     expect('${s.myInfo!['handPhone']}', matches(RegExp(r'^0+-0+$')));
   }, skip: skipReason);
+
+  testWidgets('qr-scan', (t) => _shot(t, 'qr-scan', const QRScanScreen()),
+      skip: skipShots);
+  testWidgets('training',
+      (t) => _shot(t, 'training', const TrainingScreen(), inShell: true),
+      skip: skipShots);
+  testWidgets(
+      'advance-payment',
+      (t) => _shot(
+          t, 'advance-payment', const PaymentsScreen(initialTab: 'prepay'),
+          inShell: true),
+      skip: skipShots);
+  testWidgets(
+      'payment-history',
+      (t) => _shot(
+          t, 'payment-history', const PaymentsScreen(initialTab: 'history'),
+          inShell: true),
+      skip: skipShots);
+  testWidgets('invoices',
+      (t) => _shot(t, 'invoices', const OutstandingInvoicesScreen()),
+      skip: skipShots);
+  testWidgets('events', (t) => _shot(t, 'events', const EventsScreen()),
+      skip: skipShots);
+  testWidgets(
+      'offer-detail',
+      (t) =>
+          _shot(t, 'offer-detail', const OfferDetailScreen(code: 'SAMPLE10')),
+      skip: skipShots);
+  testWidgets('edit-profile',
+      (t) => _shot(t, 'edit-profile', const EditProfileScreen()),
+      skip: skipShots);
+  testWidgets(
+      'chat-thread',
+      (t) => _shot(t, 'chat-thread',
+          const ChatThreadScreen(threadKey: 'g-101', title: 'Fee reminder')),
+      skip: skipShots);
+  testWidgets(
+      'instructor-attendance',
+      (t) =>
+          _shot(t, 'instructor-attendance', const InstructorAttendanceScreen()),
+      skip: skipShots);
+  testWidgets(
+      'instructor-settings',
+      (t) => _shot(
+          t,
+          'instructor-settings',
+          const InstructorTabsShell(
+              location: '/instructor/settings',
+              child: InstructorSettingsScreen())),
+      skip: skipShots);
+  testWidgets(
+      'instructor-student-detail',
+      (t) => _shot(
+          t,
+          'instructor-student-detail',
+          const InstructorStudentDetailScreen(student: {
+            'id': 1,
+            'studentId': 1,
+            'name': 'Alex Tan',
+            'registrationNo': 'DCX-0001'
+          })),
+      skip: skipShots);
+  testWidgets(
+      'student-particulars',
+      (t) => _shot(
+          t, 'student-particulars', const StudentParticularsScreen(id: 1)),
+      skip: skipShots);
+  testWidgets(
+      'new-student', (t) => _shot(t, 'new-student', const NewStudentScreen()),
+      skip: skipShots);
+  testWidgets(
+      'report-tournament-past',
+      (t) => _shot(t, 'report-tournament-past',
+          const CompetitionScreen(title: 'Tournament (Past)')),
+      skip: skipShots);
+  testWidgets(
+      'report-tournament-upcoming',
+      (t) => _shot(t, 'report-tournament-upcoming',
+          const CompetitionScreen(title: 'Upcoming Tournament')),
+      skip: skipShots);
+  testWidgets(
+      'user-guide', (t) => _shot(t, 'user-guide', const UserGuideScreen()),
+      skip: skipShots);
+  testWidgets(
+      'report-student-centers',
+      (t) => _shot(
+          t,
+          'report-student-centers',
+          InstructorReportListScreen(
+              spec: kReportSpecs['student-centers'] ??
+                  ReportSpec(
+                      title: 'Student Centers',
+                      fetch: (_) => Api.reportsStudentCenters()))),
+      skip: skipShots);
+  testWidgets(
+      'report-training-centers',
+      (t) => _shot(
+          t,
+          'report-training-centers',
+          InstructorReportListScreen(
+              spec: kReportSpecs['training-centers'] ??
+                  ReportSpec(
+                      title: 'Training Centers',
+                      fetch: (_) => Api.reportsTrainingCenters()))),
+      skip: skipShots);
+  testWidgets(
+      'report-exam-centers',
+      (t) => _shot(
+          t,
+          'report-exam-centers',
+          InstructorReportListScreen(
+              spec: kReportSpecs['exam-centers'] ??
+                  ReportSpec(
+                      title: 'Exam Centers',
+                      fetch: (_) => Api.reportsExamCenters()))),
+      skip: skipShots);
+  testWidgets(
+      'report-student-list',
+      (t) => _shot(
+          t,
+          'report-student-list',
+          InstructorReportListScreen(
+              spec: kReportSpecs['student-list'] ??
+                  ReportSpec(
+                      title: 'Student List',
+                      fetch: (_) => Api.reportsStudentDetails()))),
+      skip: skipShots);
+  testWidgets(
+      'report-training-time',
+      (t) => _shot(
+          t,
+          'report-training-time',
+          InstructorReportListScreen(
+              spec: kReportSpecs['training-time'] ??
+                  ReportSpec(
+                      title: 'Training Time',
+                      fetch: (_) => Api.listingTrainingCenters()))),
+      skip: skipShots);
+  testWidgets(
+      'report-grading-schedule',
+      (t) => _shot(
+          t,
+          'report-grading-schedule',
+          InstructorReportListScreen(
+              spec: kReportSpecs['grading-schedule'] ??
+                  ReportSpec(
+                      title: 'Grading Schedule',
+                      fetch: (_) => Api.reportsGradingSchedule()))),
+      skip: skipShots);
+  testWidgets(
+      'report-outstanding',
+      (t) => _shot(
+          t,
+          'report-outstanding',
+          InstructorReportListScreen(
+              spec: kReportSpecs['outstanding'] ??
+                  ReportSpec(
+                      title: 'Outstanding Report',
+                      fetch: (_) => Api.outstandingFetch()))),
+      skip: skipShots);
+  testWidgets(
+      'report-attendance',
+      (t) => _shot(
+          t,
+          'report-attendance',
+          InstructorReportListScreen(
+              spec: kReportSpecs['attendance'] ??
+                  ReportSpec(
+                      title: 'Attendance Report',
+                      fetch: (_) => Api.reportsAttendance()))),
+      skip: skipShots);
+  testWidgets(
+      'report-receipt',
+      (t) => _shot(
+          t,
+          'report-receipt',
+          InstructorReportListScreen(
+              spec: kReportSpecs['receipt'] ??
+                  ReportSpec(
+                      title: 'Receipt', fetch: (_) => Api.reportsReceipts()))),
+      skip: skipShots);
+  testWidgets(
+      'report-grading-past',
+      (t) => _shot(
+          t,
+          'report-grading-past',
+          InstructorReportListScreen(
+              spec: kReportSpecs['grading-past'] ??
+                  ReportSpec(
+                      title: 'Grading Past',
+                      fetch: (_) => Api.reportsGradingSchedule()))),
+      skip: skipShots);
+  testWidgets(
+      'report-purchase-request',
+      (t) => _shot(
+          t,
+          'report-purchase-request',
+          InstructorReportListScreen(
+              spec: kReportSpecs['purchase-request'] ??
+                  ReportSpec(
+                      title: 'Purchase Request',
+                      fetch: (_) => Api.reportsPurchaseRequests()))),
+      skip: skipShots);
+  testWidgets(
+      'report-tournament',
+      (t) => _shot(
+          t,
+          'report-tournament',
+          InstructorReportListScreen(
+              spec: kReportSpecs['tournament'] ??
+                  ReportSpec(
+                      title: 'Tournament Schedule',
+                      fetch: (_) => Api.reportsTournamentSummary()))),
+      skip: skipShots);
+  testWidgets(
+      'report-missing-invoice',
+      (t) => _shot(
+          t,
+          'report-missing-invoice',
+          InstructorReportListScreen(
+              spec: kReportSpecs['missing-invoice'] ??
+                  ReportSpec(
+                      title: 'Missing Invoice',
+                      fetch: (_) => Api.outstandingFetch()))),
+      skip: skipShots);
+  testWidgets(
+      'report-fee-master',
+      (t) => _shot(
+          t,
+          'report-fee-master',
+          InstructorReportListScreen(
+              spec: kReportSpecs['fee-master'] ??
+                  ReportSpec(
+                      title: 'Invoice Types',
+                      fetch: (_) => Api.listingInvoceTypes()))),
+      skip: skipShots);
+  testWidgets(
+      'report-payment-slip',
+      (t) => _shot(
+          t,
+          'report-payment-slip',
+          InstructorReportListScreen(
+              spec: kReportSpecs['payment-slip'] ??
+                  ReportSpec(
+                      title: 'Payment Slip',
+                      fetch: (_) => Api.reportsPaymentSlips()))),
+      skip: skipShots);
+  testWidgets(
+      'report-reimbursement',
+      (t) => _shot(
+          t,
+          'report-reimbursement',
+          InstructorReportListScreen(
+              spec: kReportSpecs['reimbursement'] ??
+                  ReportSpec(
+                      title: 'Reimbursement',
+                      fetch: (_) => Api.reportsReimbursement()))),
+      skip: skipShots);
+  testWidgets(
+      'report-contribution',
+      (t) => _shot(
+          t,
+          'report-contribution',
+          InstructorReportListScreen(
+              spec: kReportSpecs['contribution'] ??
+                  ReportSpec(
+                      title: 'Contribution',
+                      fetch: (_) => Api.reportsContribution()))),
+      skip: skipShots);
+  testWidgets(
+      'report-activity',
+      (t) => _shot(
+          t,
+          'report-activity',
+          InstructorReportListScreen(
+              spec: kReportSpecs['activity'] ??
+                  ReportSpec(
+                      title: 'Activities',
+                      fetch: (_) => Api.reportsActivity()))),
+      skip: skipShots);
 }
