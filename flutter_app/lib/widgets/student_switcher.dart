@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api.dart';
@@ -36,9 +37,11 @@ Future<void> showStudentSwitcher(BuildContext context) async {
       maxChildSize: 0.92,
       minChildSize: 0.4,
       expand: false,
-      builder: (_, scrollCtrl) =>
-          _SwitcherSheet(c: c, siblings: siblings, fetchError: error,
-              scrollController: scrollCtrl),
+      builder: (_, scrollCtrl) => _SwitcherSheet(
+          c: c,
+          siblings: siblings,
+          fetchError: error,
+          scrollController: scrollCtrl),
     ),
   );
 }
@@ -67,13 +70,13 @@ class _SwitcherSheetState extends State<_SwitcherSheet> {
     final session = UserSession.instance;
     if (sid == null) {
       session.showAllStudents();
-      ScaffoldMessenger.of(ctx).showSnackBar(
-          const SnackBar(content: Text('Showing all students')));
+      ScaffoldMessenger.of(ctx)
+          .showSnackBar(const SnackBar(content: Text('Showing all students')));
       return;
     }
     session.switchStudent(sid, studentName: name);
-    ScaffoldMessenger.of(ctx).showSnackBar(
-        SnackBar(content: Text('Switched to $name')));
+    ScaffoldMessenger.of(ctx)
+        .showSnackBar(SnackBar(content: Text('Switched to $name')));
   }
 
   @override
@@ -102,7 +105,8 @@ class _SwitcherSheetState extends State<_SwitcherSheet> {
           child: Column(children: [
             Center(
                 child: Container(
-                    width: 40, height: 4,
+                    width: 40,
+                    height: 4,
                     margin: const EdgeInsets.only(bottom: 14),
                     decoration: BoxDecoration(
                         color: c.border,
@@ -118,11 +122,12 @@ class _SwitcherSheetState extends State<_SwitcherSheet> {
                 onTap: () => Navigator.pop(context),
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
-                  width: 32, height: 32,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
                       color: c.surfaceAlt, shape: BoxShape.circle),
                   alignment: Alignment.center,
-                  child: Icon(Icons.close, color: c.textSecondary, size: 18),
+                  child: Icon(AppIcons.close, color: c.textSecondary, size: 18),
                 ),
               ),
             ]),
@@ -138,12 +143,11 @@ class _SwitcherSheetState extends State<_SwitcherSheet> {
                   onChanged: (v) => setState(() => _query = v),
                   decoration: InputDecoration(
                     prefixIcon:
-                        Icon(Icons.search, color: c.textMuted, size: 20),
+                        Icon(AppIcons.search, color: c.textMuted, size: 20),
                     hintText: 'Search',
                     hintStyle: TextStyle(color: c.textMuted, fontSize: 14),
                     border: InputBorder.none,
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
@@ -184,10 +188,8 @@ class _SwitcherSheetState extends State<_SwitcherSheet> {
                 )
               else
                 ...filtered.map((s) {
-                  final sid = s['id'] ??
-                      s['studentId'] ??
-                      s['code'] ??
-                      s['studentID'];
+                  final sid =
+                      s['id'] ?? s['studentId'] ?? s['code'] ?? s['studentID'];
                   final name = (s['text'] ??
                           s['name'] ??
                           s['fullName'] ??
@@ -199,14 +201,11 @@ class _SwitcherSheetState extends State<_SwitcherSheet> {
                       name.toUpperCase() == active.toUpperCase();
                   return _tile(
                     c,
-                    avatarText:
-                        name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    avatarText: name.isNotEmpty ? name[0].toUpperCase() : '?',
                     title: name,
                     subtitle: reg.isNotEmpty ? reg : null,
                     selected: isActive,
-                    onTap: isActive
-                        ? null
-                        : () => _pick(context, sid, name),
+                    onTap: isActive ? null : () => _pick(context, sid, name),
                   );
                 }),
             ],
@@ -239,19 +238,17 @@ class _SwitcherSheetState extends State<_SwitcherSheet> {
           ),
           child: Row(children: [
             Container(
-              width: 40, height: 40,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                gradient: selected
-                    ? LinearGradient(colors: c.gradient)
-                    : null,
+                gradient: selected ? LinearGradient(colors: c.gradient) : null,
                 color: selected ? null : c.surface,
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
               child: icon != null
                   ? Icon(icon,
-                      size: 19,
-                      color: selected ? Colors.white : c.primary)
+                      size: 19, color: selected ? Colors.white : c.primary)
                   : Text(avatarText ?? '?',
                       style: TextStyle(
                           color: selected ? Colors.white : c.primary,
@@ -274,13 +271,13 @@ class _SwitcherSheetState extends State<_SwitcherSheet> {
                     Text(subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: c.textSecondary, fontSize: 11.5)),
+                        style:
+                            TextStyle(color: c.textSecondary, fontSize: 11.5)),
                 ],
               ),
             ),
             if (selected)
-              Icon(Icons.check_circle, color: c.primary, size: 20),
+              Icon(AppIcons.check_circle, color: c.primary, size: 20),
           ]),
         ),
       ),

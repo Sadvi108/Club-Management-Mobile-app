@@ -46,7 +46,8 @@ String normalise(String raw) {
 }
 
 /// Swagger's `{param}` segments normalised the same way, so the two can be compared.
-String normaliseSwagger(String raw) => raw.replaceAll(RegExp(r'\{[^}]*\}'), '{}');
+String normaliseSwagger(String raw) =>
+    raw.replaceAll(RegExp(r'\{[^}]*\}'), '{}');
 
 /// Does an app path match a swagger path?
 ///
@@ -79,8 +80,8 @@ String? resolve(String appPath, Iterable<String> swaggerPaths) {
   return wildcardMatch;
 }
 
-final _callRe =
-    RegExp(r"""ApiService\.(get|post|put|delete|postMultipart)\(\s*'([^']+)'""");
+final _callRe = RegExp(
+    r"""ApiService\.(get|post|put|delete|postMultipart)\(\s*'([^']+)'""");
 
 /// Scan a whole file at once — `\s*` spans newlines, and plenty of calls in api.dart wrap
 /// the path onto the following line. A line-by-line scan missed those silently.
@@ -112,10 +113,10 @@ void main() {
   late List<ApiCall> calls;
 
   setUpAll(() {
-    routes =
-        (jsonDecode(File('test/fixtures/club_api_routes.json').readAsStringSync())
-                as Map<String, dynamic>)
-            .map((k, v) => MapEntry(k, (v as List).cast<String>()));
+    routes = (jsonDecode(
+                File('test/fixtures/club_api_routes.json').readAsStringSync())
+            as Map<String, dynamic>)
+        .map((k, v) => MapEntry(k, (v as List).cast<String>()));
     calls = scanLib();
   });
 
@@ -123,7 +124,8 @@ void main() {
     // Guards the parser: if lib/ is restructured and this stops matching, every other
     // test in the file would report "no problems" over an empty set.
     expect(calls.length, greaterThan(60),
-        reason: 'only found ${calls.length} calls — the parser is probably broken');
+        reason:
+            'only found ${calls.length} calls — the parser is probably broken');
     expect(routes.length, 73);
     expect(calls.map((c) => c.file).toSet(), contains('boost_payment.dart'));
   });
@@ -141,16 +143,34 @@ void main() {
   test('pathMatches treats a hardcoded param value as a match', () {
     // /Listing/StoreVersion/android against /Listing/StoreVersion/{platform}.
     expect(
-        pathMatches('/Listing/StoreVersion/android', '/Listing/StoreVersion/{}'), isTrue);
-    expect(pathMatches('/Listing/StoreVersion', '/Listing/StoreVersion/{}'), isFalse,
+        pathMatches(
+            '/Listing/StoreVersion/android', '/Listing/StoreVersion/{}'),
+        isTrue);
+    expect(pathMatches('/Listing/StoreVersion', '/Listing/StoreVersion/{}'),
+        isFalse,
         reason: 'a missing segment is not a match');
-    expect(pathMatches('/Listing/Other/android', '/Listing/StoreVersion/{}'), isFalse);
+    expect(pathMatches('/Listing/Other/android', '/Listing/StoreVersion/{}'),
+        isFalse);
   });
 
   test('every endpoint the app calls exists on the server', () {
-    final missing = calls.where((c) => resolve(c.path, routes.keys) == null).toList();
+    // These four proposed contracts were preserved from Expo; their UI explicitly
+    // handles 404 as Awaiting backend. Keep this exception narrow and visible.
+    const proposed = {
+      '/Reports/OnlineSubmissions',
+      '/Reports/OnlineSubmissionDetails/{}',
+      '/Account/ApproveStudent',
+      '/Account/RejectStudent'
+    };
+    final missing = calls
+        .where((c) =>
+            resolve(c.path, routes.keys) == null &&
+            !(c.file == 'online_submissions.dart' &&
+                proposed.contains(normalise(c.path))))
+        .toList();
     expect(missing, isEmpty,
-        reason: 'these paths are not in the server route table:\n${missing.join('\n')}');
+        reason:
+            'these paths are not in the server route table:\n${missing.join('\n')}');
   });
 
   test('every call uses a verb the server accepts on that path', () {
@@ -186,13 +206,16 @@ void main() {
       final r = resolve(c.path, routes.keys);
       if (r != null) called.add(r);
     }
-    final unused = routes.keys.where((k) => !called.contains(k)).toList()..sort();
+    final unused = routes.keys.where((k) => !called.contains(k)).toList()
+      ..sort();
     // ignore: avoid_print
-    print('Server routes not called by the app (${unused.length}/${routes.length}):\n'
+    print(
+        'Server routes not called by the app (${unused.length}/${routes.length}):\n'
         '  ${unused.join('\n  ')}');
 
     // These three are the gateway's own server-to-server legs — the browser and the
     // backend hit them, never this app. Anything else appearing here is worth a look.
-    expect(unused, containsAll(['/Bcpg/Callback', '/Bcpg/Redirect', '/Payment/Callback']));
+    expect(unused,
+        containsAll(['/Bcpg/Callback', '/Bcpg/Redirect', '/Payment/Callback']));
   });
 }

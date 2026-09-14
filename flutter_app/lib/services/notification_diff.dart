@@ -59,7 +59,8 @@ AlertPlan planAlerts({
   final maxId = ids.isEmpty ? null : ids.reduce((a, b) => b > a ? b : a);
 
   if (lastSeen == null) {
-    return AlertPlan(show: const [], capped: 0, deferred: false, newLastSeen: maxId);
+    return AlertPlan(
+        show: const [], capped: 0, deferred: false, newLastSeen: maxId ?? 0);
   }
 
   final fresh = rows
@@ -84,7 +85,8 @@ AlertPlan planAlerts({
 
   // Quiet hours DEFER, they do not delete (bug 2).
   if (wanted.isNotEmpty && inQuietHours(prefs, now)) {
-    return const AlertPlan(show: [], capped: 0, deferred: true, newLastSeen: null);
+    return const AlertPlan(
+        show: [], capped: 0, deferred: true, newLastSeen: null);
   }
 
   final show = wanted.length <= kMaxAlertsPerPoll

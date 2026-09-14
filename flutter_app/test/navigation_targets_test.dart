@@ -43,28 +43,38 @@ void main() {
   });
 
   test('every More-catalogue tile points at a registered route', () {
-    final dead =
-        MoreScreen.catalogueRoutes.where((r) => !registered.contains(r)).toSet();
-    expect(dead, isEmpty, reason: 'dead tiles in the All Features catalogue: $dead');
+    final dead = MoreScreen.catalogueRoutes
+        .where((r) => !registered.contains(Uri.parse(r).path))
+        .toSet();
+    expect(dead, isEmpty,
+        reason: 'dead tiles in the All Features catalogue: $dead');
   });
 
   test('every instructor report tile points at a registered route', () {
     final dead = InstructorReportsScreen.reportRoutes
-        .where((r) => !registered.contains(r))
+        .where((r) => !registered.contains(Uri.parse(r).path))
         .toSet();
-    expect(dead, isEmpty, reason: 'dead tiles on the instructor reports list: $dead');
+    expect(dead, isEmpty,
+        reason: 'dead tiles on the instructor reports list: $dead');
   });
 
   test('every home quick-access tile points at a registered route', () {
-    final dead = kQuickCards.map((q) => q.route).where((r) => !registered.contains(r));
+    final dead = kQuickCards
+        .map((q) => q.route)
+        .where((r) => !registered.contains(Uri.parse(r).path));
     expect(dead, isEmpty, reason: 'dead tiles on the home grid: $dead');
   });
 
-  test('the catalogue is the only way to reach the screens with no home tile', () {
+  test('the catalogue is the only way to reach the screens with no home tile',
+      () {
     // These have no quick-access tile of their own, so losing them from the catalogue
     // would strand the screen with no entry point anywhere in the app.
     final quick = kQuickCards.map((q) => q.route).toSet();
-    for (final orphan in ['/book-class', '/chat', '/invoices', '/notification-settings']) {
+    for (final orphan in [
+      '/book-class',
+      '/invoices',
+      '/notification-settings'
+    ]) {
       expect(quick, isNot(contains(orphan)));
       expect(MoreScreen.catalogueRoutes, contains(orphan),
           reason: '$orphan would be unreachable');
@@ -105,7 +115,8 @@ void main() {
 
     for (final section in ['PAYMENTS', 'PROGRESS', 'CLUB', 'ACCOUNT']) {
       await scrollTo(section);
-      expect(find.text(section), findsOneWidget, reason: '$section heading missing');
+      expect(find.text(section), findsOneWidget,
+          reason: '$section heading missing');
     }
     await scrollTo('Profile');
     expect(find.text('Profile'), findsOneWidget);

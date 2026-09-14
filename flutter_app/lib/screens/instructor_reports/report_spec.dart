@@ -41,6 +41,7 @@ class ReportSpec {
   final RowStatus? rowStatus;
   final String statusLabel;
   final bool trainingTimeMode;
+
   /// Optional row-tap handler — when set, rows become tappable (e.g. open
   /// a per-student detail screen from the Student List report).
   final RowTap? onRowTap;
@@ -107,8 +108,7 @@ final Map<String, ReportSpec> kReportSpecs = {
     // aggregator below pulls real students from listingStudentListByTcId
     // and enriches them with stats from /Outstanding/Fetch.
     fetch: fetchInstructorStudentList,
-    onRowTap: (ctx, row) =>
-        ctx.push('/instructor/student-detail', extra: row),
+    onRowTap: (ctx, row) => ctx.push('/instructor/student-detail', extra: row),
   ),
   'outstanding': ReportSpec(
     title: 'Outstanding Report',
@@ -211,19 +211,5 @@ final Map<String, ReportSpec> kReportSpecs = {
     title: 'Contribution',
     filters: const [RFilter.dateRange],
     fetch: (q) => Api.reportsContribution(reportBody(q)),
-  ),
-  // "New Student" previously called /Reports/StudentDetails, which for an
-  // instructor token returns the instructor's training-time SCHEDULE rows,
-  // not students — so the report showed schedule data under a student label.
-  // Reuse the real student aggregator (same source as Student List).
-  'new-student': ReportSpec(
-    title: 'New Student',
-    filters: const [
-      RFilter.trainingCenter,
-      RFilter.nameText,
-      RFilter.icText,
-    ],
-    fetch: fetchInstructorStudentList,
-    onRowTap: (ctx, row) => ctx.push('/instructor/student-detail', extra: row),
   ),
 };

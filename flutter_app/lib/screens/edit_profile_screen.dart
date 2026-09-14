@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -211,7 +212,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         Expanded(
           child: ListView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(Gaps.lg, Gaps.md, Gaps.lg, Gaps.xxxl),
+            padding:
+                const EdgeInsets.fromLTRB(Gaps.lg, Gaps.md, Gaps.lg, Gaps.xxxl),
             children: [
               Center(child: _avatar(c, s)),
               const SizedBox(height: Gaps.xl),
@@ -219,19 +221,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               _input(c, _name, hint: 'Your name', capitalize: true),
               _label(c, 'EMAIL'),
               _input(c, _email,
-                  hint: 'you@example.com', keyboard: TextInputType.emailAddress),
+                  hint: 'you@example.com',
+                  keyboard: TextInputType.emailAddress),
               _label(c, 'PHONE'),
-              _input(c, _phone, hint: '01x-xxxxxxx', keyboard: TextInputType.phone),
+              _input(c, _phone,
+                  hint: '01x-xxxxxxx', keyboard: TextInputType.phone),
               _label(c, 'GENDER'),
               _genderRow(c),
               _label(c, 'ADDRESS'),
-              _input(c, _address, hint: 'Street address', maxLines: 2, capitalize: true),
+              _input(c, _address,
+                  hint: 'Street address', maxLines: 2, capitalize: true),
               _label(c, 'POSTAL CODE'),
               _input(c, _postal, hint: '43000', keyboard: TextInputType.number),
               const SizedBox(height: Gaps.xl),
               GradientButton(
                 label: 'Save changes',
-                trailingIcon: Icons.check,
+                trailingIcon: AppIcons.check,
                 loading: _saving,
                 onPressed: _saving ? null : _save,
               ),
@@ -280,7 +285,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: image == null
             ? Text(initials.isEmpty ? '?' : initials,
                 style: TextStyle(
-                    color: c.textSecondary, fontSize: 30, fontWeight: FontWeight.w800))
+                    color: c.textSecondary,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800))
             : null,
       ),
       Positioned(
@@ -327,12 +334,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         enabled: !_saving,
         textCapitalization:
             capitalize ? TextCapitalization.words : TextCapitalization.none,
-        style: TextStyle(color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
+        style: TextStyle(
+            color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: c.textMuted, fontWeight: FontWeight.w400),
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           filled: true,
           fillColor: c.surface,
           enabledBorder: _pill(c.border),
@@ -356,7 +365,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ChoiceChip(
           label: Text(o),
           selected: o.toLowerCase() == _gender.toLowerCase(),
-          onSelected: _saving ? null : (v) => setState(() => _gender = v ? o : ''),
+          onSelected:
+              _saving ? null : (v) => setState(() => _gender = v ? o : ''),
         ),
       if (!known && _gender.isNotEmpty)
         ChoiceChip(label: Text(_gender), selected: true, onSelected: null),

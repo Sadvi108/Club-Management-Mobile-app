@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,13 +13,34 @@ import 'offers_screen.dart';
 /// It is selected STRICTLY by code. Falling back to "the first offer" would present
 /// someone else's terms and expiry as the member's own, at the moment they are trying to
 /// redeem it. A code that matches nothing shows a not-found state instead.
-class OfferDetailScreen extends StatelessWidget {
+class OfferDetailScreen extends StatefulWidget {
   final String code;
   const OfferDetailScreen({super.key, required this.code});
+  @override
+  State<OfferDetailScreen> createState() => _OfferDetailScreenState();
+}
+
+class _OfferDetailScreenState extends State<OfferDetailScreen>
+    with LiveRefreshMixin<OfferDetailScreen> {
+  @override
+  bool get canLiveRefresh => !UserSession.instance.loading;
+  @override
+  Future<void> refreshLiveData() =>
+      UserSession.instance.refresh(background: true);
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   String _fmt(DateTime? d) => d == null
@@ -29,7 +52,7 @@ class OfferDetailScreen extends StatelessWidget {
     final c = context.appColors;
     final session = context.watch<UserSession>();
     final offers = parseOffers(session.myOffers);
-    final match = offers.where((o) => o.code == code);
+    final match = offers.where((o) => o.code == widget.code);
     final offer = match.isEmpty ? null : match.first;
 
     return Scaffold(
@@ -49,7 +72,7 @@ class OfferDetailScreen extends StatelessWidget {
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(
                                   color: c.surfaceAlt,
-                                  child: Icon(Icons.local_offer,
+                                  child: Icon(AppIcons.local_offer,
                                       size: 40, color: c.textMuted),
                                 )),
                       ),
@@ -96,7 +119,9 @@ class OfferDetailScreen extends StatelessWidget {
           Expanded(
             child: Text('This offer has expired and may not be accepted.',
                 style: TextStyle(
-                    color: c.danger, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                    color: c.danger,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700)),
           ),
         ]),
       );
@@ -110,8 +135,10 @@ class OfferDetailScreen extends StatelessWidget {
           border: Border.all(color: c.border),
           boxShadow: Shadows.card(c),
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          _line(c, 'Member', s.displayName.trim().isEmpty ? '-' : s.displayName.trim()),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          _line(c, 'Member',
+              s.displayName.trim().isEmpty ? '-' : s.displayName.trim()),
           Divider(height: Gaps.md, color: c.border),
           _line(c, 'Registration No',
               s.registrationNo.isEmpty ? s.studentCode : s.registrationNo),
@@ -132,12 +159,16 @@ class OfferDetailScreen extends StatelessWidget {
           width: 130,
           child: Text(label,
               style: TextStyle(
-                  color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                  color: c.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600)),
         ),
         Expanded(
           child: Text(value.isEmpty ? '-' : value,
               style: TextStyle(
-                  color: c.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w800)),
+                  color: c.textPrimary,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800)),
         ),
       ]);
 
@@ -150,7 +181,9 @@ class OfferDetailScreen extends StatelessWidget {
             Text('This offer is no longer available.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                    color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                    color: c.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text('It may have expired or been withdrawn by your club.',
                 textAlign: TextAlign.center,

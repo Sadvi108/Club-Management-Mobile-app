@@ -1,6 +1,8 @@
+import '../../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
-import '../../config/feature_flags.dart';
+import '../../services/boost_payment.dart';
+import 'bcpg_webview_screen.dart';
 import '../../services/api.dart';
 import '../../services/prepay_service.dart';
 import '../../services/response_utils.dart';
@@ -19,7 +21,8 @@ class _Payee {
 /// students (self + siblings) to pay for. Each resulting invoice is listed in
 /// detail, then totalled. Mirrors the club's classic "Term Payment" screen.
 class TermPaymentScreen extends StatefulWidget {
-  const TermPaymentScreen({super.key});
+  final bool embedded;
+  const TermPaymentScreen({super.key, this.embedded = false});
 
   @override
   State<TermPaymentScreen> createState() => _TermPaymentScreenState();
@@ -37,8 +40,18 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
   int _gatherSeq = 0;
 
   static const _monthNames = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
@@ -78,11 +91,14 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
   }
 
   Future<void> _gather() async {
+    final seq = ++_gatherSeq;
     if (_months.isEmpty || _payees.isEmpty) {
-      setState(() => _bill = const PrepayBill([]));
+      setState(() {
+        _bill = const PrepayBill([]);
+        _gathering = false;
+      });
       return;
     }
-    final seq = ++_gatherSeq;
     setState(() => _gathering = true);
     final bill = await PrepayService.gatherInvoices(
       studentIds: _payees.toList(),
@@ -97,7 +113,22 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
   }
 
   Future<void> _pay() async {
-    if (_bill.count == 0) return;
+    if (_months.isEmpty ||
+        _bill.count == 0 ||
+        _payees.isEmpty ||
+        _paying ||
+        _gathering ||
+        _bill.failedRequests > 0) return;
+    final session = UserSession.instance;
+    if (session.paymentLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'A payment is being processed. Check Payment History before trying again.')));
+      return;
+    }
+    final ids = _payees.toList();
+    final selectedMonths = _months.toList()..sort();
+    final year = _year;
     // Confirm before charging.
     final c = context.appColors;
     final ok = await showDialog<bool>(
@@ -105,9 +136,9 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: c.surface,
         title: const Text('Confirm payment'),
-        content: Text(
-            'Pay RM ${_bill.total.toStringAsFixed(2)} for ${_bill.count} '
-            'invoice(s)?'),
+        content: Text(_bill.count == 0
+            ? 'Continue to checkout for ${selectedMonths.length} month(s) and ${ids.length} student(s)? The gateway will show the final amount before payment.'
+            : 'Estimated RM ${_bill.total.toStringAsFixed(2)}. The gateway confirms the final total for all selected months before payment.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -120,19 +151,24 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
     );
     if (ok != true || !mounted) return;
     setState(() => _paying = true);
+    session.startPaymentLock();
     try {
-      await Api.outstandingPayTermPayments(
-        studentIds: _payees.toList(),
-        year: _year,
-        months: _months.toList()..sort(),
-        paymentMethod: 1,
-      );
+      final start = await BoostPayment.start(PaymentIntent(
+          term: TermPayment(
+              studentIds: ids, year: year, months: selectedMonths)));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Term payment submitted.')),
-      );
-      _gather();
+      await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => BcpgWebViewScreen(
+              paymentUrl: start.url, referenceId: start.referenceId ?? '')));
+      final result = await BoostPayment.confirm(referenceId: start.referenceId);
+      if (result.outcome != PaymentOutcome.unknown) session.clearPaymentLock();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(result.message)));
+      await UserSession.instance.refresh();
+      await _gather();
     } catch (e) {
+      session.clearPaymentLock();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Payment failed: ${friendlyError(e)}')),
@@ -146,16 +182,23 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
   Widget build(BuildContext context) {
     final c = context.appColors;
     final now = DateTime.now();
-    final canPay = kPrepayPayEnabled && _bill.count > 0 && !_paying;
+    final canPay = _bill.count > 0 &&
+        _months.isNotEmpty &&
+        _payees.isNotEmpty &&
+        !_gathering &&
+        !_paying &&
+        _bill.failedRequests == 0;
     return Scaffold(
       backgroundColor: c.background,
       body: SafeArea(
         bottom: false,
         child: Column(children: [
-          const AppHeader(title: 'Term Payment', showBack: true),
+          if (!widget.embedded)
+            const AppHeader(title: 'Advance Payment', showBack: true),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(Gaps.lg, Gaps.sm, Gaps.lg, 28),
+              padding: EdgeInsets.fromLTRB(
+                  Gaps.xl, Gaps.sm, Gaps.xl, widget.embedded ? 120 : 28),
               children: [
                 _yearDropdown(c, now),
                 const SizedBox(height: 16),
@@ -180,6 +223,12 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: Center(child: CircularProgressIndicator()),
                   )
+                else if (_bill.failedRequests > 0)
+                  Column(children: [
+                    const Text(
+                        'Could not price every selected month. Please retry.'),
+                    TextButton(onPressed: _gather, child: const Text('Retry')),
+                  ])
                 else if (_months.isNotEmpty && _bill.count == 0)
                   _emptyNote(c)
                 else
@@ -216,6 +265,8 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
             if (v == null) return;
             setState(() {
               _year = v;
+              _gatherSeq++;
+              _gathering = false;
               _months.clear();
               _bill = const PrepayBill([]);
             });
@@ -291,7 +342,7 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(children: [
           Icon(
-            value ? Icons.check_circle : Icons.radio_button_unchecked,
+            value ? AppIcons.check_circle : Icons.radio_button_unchecked,
             size: 20,
             color: disabled
                 ? c.textMuted.withOpacity(0.4)
@@ -317,12 +368,15 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
       Row(children: [
         Expanded(
           child: Text('Total Invoice(s) : ${_bill.count}',
-              style: TextStyle(
-                  color: c.textPrimary, fontWeight: FontWeight.w700)),
+              style:
+                  TextStyle(color: c.textPrimary, fontWeight: FontWeight.w700)),
         ),
-        Text('Due Amt : ${_bill.total.toStringAsFixed(2)}',
-            style: TextStyle(
-                color: c.textPrimary, fontWeight: FontWeight.w800)),
+        Text(
+            _bill.count == 0
+                ? 'Total at checkout'
+                : 'Estimate: RM ${_bill.total.toStringAsFixed(2)}',
+            style:
+                TextStyle(color: c.textPrimary, fontWeight: FontWeight.w800)),
       ]),
       const SizedBox(height: 12),
       SizedBox(
@@ -334,9 +388,7 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
           child: Text(
-            !kPrepayPayEnabled
-                ? 'Pay Now (coming soon)'
-                : (_paying ? 'Submitting…' : 'Pay Now'),
+            _paying ? 'Opening checkout…' : 'Pay Now',
             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
           ),
         ),
@@ -352,7 +404,8 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
           border: Border.all(color: c.border),
         ),
         child: Center(
-          child: Text('No payable invoices for the selected months.',
+          child: Text(
+              'No fee quote is available for these selections. Choose another month or contact your club.',
               textAlign: TextAlign.center,
               style: TextStyle(color: c.textSecondary)),
         ),
@@ -361,9 +414,9 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
   Widget _invoiceCard(AppColors c, PrepayInvoice inv) {
     Widget kv(String k, String v, {bool strong = false}) => Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(k,
-                style: TextStyle(color: c.textMuted, fontSize: 11)),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(k, style: TextStyle(color: c.textMuted, fontSize: 11)),
             const SizedBox(height: 1),
             Text(v.isEmpty ? '-' : v,
                 style: TextStyle(
@@ -383,7 +436,8 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             kv('Inv No', inv.invoiceNo),
             kv('Period', inv.period),
             kv('Discount', inv.discount.toStringAsFixed(2)),
@@ -391,7 +445,8 @@ class _TermPaymentScreenState extends State<TermPaymentScreen> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             kv('Inv Type', inv.invoiceType),
             kv('Name', inv.studentName),
             kv('Due Amt', inv.amount.toStringAsFixed(2), strong: true),

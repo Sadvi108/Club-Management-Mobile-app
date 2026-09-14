@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../screens/splash_screen.dart';
+import '../screens/new_student_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/tabs_shell.dart';
 import '../screens/home_screen.dart';
@@ -41,6 +42,7 @@ import '../screens/instructor_report_list_screen.dart';
 import '../screens/instructor_reports/report_spec.dart';
 import '../screens/instructor_reports/student_detail_screen.dart';
 import '../services/api.dart';
+import '../services/live_refresh.dart';
 import '../services/user_session.dart';
 
 /// Bare report fetcher: a no-argument call returning the raw response.
@@ -91,8 +93,8 @@ CustomTransitionPage<void> _tabFade(LocalKey key, Widget child) {
 
 GoRoute _reportRoute(String path, String title, ReportFetcher fetcher) {
   final slug = path.split('/').last;
-  final spec = kReportSpecs[slug] ??
-      ReportSpec(title: title, fetch: (_) => fetcher());
+  final spec =
+      kReportSpecs[slug] ?? ReportSpec(title: title, fetch: (_) => fetcher());
   return GoRoute(
     path: path,
     pageBuilder: (_, state) => _fadeThrough(
@@ -104,19 +106,20 @@ GoRoute _reportRoute(String path, String title, ReportFetcher fetcher) {
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/',
+  observers: [LiveRefreshNavigatorObserver()],
   redirect: (context, state) {
     final loc = state.matchedLocation;
-    // /debug is always reachable (helpful for diagnosing data issues).
-    if (loc == '/debug') return null;
-    if (loc.startsWith('/instructor') && !UserSession.instance.isInstructor) {
-      return '/login';
-    }
+    if (['/', '/login', '/user-guide', '/debug'].contains(loc)) return null;
+    if (!UserSession.instance.isLoggedIn) return '/login';
+    if (loc.startsWith('/instructor') && !UserSession.instance.isInstructor)
+      return '/home';
     return null;
   },
   routes: [
     GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
     GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
     ShellRoute(
+      observers: [LiveRefreshNavigatorObserver()],
       builder: (context, state, child) =>
           TabsShell(child: child, location: state.matchedLocation),
       routes: [
@@ -125,28 +128,27 @@ final GoRouter appRouter = GoRouter(
             pageBuilder: (_, s) => _tabFade(s.pageKey, const HomeScreen())),
         GoRoute(
             path: '/schedule',
-            pageBuilder: (_, s) =>
-                _tabFade(s.pageKey, const ScheduleScreen())),
+            pageBuilder: (_, s) => _tabFade(s.pageKey, const ScheduleScreen())),
         GoRoute(
             path: '/progress',
-            pageBuilder: (_, s) =>
-                _tabFade(s.pageKey, const ProgressScreen())),
+            pageBuilder: (_, s) => _tabFade(s.pageKey, const ProgressScreen())),
         GoRoute(
             path: '/profile',
-            pageBuilder: (_, s) =>
-                _tabFade(s.pageKey, const ProfileScreen())),
+            pageBuilder: (_, s) => _tabFade(s.pageKey, const ProfileScreen())),
         // Reachable from quick-access tiles + home Pay Now / Today's Class.
         GoRoute(
             path: '/training',
-            pageBuilder: (_, s) =>
-                _tabFade(s.pageKey, const TrainingScreen())),
+            pageBuilder: (_, s) => _tabFade(s.pageKey, const TrainingScreen())),
         GoRoute(
             path: '/payments',
-            pageBuilder: (_, s) =>
-                _tabFade(s.pageKey, const PaymentsScreen())),
+            pageBuilder: (_, s) => _tabFade(
+                s.pageKey,
+                PaymentsScreen(
+                    initialTab: s.uri.queryParameters['tab'] ?? 'pay'))),
       ],
     ),
     ShellRoute(
+      observers: [LiveRefreshNavigatorObserver()],
       builder: (context, state, child) => InstructorTabsShell(
         child: child,
         location: state.matchedLocation,
@@ -188,22 +190,34 @@ final GoRouter appRouter = GoRouter(
         Api.outstandingFetch),
     _reportRoute('/instructor/reports/attendance', 'Attendance Report',
         Api.reportsAttendance),
-    _reportRoute('/instructor/reports/receipt', 'Receipt',
-        Api.reportsReceipts),
+    _reportRoute('/instructor/reports/receipt', 'Receipt', Api.reportsReceipts),
     _reportRoute('/instructor/reports/grading-past', 'Grading Past',
         Api.reportsGradingSchedule),
     _reportRoute('/instructor/reports/purchase-request', 'Purchase Request',
         Api.reportsPurchaseRequests),
-    _reportRoute('/instructor/reports/activity', 'Activities',
-        Api.reportsActivity),
+    _reportRoute(
+        '/instructor/reports/activity', 'Activities', Api.reportsActivity),
+    GoRoute(
+        path: '/instructor/reports/tournament-past',
+        builder: (_, __) =>
+            const CompetitionScreen(title: 'Tournament (Past)')),
+    GoRoute(
+        path: '/instructor/reports/tournament-upcoming',
+        builder: (_, __) =>
+            const CompetitionScreen(title: 'Upcoming Tournament')),
     _reportRoute('/instructor/reports/tournament', 'Tournament Schedule',
         Api.reportsTournamentSummary),
     _reportRoute('/instructor/reports/missing-invoice', 'Missing Invoice',
         Api.outstandingFetch),
     _reportRoute('/instructor/reports/fee-master', 'Invoice Types',
         Api.listingInvoceTypes),
-    _reportRoute('/instructor/reports/new-student', 'New Student',
-        Api.reportsStudentDetails),
+    GoRoute(
+        path: '/instructor/reports/new-student',
+        builder: (_, __) => const NewStudentScreen()),
+    GoRoute(
+        path: '/instructor/student-particulars/:id',
+        builder: (_, state) => StudentParticularsScreen(
+            id: int.tryParse(state.pathParameters['id'] ?? '') ?? 0)),
     _reportRoute('/instructor/reports/payment-slip', 'Payment Slip',
         Api.reportsPaymentSlips),
     _reportRoute('/instructor/reports/reimbursement', 'Reimbursement',
@@ -251,7 +265,8 @@ final GoRouter appRouter = GoRouter(
         pageBuilder: (_, s) => _fadeThrough(s.pageKey, const MoreScreen())),
     GoRoute(
         path: '/purchases',
-        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const PurchasesScreen())),
+        pageBuilder: (_, s) =>
+            _fadeThrough(s.pageKey, const PurchasesScreen())),
     GoRoute(
         path: '/autopay',
         pageBuilder: (_, s) => _fadeThrough(s.pageKey, const AutoPayScreen())),
@@ -261,7 +276,8 @@ final GoRouter appRouter = GoRouter(
             _fadeThrough(s.pageKey, const PurchaseRequestScreen())),
     GoRoute(
         path: '/edit-profile',
-        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const EditProfileScreen())),
+        pageBuilder: (_, s) =>
+            _fadeThrough(s.pageKey, const EditProfileScreen())),
     GoRoute(
         path: '/student-details',
         pageBuilder: (_, s) =>
@@ -274,10 +290,12 @@ final GoRouter appRouter = GoRouter(
     // it that way if a general auth guard is ever added.
     GoRoute(
         path: '/user-guide',
-        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const UserGuideScreen())),
+        pageBuilder: (_, s) =>
+            _fadeThrough(s.pageKey, const UserGuideScreen())),
     GoRoute(
         path: '/competition',
-        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const CompetitionScreen())),
+        pageBuilder: (_, s) =>
+            _fadeThrough(s.pageKey, const CompetitionScreen())),
     GoRoute(
         path: '/notifications',
         pageBuilder: (_, s) =>
@@ -304,7 +322,10 @@ final GoRouter appRouter = GoRouter(
             _fadeThrough(s.pageKey, const AttendanceScreen())),
     GoRoute(
         path: '/events',
-        pageBuilder: (_, s) => _fadeThrough(s.pageKey, const EventsScreen())),
+        pageBuilder: (_, s) => _fadeThrough(
+            s.pageKey,
+            EventsScreen(
+                initialTab: s.uri.queryParameters['tab'] ?? 'events'))),
     // Was NotificationDetailScreen, which rendered GET /Profile/NotificationDetails —
     // a route that is NOT scoped to the caller and returned other members' rows. The
     // conversation is now built from the member's own MyNotifications rows.

@@ -10,6 +10,8 @@
 // member's name, phone number and member QR. Keeping the fixture in source means a capture
 // physically cannot contain anyone's record.
 import 'dart:convert';
+import 'dart:ui' as ui;
+import 'package:qr/qr.dart';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -77,7 +79,8 @@ final Map<String, dynamic> _routes = {
       'groupId': 'g-101',
       'notificationType': '',
       'text': 'Fee reminder',
-      'value': 'Your September fee of RM85.00 is now due. Tap Pay Now to settle it.',
+      'value':
+          'Your September fee of RM85.00 is now due. Tap Pay Now to settle it.',
       'isRead': false,
       'createdDate': '2026-09-09T09:15:00',
     },
@@ -86,7 +89,8 @@ final Map<String, dynamic> _routes = {
       'groupId': 'g-102',
       'notificationType': '',
       'text': 'Class Activity',
-      'value': 'Grading practice this Saturday at 10:00 AM. Please attend in full uniform.',
+      'value':
+          'Grading practice this Saturday at 10:00 AM. Please attend in full uniform.',
       'isRead': false,
       'createdDate': '2026-09-08T18:40:00',
     },
@@ -118,7 +122,10 @@ final Map<String, dynamic> _routes = {
       },
     ],
     'mynews': [
-      {'title': 'Inter-club tournament', 'value': 'Registration opens next week.'},
+      {
+        'title': 'Inter-club tournament',
+        'value': 'Registration opens next week.'
+      },
     ],
   }),
   '/Outstanding/Fetch': _env([
@@ -147,9 +154,7 @@ final Map<String, dynamic> _routes = {
       'centerName': 'Sample Training Centre',
     },
   ]),
-  '/Outstanding/CollectionCount': _env([
-    {'id': 1, 'text': 'Cash', 'value': '3'},
-  ]),
+  '/Outstanding/CollectionCount': _env({'cash': 3, 'fpx': 5, 'dbt': 2}),
   '/Listing/MySiblings': _env([
     {'id': 1, 'text': 'Alex Tan', 'value': '1'},
     {'id': 2, 'text': 'Sam Tan', 'value': '2'},
@@ -187,7 +192,8 @@ final Map<String, dynamic> _routes = {
     _booking,
     {..._booking, 'id': 9002, 'bookingDate': '2026-09-19T20:00:00'},
   ]),
-  '/ClassBooking/PackageInfo': _env({'packageName': 'Standard', 'sessionsLeft': 8}),
+  '/ClassBooking/PackageInfo':
+      _env({'packageName': 'Standard', 'sessionsLeft': 8}),
   '/ClassBooking/TrainingTimeWithDateAndInstructor': _env([
     {
       'id': 1,
@@ -311,7 +317,8 @@ dynamic lookupFixture(String path) {
   if (_routes.containsKey(path)) return _routes[path];
   String? best;
   for (final key in _routes.keys) {
-    if (path.startsWith(key) && (best == null || key.length > best.length)) best = key;
+    if (path.startsWith(key) && (best == null || key.length > best.length))
+      best = key;
   }
   // An unknown route returns an empty list rather than an error: a screen showing its
   // empty state is a truthful picture, an exception is a blank one.
@@ -319,8 +326,33 @@ dynamic lookupFixture(String path) {
 }
 
 /// A client that answers every request from the fixture above.
-http.Client fakeApiClient() => MockClient((request) async => http.Response(
-      jsonEncode(lookupFixture(request.url.path)),
-      200,
-      headers: {'content-type': 'application/json; charset=utf-8'},
-    ));
+http.Client fakeApiClient() => MockClient((request) async {
+      if (request.url.path.startsWith('/Utilities/QRCode/')) {
+        // Generate a real QR for an explicitly fictional guide payload. Never use a member ID.
+        final qr = QrImage(QrCode.fromData(
+            data: 'DCLIX-GUIDE-SAMPLE-ONLY',
+            errorCorrectLevel: QrErrorCorrectLevel.M));
+        const cell = 8.0;
+        final side = ((qr.moduleCount + 8) * cell).toInt();
+        final recorder = ui.PictureRecorder();
+        final canvas = ui.Canvas(recorder);
+        canvas.drawPaint(ui.Paint()..color = const ui.Color(0xFFFFFFFF));
+        for (var y = 0; y < qr.moduleCount; y++) {
+          for (var x = 0; x < qr.moduleCount; x++) {
+            if (qr.isDark(y, x))
+              canvas.drawRect(
+                  ui.Rect.fromLTWH((x + 4) * cell, (y + 4) * cell, cell, cell),
+                  ui.Paint()..color = const ui.Color(0xFF000000));
+          }
+        }
+        final picture = recorder.endRecording();
+        final image = await picture.toImage(side, side);
+        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+        image.dispose();
+        picture.dispose();
+        return http.Response.bytes(bytes!.buffer.asUint8List(), 200,
+            headers: {'content-type': 'image/png'});
+      }
+      return http.Response(jsonEncode(lookupFixture(request.url.path)), 200,
+          headers: {'content-type': 'application/json; charset=utf-8'});
+    });

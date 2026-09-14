@@ -21,10 +21,7 @@ extension ResponsiveContext on BuildContext {
   /// On real devices this is the status-bar / notch inset. On web + the
   /// preview the OS reports no inset (0), so we fall back to a fixed value
   /// that keeps header content clear of a hardware notch.
-  double get topInset {
-    final inset = MediaQuery.paddingOf(this).top;
-    return inset > 0 ? inset : 44.0;
-  }
+  double get topInset => MediaQuery.paddingOf(this).top;
 
   /// Horizontal page padding that tightens on compact phones to reclaim
   /// width, without changing the look on normal / large phones.

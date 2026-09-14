@@ -1,9 +1,10 @@
 # D-CLIX — App Design System (current)
 
-Martial-arts / multi-sport **club-management** mobile app (students + instructors), Expo Router
-React Native, wired to the live Club.Api backend. This documents the **shipped** design as of
-**v2.5.0**. Everything is token-driven from `frontend/src/theme.ts` via a `useTheme()` context —
-screens consume tokens, never hardcode themed colors.
+The Flutter port uses the React Native **v2.11.1** design reference. Its palettes, shadows,
+system typography and Ionicons live in `flutter_app/lib/theme/`; the original tokens remain
+available at the [v2.11.1 tag](https://github.com/Sadvi108/Club-Management-Mobile-app/tree/v2.11.1/frontend/src/theme.ts).
+The component descriptions below retain their original React Native terminology. See the
+[parity audit](react-native-parity-audit.md) for implemented Flutter counterparts and limits.
 
 **Theme:** Orange · White · Black. One brand accent (orange); structure is white/black/neutral;
 semantic green/amber/red/blue only for status. Light + dark both first-class.

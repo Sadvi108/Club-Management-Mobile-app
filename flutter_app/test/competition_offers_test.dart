@@ -27,20 +27,28 @@ void main() {
       expect(rows.single.players, 4);
     });
 
-    test('a nameless row is dropped rather than rendered as a blank card', () {
+    test('gender grouped medal rows remain visible without a tournament name',
+        () {
       final rows = parseTournaments({
         'data': [
-          {'name': '', 'medalGold': 5},
+          {'name': '', 'gender': 'Female', 'medalGold': 5},
           {'name': 'Real Cup'},
         ]
       });
-      expect(rows.map((r) => r.name), ['Real Cup']);
+      expect(rows.map((r) => r.title), ['Female', 'Real Cup']);
+      expect(rows.first.gold, 5);
+      expect(tournamentNames(rows), ['Real Cup']);
     });
 
     test('counts arriving as strings still add up', () {
       final rows = parseTournaments({
         'data': [
-          {'name': 'X', 'medalGold': '2', 'medalSilver': '1', 'medalBronze': null}
+          {
+            'name': 'X',
+            'medalGold': '2',
+            'medalSilver': '1',
+            'medalBronze': null
+          }
         ]
       });
       expect(rows.single.medals, 3);
@@ -117,11 +125,19 @@ void main() {
     });
 
     test('no expiry date never counts as expired', () {
-      expect(parseOffers([{'code': 'FOREVER'}]).single.isExpired, isFalse);
+      expect(
+          parseOffers([
+            {'code': 'FOREVER'}
+          ]).single.isExpired,
+          isFalse);
     });
 
     test('rows with neither code nor title are dropped', () {
-      expect(parseOffers([{'description': 'orphan'}]), isEmpty);
+      expect(
+          parseOffers([
+            {'description': 'orphan'}
+          ]),
+          isEmpty);
       expect(parseOffers([]), isEmpty);
     });
   });

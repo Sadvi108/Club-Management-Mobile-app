@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/boost_payment.dart';
@@ -21,7 +23,13 @@ class PurchaseRequestScreen extends StatefulWidget {
   State<PurchaseRequestScreen> createState() => _PurchaseRequestScreenState();
 }
 
-class _PurchaseRequestScreenState extends State<PurchaseRequestScreen> {
+class _PurchaseRequestScreenState extends State<PurchaseRequestScreen>
+    with LiveRefreshMixin<PurchaseRequestScreen> {
+  @override
+  bool get canLiveRefresh => !_loading && !_paying && _qty.isEmpty;
+  @override
+  Future<void> refreshLiveData() => _load();
+
   bool _loading = true;
   bool _paying = false;
   String? _error;
@@ -109,7 +117,8 @@ class _PurchaseRequestScreenState extends State<PurchaseRequestScreen> {
             'payment goes through.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Proceed to pay')),
@@ -192,14 +201,17 @@ class _PurchaseRequestScreenState extends State<PurchaseRequestScreen> {
       body: Column(children: [
         const AppHeader(title: 'New Purchase Request', showBack: true),
         Expanded(child: _body(c)),
-        if (!_loading && _error == null && _catalogue.isNotEmpty)
+        if (!(_loading && !liveRefreshing) &&
+            _error == null &&
+            _catalogue.isNotEmpty)
           _footer(c, total, selected),
       ]),
     );
   }
 
   Widget _body(AppColors c) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if ((_loading && !liveRefreshing))
+      return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return RefreshIndicator(
         onRefresh: _load,
@@ -213,7 +225,9 @@ class _PurchaseRequestScreenState extends State<PurchaseRequestScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: c.danger, fontSize: 14)),
             const SizedBox(height: Gaps.md),
-            Center(child: TextButton(onPressed: _load, child: const Text('Try again'))),
+            Center(
+                child: TextButton(
+                    onPressed: _load, child: const Text('Try again'))),
           ],
         ),
       );
@@ -267,23 +281,28 @@ class _PurchaseRequestScreenState extends State<PurchaseRequestScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                    color: c.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
           ),
           Text('Price: ${_fmtRM(p.price)}',
-              style:
-                  TextStyle(color: c.primary, fontSize: 13, fontWeight: FontWeight.w800)),
+              style: TextStyle(
+                  color: c.primary, fontSize: 13, fontWeight: FontWeight.w800)),
         ]),
         const SizedBox(height: Gaps.sm),
         Text('Item: ${p.name.isEmpty ? "-" : p.name}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style:
-                TextStyle(color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w800)),
+            style: TextStyle(
+                color: c.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w800)),
         const SizedBox(height: Gaps.md),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
           SizedBox(
             width: 120,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _fieldLabel(c, 'QTY'),
               TextField(
                 controller: _ctrl(p.productId),
@@ -291,7 +310,9 @@ class _PurchaseRequestScreenState extends State<PurchaseRequestScreen> {
                 enabled: !_paying,
                 onChanged: (v) => _setQty(p.productId, v),
                 style: TextStyle(
-                    color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w700),
+                    color: c.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700),
                 decoration: InputDecoration(
                   hintText: '0',
                   hintStyle: TextStyle(color: c.textMuted),
@@ -309,7 +330,8 @@ class _PurchaseRequestScreenState extends State<PurchaseRequestScreen> {
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               _fieldLabel(c, 'TOTAL'),
               Container(
                 height: 46,
@@ -324,7 +346,9 @@ class _PurchaseRequestScreenState extends State<PurchaseRequestScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: c.textPrimary, fontSize: 14, fontWeight: FontWeight.w800)),
+                        color: c.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800)),
               ),
             ]),
           ),
@@ -350,8 +374,8 @@ class _PurchaseRequestScreenState extends State<PurchaseRequestScreen> {
 
   Widget _footer(AppColors c, double total, int selected) {
     return Container(
-      padding: EdgeInsets.fromLTRB(
-          Gaps.lg, Gaps.md, Gaps.lg, MediaQuery.of(context).padding.bottom + Gaps.md),
+      padding: EdgeInsets.fromLTRB(Gaps.lg, Gaps.md, Gaps.lg,
+          MediaQuery.of(context).padding.bottom + Gaps.md),
       decoration: BoxDecoration(
         color: c.background,
         border: Border(top: BorderSide(color: c.border)),
@@ -360,17 +384,21 @@ class _PurchaseRequestScreenState extends State<PurchaseRequestScreen> {
         if (selected > 0)
           Padding(
             padding: const EdgeInsets.only(bottom: Gaps.sm),
-            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('$selected item type(s)',
-                  style: TextStyle(color: c.textSecondary, fontSize: 13)),
-              Text(_fmtRM(total),
-                  style: TextStyle(
-                      color: c.textPrimary, fontSize: 16, fontWeight: FontWeight.w800)),
-            ]),
+            child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('$selected item type(s)',
+                      style: TextStyle(color: c.textSecondary, fontSize: 13)),
+                  Text(_fmtRM(total),
+                      style: TextStyle(
+                          color: c.textPrimary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800)),
+                ]),
           ),
         GradientButton(
           label: 'Proceed to pay',
-          trailingIcon: Icons.shopping_bag_outlined,
+          trailingIcon: AppIcons.shopping_bag_outlined,
           loading: _paying,
           onPressed: _paying ? null : _proceed,
         ),

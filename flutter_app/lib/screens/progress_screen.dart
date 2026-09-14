@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -30,7 +32,13 @@ class ProgressScreen extends StatefulWidget {
   State<ProgressScreen> createState() => _ProgressScreenState();
 }
 
-class _ProgressScreenState extends State<ProgressScreen> {
+class _ProgressScreenState extends State<ProgressScreen>
+    with LiveRefreshMixin<ProgressScreen> {
+  @override
+  bool get canLiveRefresh => !_loading;
+  @override
+  Future<void> refreshLiveData() => _loadProgress();
+
   bool _loading = false;
   Map<String, dynamic>? _live; // merged map of skill/fitness fields
   List<dynamic> _attendance = const [];
@@ -73,18 +81,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   /// Attendance rows scoped to the logged-in student (or picked guardian
   /// child) — the report endpoint returns the whole branch otherwise.
-  List<Map> get _scopedAttendance => UserSession.instance
-      .scopedRows(_attendance)
-      .whereType<Map>()
-      .toList();
+  List<Map> get _scopedAttendance =>
+      UserSession.instance.scopedRows(_attendance).whereType<Map>().toList();
 
   // scopedRows narrows to the logged-in student (or the picked guardian
   // child); filterByActiveStudent alone leaves a direct student login seeing
   // the whole branch's grading rows.
-  List<Map> get _scopedGrading => UserSession.instance
-      .scopedRows(_grading)
-      .whereType<Map>()
-      .toList();
+  List<Map> get _scopedGrading =>
+      UserSession.instance.scopedRows(_grading).whereType<Map>().toList();
 
   bool _isPresent(Map r) {
     final s = (r['attendanceType'] ?? r['status'] ?? r['value'] ?? '')
@@ -97,22 +101,20 @@ class _ProgressScreenState extends State<ProgressScreen> {
   Map<String, int> _realStats() {
     final att = _scopedAttendance;
     final present = att.where(_isPresent).toList();
-    final pct =
-        att.isEmpty ? 0 : ((present.length / att.length) * 100).round();
+    final pct = att.isEmpty ? 0 : ((present.length / att.length) * 100).round();
     final now = DateTime.now();
     int thisMonth = 0;
     for (final r in present) {
-      final d = DateTime.tryParse(
-          (r['recordedTime'] ?? r['date'] ?? '').toString());
+      final d =
+          DateTime.tryParse((r['recordedTime'] ?? r['date'] ?? '').toString());
       if (d != null && d.year == now.year && d.month == now.month) {
         thisMonth++;
       }
     }
     final grading = _scopedGrading;
     final passed = grading.where((g) {
-      final s = (g['examStatus'] ?? g['remarks'] ?? '')
-          .toString()
-          .toLowerCase();
+      final s =
+          (g['examStatus'] ?? g['remarks'] ?? '').toString().toLowerCase();
       return s.contains('pass');
     }).length;
     return {
@@ -135,24 +137,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 
   // ─── Derived values ────────────────────────────────────────────────────
-  /// Best-effort live read of a numeric stat, with a sensible fallback.
-  num _num(List<String> keys, num fallback) {
-    for (final m in [_live, UserSession.instance.myInfo, UserSession.instance.studentAddtnlInfo]) {
-      if (m == null) continue;
-      for (final k in keys) {
-        final v = m[k];
-        if (v is num) return v;
-        if (v is String) {
-          final n = num.tryParse(v.replaceAll(RegExp(r'[^\d.\-]'), ''));
-          if (n != null) return n;
-        }
-      }
-    }
-    return fallback;
-  }
-
   String _str(List<String> keys, String fallback) {
-    for (final m in [_live, UserSession.instance.myInfo, UserSession.instance.studentAddtnlInfo]) {
+    for (final m in [
+      _live,
+      UserSession.instance.myInfo,
+      UserSession.instance.studentAddtnlInfo
+    ]) {
       if (m == null) continue;
       for (final k in keys) {
         final v = m[k];
@@ -177,8 +167,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final gradingRows = _scopedGrading;
 
     // Clear a hardware notch when the OS reports no inset (web/preview).
-    final topPad =
-        (MediaQuery.of(context).padding.top > 0 ? 0.0 : 44.0) + 14;
+    final topPad = (MediaQuery.of(context).padding.top > 0 ? 0.0 : 44.0) + 14;
     return Scaffold(
       backgroundColor: c.background,
       body: SafeArea(
@@ -186,12 +175,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
         child: RefreshIndicator(
           color: c.primary,
           onRefresh: _loadProgress,
-          child: ResponsiveBody(child: ListView(
+          child: ResponsiveBody(
+              child: ListView(
             padding: EdgeInsets.fromLTRB(Gaps.xl, topPad, Gaps.xl, 140),
             children: [
               _buildHeader(c, deltaThisMonth, context),
               const SizedBox(height: 18),
-              _buildOverallCard(c, fitness, deltaThisMonth, nextBelt, compact: compact),
+              _buildOverallCard(c, fitness, deltaThisMonth, nextBelt,
+                  compact: compact),
               const SizedBox(height: 14),
               _buildMetricRow(c, stats),
               const SizedBox(height: 22),
@@ -204,7 +195,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     letterSpacing: -0.3),
               ),
               const SizedBox(height: 12),
-              if (_loading)
+              if ((_loading && !liveRefreshing))
                 Center(
                     child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
@@ -220,7 +211,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     boxShadow: Shadows.card(c),
                   ),
                   child: Row(children: [
-                    Icon(Icons.school_outlined,
+                    Icon(AppIcons.school_outlined,
                         size: 20, color: c.textMuted),
                     const SizedBox(width: 10),
                     Expanded(
@@ -256,7 +247,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
           onTap: ctx.canPop() ? () => ctx.pop() : null,
           borderRadius: BorderRadius.circular(10),
           child: Container(
-            width: 38, height: 38,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: c.surfaceAlt,
               borderRadius: BorderRadius.circular(10),
@@ -357,8 +349,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       letterSpacing: -0.3),
                 ),
                 const SizedBox(height: 4),
-                if (delta > 0)
-                  const Text('🔥', style: TextStyle(fontSize: 16)),
+                if (delta > 0) const Text('🔥', style: TextStyle(fontSize: 16)),
                 const SizedBox(height: 6),
                 Text(
                   delta > 0
@@ -408,12 +399,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
           ),
         );
     return Row(children: [
-      tile(Icons.event_available, '${stats['classes']}', 'Classes\nattended'),
+      tile(
+          AppIcons.event_available, '${stats['classes']}', 'Classes\nattended'),
       const SizedBox(width: 10),
-      tile(Icons.calendar_month, '${stats['classesThisMonth']}',
+      tile(AppIcons.calendar_month, '${stats['classesThisMonth']}',
           'This\nmonth'),
       const SizedBox(width: 10),
-      tile(Icons.workspace_premium,
+      tile(
+          Icons.workspace_premium,
           '${stats['gradesPassed']}/${stats['gradesTotal']}',
           'Gradings\npassed'),
     ]);
@@ -429,9 +422,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final status = (g['examStatus'] ?? g['remarks'] ?? '').toString().trim();
     final payStatus = (g['paymentStatus'] ?? '').toString().trim();
     final passed = status.toLowerCase().contains('pass');
-    final statusColor = passed
-        ? c.success
-        : (status.isEmpty ? c.textMuted : c.danger);
+    final statusColor =
+        passed ? c.success : (status.isEmpty ? c.textMuted : c.danger);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -443,15 +435,17 @@ class _ProgressScreenState extends State<ProgressScreen> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
-            width: 38, height: 38,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: statusColor.withOpacity(0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             alignment: Alignment.center,
             child: Icon(
-                passed ? Icons.check_circle : Icons.school_outlined,
-                color: statusColor, size: 19),
+                passed ? AppIcons.check_circle : AppIcons.school_outlined,
+                color: statusColor,
+                size: 19),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -478,8 +472,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
           ),
           if (status.isNotEmpty)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 color: statusColor.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(999),
@@ -494,7 +487,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
         if (payStatus.isNotEmpty) ...[
           const SizedBox(height: 8),
           Row(children: [
-            Icon(Icons.payments_outlined, size: 13, color: c.textMuted),
+            Icon(AppIcons.payments_outlined, size: 13, color: c.textMuted),
             const SizedBox(width: 5),
             Text('Payment: $payStatus',
                 style: TextStyle(

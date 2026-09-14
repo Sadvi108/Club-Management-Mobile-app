@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -12,7 +14,20 @@ class TrainingScreen extends StatefulWidget {
   State<TrainingScreen> createState() => _TrainingScreenState();
 }
 
-class _TrainingScreenState extends State<TrainingScreen> {
+class _TrainingScreenState extends State<TrainingScreen>
+    with LiveRefreshMixin<TrainingScreen> {
+  @override
+  bool get canLiveRefresh => !_loading && !_timesLoading;
+  @override
+  Future<void> refreshLiveData() async {
+    await _loadInitial();
+    final center = _selectedCenterId;
+    if (center == null) return;
+    final rows = await _safeList(() => Api.listingTrainingTimeByTcId(center));
+    if (mounted && center == _selectedCenterId && rows != null)
+      setState(() => _times = rows);
+  }
+
   List<dynamic>? _centers;
   List<dynamic>? _instructors;
   List<dynamic>? _times;
@@ -46,8 +61,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
 
     final present = rows.where(isPresent).toList();
     final classes = present.length;
-    final percent =
-        rows.isEmpty ? 0 : ((classes / rows.length) * 100).round();
+    final percent = rows.isEmpty ? 0 : ((classes / rows.length) * 100).round();
 
     // Streak: count consecutive calendar days (ending at the most recent
     // present record) that have a present row.
@@ -89,10 +103,12 @@ class _TrainingScreenState extends State<TrainingScreen> {
   Future<void> _loadInitial() async {
     setState(() => _loading = true);
     await Future.wait([
-      _safeList(Api.listingTrainingCenters).then((v) => _centers = v),
-      _safeList(Api.listingInstructors).then((v) => _instructors = v),
+      _safeList(Api.listingTrainingCenters)
+          .then((v) => _centers = v ?? _centers),
+      _safeList(Api.listingInstructors)
+          .then((v) => _instructors = v ?? _instructors),
       _safeList(() => Api.reportsAttendance(const {}))
-          .then((v) => _attendance = v),
+          .then((v) => _attendance = v ?? _attendance),
     ]);
     if (mounted) setState(() => _loading = false);
   }
@@ -133,7 +149,10 @@ class _TrainingScreenState extends State<TrainingScreen> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: c.gradient, begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  gradient: LinearGradient(
+                      colors: c.gradient,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight),
                   borderRadius: BorderRadius.circular(Radii.xl),
                   boxShadow: Shadows.strong(c),
                 ),
@@ -141,15 +160,33 @@ class _TrainingScreenState extends State<TrainingScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(children: const [
-                      Icon(Icons.emoji_events, color: Color(0xFFFFF7ED), size: 22),
+                      Icon(Icons.emoji_events,
+                          color: Color(0xFFFFF7ED), size: 22),
                       SizedBox(width: 8),
-                      Text('WEEKLY STREAK', style: TextStyle(color: Color(0xFFFFF7ED), fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.2)),
+                      Text('WEEKLY STREAK',
+                          style: TextStyle(
+                              color: Color(0xFFFFF7ED),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2)),
                     ]),
                     const SizedBox(height: 6),
-                    RichText(text: TextSpan(
+                    RichText(
+                        text: TextSpan(
                       children: [
-                        TextSpan(text: '${stats['streak']} ', style: const TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w800, letterSpacing: -1)),
-                        const TextSpan(text: 'days', style: TextStyle(color: Color(0xCCFFFFFF), fontSize: 16, fontWeight: FontWeight.w500)),
+                        TextSpan(
+                            text: '${stats['streak']} ',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 44,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -1)),
+                        const TextSpan(
+                            text: 'days',
+                            style: TextStyle(
+                                color: Color(0xCCFFFFFF),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500)),
                       ],
                     )),
                     const SizedBox(height: 4),
@@ -159,7 +196,8 @@ class _TrainingScreenState extends State<TrainingScreen> {
                           : (stats['streak']! > 0
                               ? "You're on fire! Don't break the chain."
                               : 'Attend a class to start your streak.'),
-                      style: const TextStyle(color: Color(0xE6FFFFFF), fontSize: 12),
+                      style: const TextStyle(
+                          color: Color(0xE6FFFFFF), fontSize: 12),
                     ),
                     const SizedBox(height: 16),
                     Row(children: [
@@ -185,7 +223,11 @@ class _TrainingScreenState extends State<TrainingScreen> {
               const SizedBox(height: 12),
               _liveInstructorsCard(c),
               const SizedBox(height: 20),
-              Text('Enrolled Programs', style: TextStyle(color: c.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+              Text('Enrolled Programs',
+                  style: TextStyle(
+                      color: c.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700)),
               const SizedBox(height: 14),
               _buildLivePrograms(c),
             ]),
@@ -196,14 +238,16 @@ class _TrainingScreenState extends State<TrainingScreen> {
   }
 
   Widget _liveCentersCard(AppColors c) {
-    if (_loading) {
+    if (_loading && !liveRefreshing) {
       return Row(children: [
         SizedBox(
-          width: 14, height: 14,
+          width: 14,
+          height: 14,
           child: CircularProgressIndicator(strokeWidth: 2, color: c.primary),
         ),
         const SizedBox(width: 8),
-        Text('Loading training centers…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+        Text('Loading training centers…',
+            style: TextStyle(fontSize: 12, color: c.textSecondary)),
       ]);
     }
     final centers = _centers;
@@ -223,13 +267,18 @@ class _TrainingScreenState extends State<TrainingScreen> {
             const SizedBox(width: 6),
             Text(
               'Training Centers (${centers.length})',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1),
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: c.primary,
+                  letterSpacing: 1),
             ),
           ]),
           const SizedBox(height: 8),
           ...centers.take(8).map((tc) {
             final m = tc is Map ? tc : <dynamic, dynamic>{};
-            final name = (m['text'] ?? m['name'] ?? m['value'] ?? tc).toString();
+            final name =
+                (m['text'] ?? m['name'] ?? m['value'] ?? tc).toString();
             final id = m['value'] ?? m['id'] ?? m['tcId'];
             final selected = id != null && id == _selectedCenterId;
             return InkWell(
@@ -237,10 +286,19 @@ class _TrainingScreenState extends State<TrainingScreen> {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Row(children: [
-                  Icon(selected ? Icons.radio_button_checked : Icons.radio_button_off,
-                      size: 14, color: selected ? c.primary : c.textMuted),
+                  Icon(
+                      selected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      size: 14,
+                      color: selected ? c.primary : c.textMuted),
                   const SizedBox(width: 6),
-                  Expanded(child: Text(name, style: TextStyle(fontSize: 12, color: selected ? c.textPrimary : c.textSecondary))),
+                  Expanded(
+                      child: Text(name,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color:
+                                  selected ? c.textPrimary : c.textSecondary))),
                 ]),
               ),
             );
@@ -248,7 +306,11 @@ class _TrainingScreenState extends State<TrainingScreen> {
           if (centers.length > 5)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text('+${centers.length - 5} more', style: TextStyle(fontSize: 11, color: c.textMuted, fontStyle: FontStyle.italic)),
+              child: Text('+${centers.length - 5} more',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: c.textMuted,
+                      fontStyle: FontStyle.italic)),
             ),
         ],
       ),
@@ -272,14 +334,21 @@ class _TrainingScreenState extends State<TrainingScreen> {
             Icon(Icons.person_pin, size: 16, color: c.primary),
             const SizedBox(width: 6),
             Text('Instructors (${list.length})',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: c.primary,
+                    letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
           ...list.take(6).map((i) {
-            final name = i is Map ? (i['text'] ?? i['name'] ?? i['value'] ?? '').toString() : i.toString();
+            final name = i is Map
+                ? (i['text'] ?? i['name'] ?? i['value'] ?? '').toString()
+                : i.toString();
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Text('• $name', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+              child: Text('• $name',
+                  style: TextStyle(fontSize: 12, color: c.textSecondary)),
             );
           }),
         ],
@@ -302,23 +371,41 @@ class _TrainingScreenState extends State<TrainingScreen> {
             Icon(Icons.access_time, size: 16, color: c.primary),
             const SizedBox(width: 6),
             Text('Training Times',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c.primary, letterSpacing: 1)),
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: c.primary,
+                    letterSpacing: 1)),
           ]),
           const SizedBox(height: 8),
           if (_timesLoading)
             Row(children: [
-              SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: c.primary)),
+              SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: c.primary)),
               const SizedBox(width: 8),
-              Text('Loading…', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+              Text('Loading…',
+                  style: TextStyle(fontSize: 12, color: c.textSecondary)),
             ])
           else if ((_times ?? const []).isEmpty)
-            Text('No times for this center.', style: TextStyle(fontSize: 12, color: c.textSecondary))
+            Text('No times for this center.',
+                style: TextStyle(fontSize: 12, color: c.textSecondary))
           else
             ...(_times!).take(8).map((t) {
-              final name = t is Map ? (t['text'] ?? t['trainingTime'] ?? t['name'] ?? t['value'] ?? '').toString() : t.toString();
+              final name = t is Map
+                  ? (t['text'] ??
+                          t['trainingTime'] ??
+                          t['name'] ??
+                          t['value'] ??
+                          '')
+                      .toString()
+                  : t.toString();
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text('• $name', style: TextStyle(fontSize: 12, color: c.textSecondary)),
+                child: Text('• $name',
+                    style: TextStyle(fontSize: 12, color: c.textSecondary)),
               );
             }),
         ],
@@ -329,11 +416,18 @@ class _TrainingScreenState extends State<TrainingScreen> {
   Widget _heroStat(String n, String l) => Expanded(
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(Radii.md)),
+          decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(Radii.md)),
           child: Column(children: [
-            Text(n, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(n,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800)),
             const SizedBox(height: 2),
-            Text(l, style: const TextStyle(color: Color(0xD9FFFFFF), fontSize: 10)),
+            Text(l,
+                style: const TextStyle(color: Color(0xD9FFFFFF), fontSize: 10)),
           ]),
         ),
       );
@@ -343,13 +437,14 @@ class _TrainingScreenState extends State<TrainingScreen> {
   Widget _buildLivePrograms(AppColors c) {
     final session = context.watch<UserSession>();
     final info = session.myInfo ?? const <String, dynamic>{};
-    final sport   = (info['sport']?.toString().trim().isNotEmpty == true)
+    final sport = (info['sport']?.toString().trim().isNotEmpty == true)
         ? info['sport'].toString()
         : (session.tCenterName.isNotEmpty ? session.tCenterName : '');
     final trainer = session.instructorName;
-    final level   = session.currentGrade;
-    final pctStr  = session.attendancePercentage;
-    final progress = num.tryParse(pctStr.replaceAll(RegExp(r'[^\d.]'), ''))?.toInt() ?? 0;
+    final level = session.currentGrade;
+    final pctStr = session.attendancePercentage;
+    final progress =
+        num.tryParse(pctStr.replaceAll(RegExp(r'[^\d.]'), ''))?.toInt() ?? 0;
 
     if (sport.isEmpty && trainer.isEmpty && level.isEmpty) {
       return Container(
@@ -382,7 +477,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              icon: const Icon(Icons.support_agent, size: 16),
+              icon: const Icon(AppIcons.support_agent, size: 16),
               label: const Text('Help Desk'),
               onPressed: () => context.go('/profile'),
             ),
@@ -407,13 +502,14 @@ class _TrainingScreenState extends State<TrainingScreen> {
           children: [
             Row(children: [
               Container(
-                width: 38, height: 38,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 alignment: Alignment.center,
-                child: Icon(Icons.fitness_center, color: color, size: 18),
+                child: Icon(AppIcons.fitness_center, color: color, size: 18),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -440,7 +536,8 @@ class _TrainingScreenState extends State<TrainingScreen> {
               ),
               if (level.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(999),
@@ -487,5 +584,4 @@ class _TrainingScreenState extends State<TrainingScreen> {
       ),
     );
   }
-
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Full palette mirroring src/theme.ts
 class AppColors {
@@ -48,7 +47,7 @@ class AppColors {
   });
 
   static const light = AppColors(
-    background: Color(0xFFF6F7FB),
+    background: Color(0xFFFBFAF9),
     surface: Color(0xFFFFFFFF),
     surfaceAlt: Color(0xFFFFF7ED),
     surfaceAlt2: Color(0xFFFFEDD5),
@@ -57,10 +56,10 @@ class AppColors {
     primaryLight: Color(0xFFFB923C),
     accent: Color(0xFFFB923C),
     textPrimary: Color(0xFF0F172A),
-    textSecondary: Color(0xFF475569),
-    textMuted: Color(0xFF94A3B8),
-    border: Color(0xFFE2E8F0),
-    borderLight: Color(0xFFF1F5F9),
+    textSecondary: Color(0xFF5B6472),
+    textMuted: Color(0xFF9AA1AC),
+    border: Color(0xFFEBEDF0),
+    borderLight: Color(0xFFF4F5F7),
     success: Color(0xFF10B981),
     warning: Color(0xFFF59E0B),
     danger: Color(0xFFEF4444),
@@ -71,24 +70,24 @@ class AppColors {
   );
 
   static const dark = AppColors(
-    background: Color(0xFF0A0A0B),
-    surface: Color(0xFF17171A),
-    surfaceAlt: Color(0xFF1F1F23),
-    surfaceAlt2: Color(0xFF27272A),
+    background: Color(0xFF0B0A0C),
+    surface: Color(0xFF1A191E),
+    surfaceAlt: Color(0xFF232228),
+    surfaceAlt2: Color(0xFF2B2A31),
     primary: Color(0xFFFB923C),
     primaryDark: Color(0xFFF97316),
     primaryLight: Color(0xFFFDBA74),
     accent: Color(0xFFFB923C),
     textPrimary: Color(0xFFFAFAFA),
-    textSecondary: Color(0xFFA1A1AA),
-    textMuted: Color(0xFF71717A),
-    border: Color(0xFF27272A),
-    borderLight: Color(0xFF1F1F23),
+    textSecondary: Color(0xFFA8A6AF),
+    textMuted: Color(0xFF77757E),
+    border: Color(0xFF2E2C34),
+    borderLight: Color(0xFF232228),
     success: Color(0xFF34D399),
     warning: Color(0xFFFBBF24),
     danger: Color(0xFFF87171),
     gradient: [Color(0xFFFDBA74), Color(0xFFF97316), Color(0xFFEA580C)],
-    gradientSoft: [Color(0xFF1F1F23), Color(0xFF27272A)],
+    gradientSoft: [Color(0xFF232228), Color(0xFF2B2A31)],
     overlay: Color(0xB3000000),
     isDark: true,
   );
@@ -100,42 +99,33 @@ class Radii {
 }
 
 class Gaps {
-  static const xs = 4.0, sm = 8.0, md = 12.0, lg = 16.0, xl = 20.0, xxl = 24.0, xxxl = 32.0;
+  static const xs = 4.0,
+      sm = 8.0,
+      md = 12.0,
+      lg = 16.0,
+      xl = 20.0,
+      xxl = 24.0,
+      xxxl = 32.0;
 }
 
 class Shadows {
-  static List<BoxShadow> card(AppColors c) => c.isDark
-      ? [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ]
-      : [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.06),
-            blurRadius: 1,
-            offset: const Offset(0, 1),
-          ),
-          BoxShadow(
-            color: const Color(0xFF0F172A).withOpacity(0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-            spreadRadius: -4,
-          ),
-        ];
+  static List<BoxShadow> _make(
+          AppColors c, double y, double alpha, double blur) =>
+      [
+        BoxShadow(
+            color: (c.isDark ? Colors.black : const Color(0xFF1E1B18))
+                .withValues(alpha: alpha),
+            offset: Offset(0, y),
+            blurRadius: blur),
+      ];
+  static List<BoxShadow> card(AppColors c) => _make(c, 8, .10, 24);
+  static List<BoxShadow> soft(AppColors c) => _make(c, 4, .07, 14);
+  static List<BoxShadow> shade(AppColors c) => _make(c, 14, .16, 30);
   static List<BoxShadow> strong(AppColors c) => [
         BoxShadow(
-          color: const Color(0xFFF97316).withOpacity(c.isDark ? 0.45 : 0.35),
-          blurRadius: 24,
-          offset: const Offset(0, 12),
-        ),
-        BoxShadow(
-          color: const Color(0xFFEA580C).withOpacity(c.isDark ? 0.25 : 0.18),
-          blurRadius: 6,
-          offset: const Offset(0, 2),
-        ),
+            color: const Color(0xFFF97316).withValues(alpha: .30),
+            offset: const Offset(0, 12),
+            blurRadius: 26),
       ];
 }
 
@@ -157,7 +147,7 @@ class AppTheme {
       error: c.danger,
     );
 
-    final textTheme = GoogleFonts.poppinsTextTheme(base.textTheme).apply(
+    final textTheme = base.textTheme.apply(
       bodyColor: c.textPrimary,
       displayColor: c.textPrimary,
     );
@@ -187,16 +177,22 @@ class AppTheme {
       dividerTheme: DividerThemeData(color: c.border, thickness: 1, space: 1),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: c.isDark ? const Color(0xFF17171A) : const Color(0xFF0F172A),
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.lg)),
+        backgroundColor:
+            c.isDark ? const Color(0xFF17171A) : const Color(0xFF0F172A),
+        contentTextStyle: textTheme.bodyMedium
+            ?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Radii.lg)),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: c.surface,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.xl)),
-        titleTextStyle: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, color: c.textPrimary),
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: c.textSecondary),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(Radii.xl)),
+        titleTextStyle: textTheme.titleLarge
+            ?.copyWith(fontWeight: FontWeight.w800, color: c.textPrimary),
+        contentTextStyle:
+            textTheme.bodyMedium?.copyWith(color: c.textSecondary),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: c.surface,
@@ -207,10 +203,12 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: c.isDark ? c.surfaceAlt : const Color(0xFFF8FAFC),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        fillColor: c.surface,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         hintStyle: TextStyle(color: c.textMuted, fontWeight: FontWeight.w500),
-        labelStyle: TextStyle(color: c.textSecondary, fontWeight: FontWeight.w600),
+        labelStyle:
+            TextStyle(color: c.textSecondary, fontWeight: FontWeight.w600),
         errorStyle: TextStyle(color: c.danger, fontWeight: FontWeight.w600),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(Radii.md),
@@ -230,8 +228,10 @@ class AppTheme {
           backgroundColor: c.primary,
           foregroundColor: Colors.white,
           minimumSize: const Size.fromHeight(48),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.md)),
-          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(Radii.md)),
+          textStyle:
+              textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -239,14 +239,17 @@ class AppTheme {
           minimumSize: const Size.fromHeight(48),
           foregroundColor: c.textPrimary,
           side: BorderSide(color: c.border),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.md)),
-          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(Radii.md)),
+          textStyle:
+              textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: c.primary,
-          textStyle: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+          textStyle:
+              textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
       ),
       // Expose palette via extension so widgets can read it via Theme.of(context).extension<AppColors>()
@@ -264,7 +267,9 @@ class _AppColorsExt extends ThemeExtension<_AppColorsExt> {
       _AppColorsExt(colors ?? this.colors);
 
   @override
-  ThemeExtension<_AppColorsExt> lerp(ThemeExtension<_AppColorsExt>? other, double t) => this;
+  ThemeExtension<_AppColorsExt> lerp(
+          ThemeExtension<_AppColorsExt>? other, double t) =>
+      this;
 }
 
 /// Sugar: context.appColors — use anywhere in the widget tree

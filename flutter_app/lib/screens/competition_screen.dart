@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../services/api.dart';
@@ -30,6 +32,14 @@ class TournamentRow {
     this.bronze = 0,
   });
 
+  String get title => name.isNotEmpty
+      ? name
+      : category.isNotEmpty
+          ? category
+          : gender.isNotEmpty
+              ? gender
+              : 'Tournament';
+
   int get medals => gold + silver + bronze;
 
   static int _int(dynamic v) {
@@ -57,7 +67,6 @@ List<TournamentRow> parseTournaments(dynamic res) {
   return rows
       .whereType<Map>()
       .map((m) => TournamentRow.fromJson(Map<String, dynamic>.from(m)))
-      .where((r) => r.name.isNotEmpty)
       .toList(growable: false);
 }
 
@@ -66,7 +75,7 @@ List<String> tournamentNames(List<TournamentRow> rows) {
   final seen = <String>{};
   final out = <String>[];
   for (final r in rows) {
-    if (seen.add(r.name)) out.add(r.name);
+    if (r.name.isNotEmpty && seen.add(r.name)) out.add(r.name);
   }
   return out;
 }
@@ -78,13 +87,20 @@ List<String> tournamentNames(List<TournamentRow> rows) {
 /// A control that appears to filter and does not is a bug report waiting to happen, so
 /// this ports the filter that DOES work (by tournament name) and leaves the tabs out.
 class CompetitionScreen extends StatefulWidget {
-  const CompetitionScreen({super.key});
+  final String title;
+  const CompetitionScreen({super.key, this.title = 'Competition'});
 
   @override
   State<CompetitionScreen> createState() => _CompetitionScreenState();
 }
 
-class _CompetitionScreenState extends State<CompetitionScreen> {
+class _CompetitionScreenState extends State<CompetitionScreen>
+    with LiveRefreshMixin<CompetitionScreen> {
+  @override
+  bool get canLiveRefresh => !_loading;
+  @override
+  Future<void> refreshLiveData() => _load();
+
   bool _loading = true;
   String? _error;
   List<TournamentRow> _rows = const [];
@@ -102,7 +118,8 @@ class _CompetitionScreenState extends State<CompetitionScreen> {
       _error = null;
     });
     try {
-      final res = await Api.reportsTournamentSummary();
+      final res = await Api.reportsTournamentSummary(
+          {'fromDate': null, 'toDate': null});
       if (!mounted) return;
       setState(() {
         _rows = parseTournaments(res);
@@ -128,8 +145,8 @@ class _CompetitionScreenState extends State<CompetitionScreen> {
     return Scaffold(
       backgroundColor: c.background,
       body: Column(children: [
-        const AppHeader(
-          title: 'Competition',
+        AppHeader(
+          title: widget.title,
           subtitle: 'Tournament results and medals',
           showBack: true,
         ),
@@ -137,7 +154,7 @@ class _CompetitionScreenState extends State<CompetitionScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: _load,
-            child: _loading
+            child: (_loading && !liveRefreshing)
                 ? const Center(child: CircularProgressIndicator())
                 : ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -162,15 +179,21 @@ class _CompetitionScreenState extends State<CompetitionScreen> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: Gaps.lg, vertical: 4),
           children: [
-            _pill(c, 'All', _selectedName.isEmpty, () => setState(() => _selectedName = '')),
+            _pill(c, 'All', _selectedName.isEmpty,
+                () => setState(() => _selectedName = '')),
             for (final n in names)
-              _pill(c, n, _selectedName == n,
-                  () => setState(() => _selectedName = _selectedName == n ? '' : n)),
+              _pill(
+                  c,
+                  n,
+                  _selectedName == n,
+                  () => setState(
+                      () => _selectedName = _selectedName == n ? '' : n)),
           ],
         ),
       );
 
-  Widget _pill(AppColors c, String label, bool active, VoidCallback onTap) => Padding(
+  Widget _pill(AppColors c, String label, bool active, VoidCallback onTap) =>
+      Padding(
         padding: const EdgeInsets.only(right: Gaps.sm),
         child: GestureDetector(
           onTap: onTap,
@@ -223,7 +246,8 @@ class _CompetitionScreenState extends State<CompetitionScreen> {
   Widget _tally(AppColors c, String label, int value, Color color) =>
       Column(mainAxisSize: MainAxisSize.min, children: [
         Text('$value',
-            style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w900)),
+            style: TextStyle(
+                color: color, fontSize: 20, fontWeight: FontWeight.w900)),
         const SizedBox(height: 2),
         Text(label, style: TextStyle(color: c.textSecondary, fontSize: 11)),
       ]);
@@ -247,17 +271,21 @@ class _CompetitionScreenState extends State<CompetitionScreen> {
           Container(
             width: 38,
             height: 38,
-            decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+            decoration:
+                BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
             child: Icon(Icons.emoji_events, size: 18, color: c.primary),
           ),
           const SizedBox(width: Gaps.md),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(r.name,
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(r.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      color: c.textPrimary, fontSize: 14.5, fontWeight: FontWeight.w800)),
+                      color: c.textPrimary,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800)),
               if (meta.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
@@ -273,8 +301,10 @@ class _CompetitionScreenState extends State<CompetitionScreen> {
           const SizedBox(height: Gaps.sm),
           Wrap(spacing: Gaps.sm, runSpacing: 6, children: [
             if (r.gold > 0) _chip(c, '${r.gold} gold', const Color(0xFFEAB308)),
-            if (r.silver > 0) _chip(c, '${r.silver} silver', const Color(0xFF94A3B8)),
-            if (r.bronze > 0) _chip(c, '${r.bronze} bronze', const Color(0xFFB45309)),
+            if (r.silver > 0)
+              _chip(c, '${r.silver} silver', const Color(0xFF94A3B8)),
+            if (r.bronze > 0)
+              _chip(c, '${r.bronze} bronze', const Color(0xFFB45309)),
             if (r.players > 0) _chip(c, '${r.players} entered', c.primary),
           ]),
         ],
@@ -289,8 +319,8 @@ class _CompetitionScreenState extends State<CompetitionScreen> {
           borderRadius: BorderRadius.circular(Radii.xxl),
         ),
         child: Text(label,
-            style:
-                TextStyle(color: color, fontSize: 11.5, fontWeight: FontWeight.w800)),
+            style: TextStyle(
+                color: color, fontSize: 11.5, fontWeight: FontWeight.w800)),
       );
 
   Widget _errorBlock(AppColors c) => Padding(
@@ -308,7 +338,7 @@ class _CompetitionScreenState extends State<CompetitionScreen> {
   Widget _emptyBlock(AppColors c) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 60),
         child: Column(children: [
-          Icon(Icons.military_tech_outlined, size: 48, color: c.textMuted),
+          Icon(AppIcons.military_tech_outlined, size: 48, color: c.textMuted),
           const SizedBox(height: Gaps.sm),
           Text(
               _selectedName.isEmpty

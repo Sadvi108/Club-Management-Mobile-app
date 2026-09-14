@@ -45,7 +45,8 @@ class ChatStore {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
         _key(userId),
-        jsonEncode(all.map((k, v) => MapEntry(k, v.map((m) => m.toJson()).toList()))),
+        jsonEncode(
+            all.map((k, v) => MapEntry(k, v.map((m) => m.toJson()).toList()))),
       );
     } catch (e) {
       debugPrint('ChatStore write failed: $e');
@@ -58,13 +59,15 @@ class ChatStore {
 
   /// Every thread this member has sent something in — the help desk shows up here even
   /// before the club has replied.
-  static Future<Map<String, List<SentMessage>>> threads(int userId) => _readAll(userId);
+  static Future<Map<String, List<SentMessage>>> threads(int userId) =>
+      _readAll(userId);
 
   /// Record a message that the server accepted.
   ///
   /// Only call this AFTER the send succeeds: echoing an unsent message would tell the user
   /// the club had received something it never did.
-  static Future<SentMessage> append(int userId, String threadKey, String text) async {
+  static Future<SentMessage> append(
+      int userId, String threadKey, String text) async {
     final msg = SentMessage(
       id: '${DateTime.now().microsecondsSinceEpoch}',
       text: text,
@@ -119,6 +122,9 @@ class ChatBubble {
   });
 }
 
+DateTime? messageTime(Map row) => DateTime.tryParse(
+    '${row['notifyDate'] ?? row['createdDate'] ?? row['notificationDate'] ?? row['date'] ?? ''}');
+
 /// Build a conversation from the member's OWN notification rows plus the local echo.
 ///
 /// Incoming rows must come from `MyNotifications` filtered by groupId — never from
@@ -142,12 +148,13 @@ List<ChatBubble> buildThread({
       subject: (n['text'] ?? '').toString().trim().isEmpty
           ? null
           : (n['text'] ?? '').toString().trim(),
-      at: DateTime.tryParse((n['notifyDate'] ?? '').toString()),
+      at: messageTime(n),
     ));
   }
 
   for (final m in sent) {
-    bubbles.add(ChatBubble(key: 'out-${m.id}', mine: true, text: m.text, at: m.at));
+    bubbles.add(
+        ChatBubble(key: 'out-${m.id}', mine: true, text: m.text, at: m.at));
   }
 
   bubbles.sort((a, b) {
@@ -204,18 +211,18 @@ List<ChatThreadSummary> buildThreadList({
   final out = <ChatThreadSummary>[];
   byGroup.forEach((key, rows) {
     rows.sort((a, b) {
-      final x = DateTime.tryParse((a['notifyDate'] ?? '').toString());
-      final y = DateTime.tryParse((b['notifyDate'] ?? '').toString());
+      final x = messageTime(a);
+      final y = messageTime(b);
       if (x == null || y == null) return 0;
       return x.compareTo(y);
     });
     final last = rows.last;
-    final lastAt = DateTime.tryParse((last['notifyDate'] ?? '').toString());
+    final lastAt = messageTime(last);
 
     final mine = sentByThread[key] ?? const <SentMessage>[];
     final lastMine = mine.isEmpty ? null : mine.last;
-    final mineIsNewer = lastMine != null &&
-        (lastAt == null || lastMine.at.isAfter(lastAt));
+    final mineIsNewer =
+        lastMine != null && (lastAt == null || lastMine.at.isAfter(lastAt));
 
     out.add(ChatThreadSummary(
       key: key,

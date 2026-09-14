@@ -6,19 +6,25 @@ void main() {
     test('HTTP-200-wrapped failure returns the server message', () {
       final resp = {
         'status': 404,
-        'meta': {'code': 404, 'error': 'Account not found, contact your club administrator'},
+        'meta': {
+          'code': 404,
+          'error': 'Account not found, contact your club administrator'
+        },
       };
       expect(apiEnvelopeError(resp),
           'Account not found, contact your club administrator');
     });
 
-    test('400 envelope with meta.error returns it', () {
+    test('400 envelope suppresses database internals', () {
       final resp = {
         'status': 400,
-        'meta': {'code': 0, 'error': 'Object reference not set to an instance of an object.'},
+        'meta': {
+          'code': 0,
+          'error': 'Object reference not set to an instance of an object.'
+        },
       };
       expect(apiEnvelopeError(resp),
-          'Object reference not set to an instance of an object.');
+          'The club server could not complete that request. Please try again.');
     });
 
     test('successful auth envelope returns null', () {
@@ -43,7 +49,10 @@ void main() {
     });
 
     test('failure status without a message falls back to a generic string', () {
-      final resp = {'status': 500, 'meta': {'code': 500}};
+      final resp = {
+        'status': 500,
+        'meta': {'code': 500}
+      };
       expect(apiEnvelopeError(resp), 'Request failed (status 500).');
     });
   });

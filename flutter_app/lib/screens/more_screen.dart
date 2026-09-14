@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,47 +16,67 @@ class MoreScreen extends StatelessWidget {
 
   static const _sections = <_Section>[
     _Section('Training', [
-      _Item('Training', Icons.fitness_center, Color(0xFF4F46E5), '/training'),
+      _Item(
+          'Training', AppIcons.fitness_center, Color(0xFF4F46E5), '/training'),
       _Item("Today's Classes", Icons.bolt, Color(0xFFF59E0B), '/schedule'),
-      _Item('Timetable', Icons.calendar_month, Color(0xFF0EA5E9), '/schedule'),
-      _Item('Attendance', Icons.check_circle, Color(0xFF10B981), '/attendance'),
+      _Item(
+          'Timetable', AppIcons.calendar_month, Color(0xFF0EA5E9), '/schedule'),
+      _Item('Attendance', AppIcons.check_circle, Color(0xFF10B981),
+          '/attendance'),
       _Item('Book a Class', Icons.add_circle, Color(0xFF14B8A6), '/book-class'),
-      _Item('Scan QR', Icons.qr_code_scanner, Color(0xFF0EA5E9), '/qr-scan'),
+      _Item('Scan QR', AppIcons.qr_code_scanner, Color(0xFF0EA5E9), '/qr-scan'),
     ]),
     _Section('Payments', [
-      _Item('Fees Due', Icons.account_balance_wallet, Color(0xFFEF4444), '/payments'),
-      _Item('Payment History', Icons.receipt_long, Color(0xFF14B8A6), '/payments'),
-      _Item('Outstanding Invoices', Icons.description, Color(0xFF8B5CF6), '/invoices'),
-      _Item('Purchase Request', Icons.shopping_bag, Color(0xFFF59E0B), '/purchase-request'),
+      _Item('Advance Payment', AppIcons.credit_card, Color(0xFF8B5CF6),
+          '/payments?tab=prepay'),
+      _Item('Fees Due', AppIcons.account_balance_wallet, Color(0xFFEF4444),
+          '/payments'),
+      _Item('Payment History', AppIcons.receipt_long, Color(0xFF14B8A6),
+          '/payments?tab=history'),
+      _Item('Outstanding Invoices', AppIcons.description, Color(0xFF8B5CF6),
+          '/invoices'),
+      _Item('Purchase Request', AppIcons.shopping_bag, Color(0xFFF59E0B),
+          '/purchase-request'),
       _Item('My Purchases', Icons.inventory_2, Color(0xFFDB2777), '/purchases'),
-      _Item('Auto Pay', Icons.autorenew, Color(0xFF6366F1), '/autopay'),
+      _Item('Auto Pay', AppIcons.autorenew, Color(0xFF6366F1), '/autopay'),
     ]),
     _Section('Progress', [
-      _Item('Progress Report', Icons.trending_up, Color(0xFF6366F1), '/progress'),
-      _Item('Belt / Rank', Icons.military_tech, Color(0xFFEAB308), '/progress'),
+      _Item('Grading', AppIcons.school, Color(0xFFDB2777), '/progress'),
+      _Item(
+          'Progress Report', Icons.trending_up, Color(0xFF6366F1), '/progress'),
+      _Item('Belt / Rank', AppIcons.military_tech, Color(0xFFEAB308),
+          '/progress'),
     ]),
     _Section('Club', [
-      _Item('Events', Icons.event, Color(0xFFF97316), '/events'),
-      _Item('Competition', Icons.military_tech, Color(0xFFDB2777), '/competition'),
-      _Item('Offers', Icons.local_offer, Color(0xFFEC4899), '/offers'),
-      _Item('Chat Academy', Icons.forum, Color(0xFF22C55E), '/chat'),
-      _Item('Help Desk', Icons.support_agent, Color(0xFF0EA5E9), '/helpdesk'),
-      _Item('Notifications', Icons.notifications, Color(0xFFF59E0B), '/notifications'),
-      _Item('Notification Settings', Icons.tune, Color(0xFF64748B), '/notification-settings'),
+      _Item('Events', AppIcons.event, Color(0xFFF97316), '/events'),
+      _Item('Competition', AppIcons.military_tech, Color(0xFFDB2777),
+          '/competition'),
+      _Item('Offers', AppIcons.local_offer, Color(0xFF10B981),
+          '/events?tab=offers'),
+      _Item('Chat Academy', AppIcons.forum, Color(0xFF22C55E), '/chat'),
+      _Item(
+          'Help Desk', AppIcons.support_agent, Color(0xFF0EA5E9), '/helpdesk'),
+      _Item('Notifications', AppIcons.notifications, Color(0xFFF59E0B),
+          '/notifications'),
+      _Item('Notification Settings', Icons.tune, Color(0xFF64748B),
+          '/notification-settings'),
     ]),
     _Section('Account', [
-      _Item('Profile', Icons.account_circle, Color(0xFF64748B), '/profile'),
-      _Item('Student Details', Icons.badge, Color(0xFF0EA5E9), '/student-details'),
-      _Item('Edit Profile', Icons.edit, Color(0xFF8B5CF6), '/edit-profile'),
-      _Item('User Guide', Icons.menu_book, Color(0xFF14B8A6), '/user-guide'),
+      _Item('Profile', AppIcons.account_circle, Color(0xFF64748B), '/profile'),
+      _Item('Student Details', Icons.badge, Color(0xFF0EA5E9),
+          '/student-details'),
+      _Item('Edit Profile', AppIcons.edit, Color(0xFF8B5CF6), '/edit-profile'),
+      _Item('User Guide', AppIcons.menu_book, Color(0xFF14B8A6), '/user-guide'),
     ]),
   ];
 
   /// Every route this screen can navigate to. Exposed so a test can assert each one
   /// is actually registered on the router — a dead tile here is invisible until a
   /// member taps it.
-  static List<String> get catalogueRoutes =>
-      [for (final s in _sections) for (final i in s.items) i.route];
+  static List<String> get catalogueRoutes => [
+        for (final s in _sections)
+          for (final i in s.items) i.route
+      ];
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +91,8 @@ class MoreScreen extends StatelessWidget {
         ),
         Expanded(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(Gaps.lg, Gaps.md, Gaps.lg, Gaps.xxxl),
+            padding:
+                const EdgeInsets.fromLTRB(Gaps.lg, Gaps.md, Gaps.lg, Gaps.xxxl),
             children: [
               for (final s in _sections) ...[
                 Padding(
@@ -126,7 +148,9 @@ class MoreScreen extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      color: c.textPrimary, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                      color: c.textPrimary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700)),
             ),
           ]),
         ),

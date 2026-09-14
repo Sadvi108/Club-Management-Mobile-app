@@ -6,7 +6,7 @@ publish_to: "none"
 # Both ship as applicationId com.dclix.clubapp, so this APK replaces the Expo one on a
 # member's phone. Android refuses to install a lower versionCode, so 7 would have failed
 # to update every existing install with "app not installed" and no further explanation.
-version: 2.12.0+18
+version: 2.12.1+19
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -23,7 +23,6 @@ dependencies:
   provider: ^6.1.2
 
   # UI & assets
-  google_fonts: ^6.2.1
   cached_network_image: ^3.4.1
   flutter_svg: ^2.0.16
   url_launcher: ^6.3.1
@@ -63,6 +62,7 @@ dependencies:
   nfc_manager: ^4.2.1
 
 dev_dependencies:
+  qr: ^3.0.2 # Generate fictional QR images in the screenshot fixture.
   flutter_launcher_icons: ^0.14.1
   flutter_test:
     sdk: flutter
@@ -70,6 +70,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: Ionicons
+      fonts:
+        - asset: assets/fonts/Ionicons.ttf
   assets:
     - assets/images/
     - assets/branding/

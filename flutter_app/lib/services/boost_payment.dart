@@ -22,10 +22,12 @@ class TermPayment {
   final List<int> studentIds;
   final int year;
   final List<int> months;
-  const TermPayment({required this.studentIds, required this.year, required this.months});
+  const TermPayment(
+      {required this.studentIds, required this.year, required this.months});
 
   bool get isEmpty => studentIds.isEmpty || months.isEmpty;
-  Map<String, dynamic> toJson() => {'studentIds': studentIds, 'year': year, 'months': months};
+  Map<String, dynamic> toJson() =>
+      {'studentIds': studentIds, 'year': year, 'months': months};
 }
 
 /// One line of a purchase request — the API's `PurchaseRequestLineViewModel`.
@@ -123,7 +125,8 @@ class BoostPayment {
   /// Ask the backend for a checkout URL.
   static Future<PaymentStart> start(PaymentIntent intent) async {
     final invoiceIds = intent.invoiceIds.where((i) => i > 0).toList();
-    final term = (intent.term != null && !intent.term!.isEmpty) ? intent.term : null;
+    final term =
+        (intent.term != null && !intent.term!.isEmpty) ? intent.term : null;
     final purchases = intent.purchaseItems;
 
     if (invoiceIds.isEmpty && term == null && purchases.isEmpty) {
@@ -141,12 +144,14 @@ class BoostPayment {
     final res = await ApiService.post('/Bcpg/PayInvoices', {
       'invoiceIds': invoiceIds,
       'payTermPayments': term?.toJson(),
-      'purchaseItems': purchases.isEmpty ? null : purchases.map((p) => p.toJson()).toList(),
+      'purchaseItems':
+          purchases.isEmpty ? null : purchases.map((p) => p.toJson()).toList(),
     });
 
     final url = _urlFrom(res);
     if (url == null || url.isEmpty) {
-      throw const BoostPaymentException('No payment link was returned by the Boost gateway.');
+      throw const BoostPaymentException(
+          'No payment link was returned by the Boost gateway.');
     }
     return PaymentStart(url: url, referenceId: extractReferenceId(url));
   }
@@ -199,9 +204,11 @@ class BoostPayment {
       for (var i = 0; i < (attempts < 1 ? 1 : attempts); i++) {
         if (i > 0) await Future<void>.delayed(delay);
         try {
-          final res = await ApiService.get('/Bcpg/VerifyPayment/${Uri.encodeComponent(referenceId)}');
+          final res = await ApiService.get(
+              '/Bcpg/VerifyPayment/${Uri.encodeComponent(referenceId)}');
           final data = unwrapData(res);
-          final status = (data is Map ? data['status'] : data)?.toString().trim() ?? '';
+          final status =
+              (data is Map ? data['status'] : data)?.toString().trim() ?? '';
           if (status.isNotEmpty) gatewayStatus = status;
           if (_paid.hasMatch(status)) {
             return PaymentResult(PaymentOutcome.paid,
@@ -225,26 +232,30 @@ class BoostPayment {
     // concluded the others were settled and told the user "Payment received" for a payment
     // that may never have gone through.
     if (invoiceIds.isNotEmpty && fetchOutstandingIds != null) {
-      final accounts = studentIds.isEmpty ? <int?>[null] : studentIds.toSet().toList();
+      final accounts =
+          studentIds.isEmpty ? <int?>[null] : studentIds.toSet().toList();
       final stillDue = <int>{};
-      var queried = false;
+      var queried = 0;
       for (final id in accounts) {
         try {
           stillDue.addAll(await fetchOutstandingIds(id));
-          queried = true;
+          queried++;
         } catch (_) {
           // A failed lookup means we cannot prove anything — do not treat it as "settled".
         }
       }
-      if (queried) {
+      if (queried == accounts.length) {
         final unsettled = invoiceIds.where(stillDue.contains).toList();
         if (unsettled.isEmpty) {
           return PaymentResult(PaymentOutcome.paid,
               'Payment received — those invoices are no longer outstanding.',
               gatewayStatus: gatewayStatus);
         }
-        return PaymentResult(PaymentOutcome.unpaid,
-            '${unsettled.length} of ${invoiceIds.length} invoice(s) are still outstanding.',
+        final partial = unsettled.length < invoiceIds.toSet().length;
+        return PaymentResult(
+            partial ? PaymentOutcome.unknown : PaymentOutcome.unpaid,
+            '${unsettled.length} of ${invoiceIds.toSet().length} invoice(s) are still outstanding.'
+            '${partial ? ' Some invoices have settled. Check Payment History before paying again.' : ''}',
             gatewayStatus: gatewayStatus);
       }
     }
@@ -259,7 +270,8 @@ class BoostPayment {
       } catch (_) {/* inconclusive */}
     }
 
-    return PaymentResult(PaymentOutcome.unknown,
+    return PaymentResult(
+        PaymentOutcome.unknown,
         'We could not confirm this payment yet. If money left your account it will appear '
         'shortly — check Payment History before paying again.',
         gatewayStatus: gatewayStatus);

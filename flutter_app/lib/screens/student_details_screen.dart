@@ -1,3 +1,5 @@
+import '../services/live_refresh.dart';
+import '../theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -18,7 +20,13 @@ class StudentDetailsScreen extends StatefulWidget {
   State<StudentDetailsScreen> createState() => _StudentDetailsScreenState();
 }
 
-class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
+class _StudentDetailsScreenState extends State<StudentDetailsScreen>
+    with LiveRefreshMixin<StudentDetailsScreen> {
+  @override
+  bool get canLiveRefresh => !_loading;
+  @override
+  Future<void> refreshLiveData() => _load();
+
   bool _loading = true;
   String? _error;
 
@@ -39,7 +47,9 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
       // blank out the enrolment fields the member came here to read.
       final results = await Future.wait([
         Api.profileMyInfo().then<dynamic>((v) => v).catchError((_) => null),
-        Api.profileStudentAddtnlInfo().then<dynamic>((v) => v).catchError((_) => null),
+        Api.profileStudentAddtnlInfo()
+            .then<dynamic>((v) => v)
+            .catchError((_) => null),
       ]);
       final info = unwrapData(results[0]);
       final addtnl = unwrapData(results[1]);
@@ -67,11 +77,22 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
 
   /// Is there already enough in the session to render a useful screen?
   bool _hasSomethingToShow(UserSession s) =>
-      (s.myInfo?.isNotEmpty ?? false) || (s.studentAddtnlInfo?.isNotEmpty ?? false);
+      (s.myInfo?.isNotEmpty ?? false) ||
+      (s.studentAddtnlInfo?.isNotEmpty ?? false);
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   String _fmtDate(String raw) {
@@ -100,28 +121,41 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
     String or(String v) => v.trim().isEmpty ? '-' : v.trim();
 
     final fields = <({IconData icon, String label, String value})>[
-      (icon: Icons.person_outline, label: 'Name', value: or(s.displayName)),
+      (icon: AppIcons.person_outline, label: 'Name', value: or(s.displayName)),
       (
-        icon: Icons.badge_outlined,
+        icon: AppIcons.badge_outlined,
         label: 'Registration No',
-        value: or(s.registrationNo.isNotEmpty ? s.registrationNo : s.studentCode)
+        value:
+            or(s.registrationNo.isNotEmpty ? s.registrationNo : s.studentCode)
       ),
       (
         icon: Icons.fingerprint,
         label: 'IC No',
         value: or(_pick(s, ['icNo', 'IcNo', 'icNumber', 'nric']))
       ),
-      (icon: Icons.military_tech_outlined, label: 'Current Grade', value: or(s.currentGrade)),
-      (icon: Icons.location_on_outlined, label: 'Training Center', value: or(s.tCenterName)),
+      (
+        icon: AppIcons.military_tech_outlined,
+        label: 'Current Grade',
+        value: or(s.currentGrade)
+      ),
+      (
+        icon: Icons.location_on_outlined,
+        label: 'Training Center',
+        value: or(s.tCenterName)
+      ),
       (
         icon: Icons.business_outlined,
         label: 'Exam Center',
         value: or(_pick(s, ['eCenterName', 'examCenter', 'ECenterName']))
       ),
-      (icon: Icons.account_circle_outlined, label: 'Instructor', value: or(s.instructorName)),
+      (
+        icon: AppIcons.account_circle_outlined,
+        label: 'Instructor',
+        value: or(s.instructorName)
+      ),
       (icon: Icons.call_outlined, label: 'Phone', value: or(s.phone)),
       (
-        icon: Icons.school_outlined,
+        icon: AppIcons.school_outlined,
         label: 'School',
         value: or(_pick(s, ['schoolname', 'schoolName', 'school']))
       ),
@@ -149,7 +183,7 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: _load,
-            child: _loading
+            child: (_loading && !liveRefreshing)
                 ? const Center(child: CircularProgressIndicator())
                 : ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -186,29 +220,36 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
     );
   }
 
-  Widget _row(AppColors c, ({IconData icon, String label, String value}) f) => Padding(
+  Widget _row(AppColors c, ({IconData icon, String label, String value}) f) =>
+      Padding(
         padding: const EdgeInsets.symmetric(vertical: 11),
         child: Row(children: [
           Container(
             width: 38,
             height: 38,
-            decoration: BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
+            decoration:
+                BoxDecoration(color: c.surfaceAlt, shape: BoxShape.circle),
             child: Icon(f.icon, size: 18, color: c.primary),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(f.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      color: c.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                      color: c.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
               Text(f.value,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                      color: c.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                      color: c.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
             ]),
           ),
         ]),

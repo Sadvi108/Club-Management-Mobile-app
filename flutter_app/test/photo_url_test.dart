@@ -13,7 +13,8 @@ void main() {
 
   test('an absolute URL is left alone', () {
     expect(r('https://cdn.example.com/a.jpg'), 'https://cdn.example.com/a.jpg');
-    expect(r('http://apimac.zyncbook.com/x.png'), 'http://apimac.zyncbook.com/x.png');
+    expect(r('http://apimac.zyncbook.com/x.png'),
+        'http://apimac.zyncbook.com/x.png');
   });
 
   test('a rooted server path is prefixed with the API host', () {
@@ -45,22 +46,29 @@ void main() {
   });
 
   group('studentPhoto', () {
-    test('a relative myInfo path is rendered, not swapped for the club logo', () {
+    test('a relative myInfo path is rendered, not swapped for the club logo',
+        () {
       final s = UserSession.instance;
-      s.myInfo = {'photo': '/Uploads/DP/77.jpg', 'clubPic': 'http://cdn/club.png'};
+      s.myInfo = {
+        'photo': '/Uploads/DP/77.jpg',
+        'clubPic': 'http://cdn/club.png'
+      };
       s.studentAddtnlInfo = null;
       expect(s.studentPhoto, endsWith('/Uploads/DP/77.jpg'));
       expect(s.studentPhoto, isNot(contains('club.png')));
     });
 
-    test('with no photo at all it still falls back to the club logo', () {
+    test('with no student photo the UI can show initials, not the club logo',
+        () {
       final s = UserSession.instance;
       s.myInfo = {'clubPic': '/Uploads/Club/1.png'};
       s.studentAddtnlInfo = null;
-      expect(s.studentPhoto, endsWith('/Uploads/Club/1.png'));
+      s.authData = null;
+      expect(s.studentPhoto, isEmpty);
     });
 
-    test('an empty photo field is skipped rather than returned as a blank URL', () {
+    test('an empty photo field is skipped rather than returned as a blank URL',
+        () {
       final s = UserSession.instance;
       s.myInfo = {'photo': '', 'profilePic': '/Uploads/DP/9.jpg'};
       s.studentAddtnlInfo = null;

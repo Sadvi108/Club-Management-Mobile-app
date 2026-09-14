@@ -88,6 +88,12 @@ class NotificationService {
         onDidReceiveNotificationResponse: (r) => onTap?.call(r.payload),
       );
       _ready = true;
+      try {
+        final launch = await _plugin.getNotificationAppLaunchDetails();
+        if (launch?.didNotificationLaunchApp == true) {
+          onTap?.call(launch?.notificationResponse?.payload);
+        }
+      } catch (_) {/* Launch metadata is optional; delivery can still work. */}
     } catch (e) {
       // Seen for real in a widget test, where the platform interface is never registered
       // and `instance` throws LateInitializationError. On a device the equivalent is a
@@ -95,6 +101,13 @@ class NotificationService {
       _initFailed = true;
       debugPrint('notification plugin failed to initialise: $e');
     }
+  }
+
+  static Future<void> cancelAll() async {
+    if (!_ready) return;
+    try {
+      await _plugin.cancelAll();
+    } catch (_) {}
   }
 
   /// Test seam: forget a previous failure so a later attempt can succeed.
@@ -117,7 +130,9 @@ class NotificationService {
       final ios = _plugin.resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin>();
       if (ios != null) {
-        return await ios.requestPermissions(alert: true, badge: true, sound: true) ?? false;
+        return await ios.requestPermissions(
+                alert: true, badge: true, sound: true) ??
+            false;
       }
     } catch (e) {
       debugPrint('notification permission request failed: $e');
@@ -131,9 +146,16 @@ class NotificationService {
     try {
       final android = _plugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
-      if (android != null) return await android.areNotificationsEnabled() ?? false;
-    } catch (_) {}
-    return true; // iOS/desktop: assume granted unless the OS says otherwise
+      if (android != null)
+        return await android.areNotificationsEnabled() ?? false;
+      final ios = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      if (ios != null)
+        return (await ios.checkPermissions())?.isAlertEnabled ?? false;
+    } catch (_) {
+      return false;
+    }
+    return false;
   }
 
   // ── Channels ───────────────────────────────────────────────────────────────
@@ -167,7 +189,9 @@ class NotificationService {
           '${c.label}$suffix',
           groupId: 'dclix-notifications',
           // MAX is what earns a heads-up banner over whatever the member is doing.
-          importance: loudness == 'quiet' ? Importance.defaultImportance : Importance.max,
+          importance: loudness == 'quiet'
+              ? Importance.defaultImportance
+              : Importance.max,
           playSound: loudness == 'alert',
           sound: loudness == 'alert'
               ? const RawResourceAndroidNotificationSound(_soundName)
@@ -188,7 +212,8 @@ class NotificationService {
       id,
       '${c.label}$suffix',
       channelShowBadge: true,
-      importance: loudness == 'quiet' ? Importance.defaultImportance : Importance.max,
+      importance:
+          loudness == 'quiet' ? Importance.defaultImportance : Importance.max,
       priority: loudness == 'quiet' ? Priority.defaultPriority : Priority.high,
       playSound: loudness == 'alert',
       sound: loudness == 'alert'
@@ -210,7 +235,7 @@ class NotificationService {
     await init();
     final p = await NotifPrefsStore.load();
 
-    if (!p.enabled) return false;
+    if (!p.enabled || !await hasPermission()) return false;
     if (!force && !shouldAlert(p, category)) return false;
 
     try {
@@ -247,6 +272,7 @@ class NotificationService {
   static Future<int?> _lastSeen(int userId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
       final v = prefs.getInt('$_lastSeenKey.$userId');
       return v;
     } catch (_) {
@@ -268,7 +294,6 @@ class NotificationService {
     required int userId,
     required List<dynamic> rows,
   }) async {
-    if (rows.isEmpty) return;
     final prefs = await NotifPrefsStore.load();
     final plan = planAlerts(
       rows: rows,
@@ -290,15 +315,23 @@ class NotificationService {
     // Summarise only what the volume cap dropped, and only if something got through.
     // Counting rows a muted category already filtered would leak the very alerts the
     // member turned off.
+    var summaryDelivered = plan.capped == 0;
     if (plan.capped > 0 && presented > 0) {
-      await present(
+      summaryDelivered = await present(
         title: 'Club notifications',
-        body: '${plan.capped} more new notification${plan.capped > 1 ? 's' : ''}',
+        // The summary represents allowed messages; a muted General channel must
+        // not prevent a Fees/Class batch from being acknowledged.
+        category: categoryOf(plan.show.last),
+        body:
+            '${plan.capped} more new notification${plan.capped > 1 ? 's' : ''}',
       );
     }
 
     // Quiet hours hold the mark back so the batch alerts once the window ends.
-    if (!plan.deferred && plan.newLastSeen != null) {
+    if (!plan.deferred &&
+        summaryDelivered &&
+        presented == plan.show.length &&
+        plan.newLastSeen != null) {
       await _setLastSeen(userId, plan.newLastSeen!);
     }
   }
@@ -315,7 +348,8 @@ class NotificationService {
   /// a repeating monthly alarm cannot express "the 28th in February but the 30th
   /// otherwise", and it keeps firing after the member turns Auto Pay off if a cancel is
   /// ever missed. The screen re-arms the next one each time it runs.
-  static Future<bool> scheduleAutoPayReminder(DateTime when, String body) async {
+  static Future<bool> scheduleAutoPayReminder(
+      DateTime when, String body) async {
     await init();
     _initTimeZones();
     try {

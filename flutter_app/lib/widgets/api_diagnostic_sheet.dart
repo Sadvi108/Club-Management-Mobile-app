@@ -1,3 +1,4 @@
+import '../theme/app_icons.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -43,7 +44,8 @@ class ApiDiagnosticSheet extends StatelessWidget {
           children: [
             Center(
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 margin: const EdgeInsets.only(bottom: 14),
                 decoration: BoxDecoration(
                     color: c.border, borderRadius: BorderRadius.circular(2)),
@@ -62,25 +64,37 @@ class ApiDiagnosticSheet extends StatelessWidget {
               style: TextStyle(color: c.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: 14),
-
-            _summary(c, 'Account', session.isInstructor ? 'Instructor' : 'Student'),
-            _summary(c, 'Resolved name', session.displayName.isEmpty ? '(empty)' : session.displayName),
-            _summary(c, 'Resolved reg no', session.registrationNo.isEmpty ? '(empty)' : session.registrationNo),
-            _summary(c, 'Resolved club', session.clubName.isEmpty ? '(empty)' : session.clubName),
+            _summary(
+                c, 'Account', session.isInstructor ? 'Instructor' : 'Student'),
+            _summary(c, 'Resolved name',
+                session.displayName.isEmpty ? '(empty)' : session.displayName),
+            _summary(
+                c,
+                'Resolved reg no',
+                session.registrationNo.isEmpty
+                    ? '(empty)'
+                    : session.registrationNo),
+            _summary(c, 'Resolved club',
+                session.clubName.isEmpty ? '(empty)' : session.clubName),
             _summary(c, 'User ID', _userId(session)),
-            _summary(c, 'Branch ID', (session.authData?['branchId'] ?? '—').toString()),
-            _summary(c, 'authData keys', (session.authData?.keys.toList() ?? []).join(', ')),
-            _summary(c, 'myInfo keys', (session.myInfo?.keys.toList() ?? []).join(', ')),
+            _summary(c, 'Branch ID',
+                (session.authData?['branchId'] ?? '—').toString()),
+            _summary(c, 'authData keys',
+                (session.authData?.keys.toList() ?? []).join(', ')),
+            _summary(c, 'myInfo keys',
+                (session.myInfo?.keys.toList() ?? []).join(', ')),
             _summary(c, 'Computed invoice count', '${session.invoiceCount}'),
-            _summary(c, 'Computed due amount', 'RM ${session.dueAmount.toStringAsFixed(2)}'),
-            _summary(c, 'Outstanding records', _listLen(session.outstandingList)),
-            _summary(c, 'Notifications unread', '${session.unreadNotifications}'),
-
+            _summary(c, 'Computed due amount',
+                'RM ${session.dueAmount.toStringAsFixed(2)}'),
+            _summary(
+                c, 'Outstanding records', _listLen(session.outstandingList)),
+            _summary(
+                c, 'Notifications unread', '${session.unreadNotifications}'),
             const SizedBox(height: 18),
             Row(children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  icon: const Icon(Icons.refresh, size: 16),
+                  icon: const Icon(AppIcons.refresh, size: 16),
                   label: const Text('Refresh APIs'),
                   onPressed: () async {
                     Navigator.pop(context);
@@ -106,7 +120,6 @@ class ApiDiagnosticSheet extends StatelessWidget {
               ),
             ]),
             const SizedBox(height: 18),
-
             _section(
               c,
               title: 'POST /Account/Authenticate (cached authData)',
@@ -120,7 +133,8 @@ class ApiDiagnosticSheet extends StatelessWidget {
               title: 'GET /Profile/MyInfo',
               status: session.myInfo == null ? 'error' : 'ok',
               body: session.myInfo,
-              extra: 'Primary source for student/instructor name + grade + training center.',
+              extra:
+                  'Primary source for student/instructor name + grade + training center.',
             ),
             const SizedBox(height: 14),
             _section(
@@ -137,7 +151,8 @@ class ApiDiagnosticSheet extends StatelessWidget {
               status: session.outstandingError == null ? 'ok' : 'error',
               body: session.outstandingRaw,
               error: session.outstandingError,
-              extra: 'First row keys: ${_firstRowKeys(session.outstandingList)}',
+              extra:
+                  'First row keys: ${_firstRowKeys(session.outstandingList)}',
             ),
             const SizedBox(height: 14),
             _section(
@@ -250,10 +265,10 @@ class ApiDiagnosticSheet extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
-            width: 8, height: 8,
+            width: 8,
+            height: 8,
             decoration: BoxDecoration(
-                color: isError ? c.danger : c.success,
-                shape: BoxShape.circle),
+                color: isError ? c.danger : c.success, shape: BoxShape.circle),
           ),
           const SizedBox(width: 8),
           Expanded(
